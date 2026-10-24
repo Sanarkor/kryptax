@@ -40,6 +40,7 @@
   }
   $('#files').addEventListener('change', async e => {
     for (const file of e.target.files) {
+      if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') { await importPdf(file); continue; }
       if (/\.xlsx?$/i.test(file.name)) {
         if (!window.XLSX) { alert('Lecteur Excel indisponible.'); continue; }
         const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
@@ -49,6 +50,26 @@
     }
     e.target.value = '';
   });
+  /* ---------- PDF Revolut (pdf.js local, rien n'est envoyé) ---------- */
+  async function importPdf(file) {
+    if (!window.pdfjsLib) return alert('Lecteur PDF indisponible.');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+    $('#progress').textContent = 'Lecture du PDF…';
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+    let lines = [];
+    for (let i = 1; i <= doc.numPages; i++) { const c = await (await doc.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
+    $('#progress').textContent = '';
+    const r = KP.parsePdfLines(lines);
+    if (!r.rows.length && !r.fiat.length) return alert(file.name + ' : aucune transaction reconnue dans ce PDF.');
+    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Revolut', source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
+    txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
+    if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
+    save(); renderTx();
+    let msg = res.txs.length + ' transactions lues dans le PDF' + (nsw ? ', ' + nsw + ' échanges crypto→crypto détectés' : '') + (r.fiat.length ? ', ' + r.fiat.length + ' lignes « Vente de / Achat de » des relevés en devises' : '') + '.';
+    if (r.fiat.length) { const cc = E.crossCheck(txs, E.parseFiatSales(fiatText)); msg += ' Contre-vérification : ' + cc.confirmed.length + ' ventes confirmées, ' + (cc.swapButFiat.length + cc.sellNoFiat.length) + ' divergences (voir le tableau des échanges).'; }
+    alert(msg + ' Vérifiez les types !');
+  }
+  let fiatText = localStorage.getItem('kryptax.fiat') || '';
   function showMapping(name, rows, isXlsx) {
     if (rows.length < 2) return alert(name + ' : fichier vide ?');
     if (rows[0].some(h => /sent amount|received amount|montant envoy|montant re/i.test(h))) return showMapping2(name, rows);
@@ -152,7 +173,7 @@
     const el = $('#swaps'); if (!el) return;
     const byId = {}; txs.forEach(t => byId[t.id] = t);
     const outs = E.sortTx(txs).filter(t => (t.swapAuto && t.type === 'EXCH_OUT') || t.swapForce === 'taxable' && t.rawSwap === 'out');
-    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (« Transfer from Revolut Digital Assets… – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%"></textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
+    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (« Transfer from Revolut Digital Assets… – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
     if (!outs.length) { el.innerHTML = txs.length ? chk : ''; return; }
     el.innerHTML = chk + `<h3>Échanges crypto→crypto détectés (${outs.filter(t => t.swapAuto).length})</h3>
       <p class="hint">Une vente et un achat d’une autre crypto à la même seconde (≤ 5 s), pour une valeur proche (±8 %), sont un échange crypto→crypto : non imposable. Une vente vers des euros n’a pas d’achat simultané. Si une ligne est fausse, forcez-la.</p>
@@ -160,7 +181,7 @@
   }
   $('#swaps') && $('#swaps').addEventListener('click', e => {
     if (e.target.id === 'fiatgo') {
-      const f = E.parseFiatSales($('#fiattxt').value), r = E.crossCheck(txs, f), L = (a, m) => a.length ? `<li>${m} (${a.length}) : ${a.map(x => esc((x.t ? x.t.asset + ' ' + dt(x.t.date) : x.asset + ' ' + dt(x.date)))).join(', ')}</li>` : '';
+      fiatText = $('#fiattxt').value; localStorage.setItem('kryptax.fiat', fiatText); const f = E.parseFiatSales(fiatText), r = E.crossCheck(txs, f), L = (a, m) => a.length ? `<li>${m} (${a.length}) : ${a.map(x => esc((x.t ? x.t.asset + ' ' + dt(x.t.date) : x.asset + ' ' + dt(x.date)))).join(', ')}</li>` : '';
       $('#fiatres').innerHTML = `<p>${f.length} lignes « Vente de » lues. ${r.confirmed.length} ventes confirmées imposables.</p><ul>${L(r.swapButFiat, '⚠️ Détectées comme échange mais présentes dans le relevé € (à forcer imposable ?)')}${L(r.sellNoFiat, '⚠️ Ventes imposables absentes du relevé € (échange ?)')}${L(r.fiatNoSell, 'Lignes du relevé € sans vente correspondante')}</ul>`;
       save(); return;
     }
@@ -188,7 +209,7 @@
     save(); if (k === 'type' || k === 'qty') renderTx();
   });
   $('#txtable').addEventListener('click', e => { if (!e.target.hasAttribute('data-del')) return; txs = txs.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); renderTx(); });
-  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; save(); renderTx(); $('#results').innerHTML = ''; } };
+  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; fiatText = ''; localStorage.removeItem('kryptax.fiat'); save(); renderTx(); $('#results').innerHTML = ''; } };
 
   /* ---------- Cours historiques ---------- */
   const HOUR = 3600e3;
@@ -221,7 +242,7 @@
     ['220', 'Prix total d’acquisition', c => eur(c.l220), 'Σ achats en € (frais inclus) depuis le début'],
     ['221', 'Fractions de capital initial', c => eur(c.l221), 'Σ des [223 × 217 / 212] des cessions antérieures'],
     ['222', 'Soultes reçues lors d’échanges antérieurs', c => eur(c.l222), ''], ['223', 'Prix total d’acquisition net', c => eur(c.l223), '220 − 221 − 222'],
-    ['224', 'Plus-value ou moins-value', c => c.l224 == null ? '<b class="warn">à renseigner</b>' : '<b>' + (c.l224 >= 0 ? '+' : '') + eur(c.l224) + '</b>', '218 − [223 × (217 / 212)]']
+    ['224', 'Plus-value ou moins-value', c => c.l224 == null ? '<b class="warn">à renseigner</b>' : '<b class="' + (c.l224 >= 0 ? 'pos' : 'neg') + '">' + (c.l224 >= 0 ? '+' : '') + eur(c.l224) + '</b>', '218 − [223 × (217 / 212)]']
   ];
   function renderResults() {
     const out = computeWithPrices(); const Y = E.byYear(out);
@@ -238,7 +259,7 @@
       const ap = (a, c) => livePrice && livePrice.approx && livePrice.approx.has(a + '|' + c.date) ? '≈' : '';
       h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ')).join(' ;<br>')}</p></details>`;
       h += `<p>Ligne 51 — total des prix de cession (218) : <b>${eur(y.total218)}</b>${y.exonere ? ' → <b>≤ 305 € : cessions exonérées</b>, pas d’autres lignes à remplir.' : ''}</p>`;
-      h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : (y.total224 >= 0 ? '+' : '') + eur(y.total224)}</p>`;
+      h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : '<span class="' + (y.total224 >= 0 ? 'pos' : 'neg') + '">' + (y.total224 >= 0 ? '+' : '') + eur(y.total224) + '</span>'}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : flat tax = 12,8 % d’impôt + prélèvements sociaux (≈ 30 % au total ; taux des prélèvements sociaux à vérifier pour votre année) → environ ${eur(Math.max(0, y.total224) * 0.30)}. Option barème progressif : case 3CN.</div>`;
     }
     h += cmpBlock(Y);

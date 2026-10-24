@@ -116,6 +116,33 @@
     const fn = (a, ts) => { const v = cache[key(a, ts)]; if (v != null && v !== 'NA') return v; const o = obs(a, ts); if (o != null) approx.add(a + '|' + ts); return o; };
     fn.approx = approx; return fn;
   }
-  const api = { importRows, makeSources, prepare, observed };
+  /* Relevé PDF Revolut : lignes de texte -> lignes à 7 colonnes (Symbole, Type, Quantité, Prix, Valeur, Frais, Date)
+     + lignes des relevés en devises (« Vente de X » / « Achat de X ») pour la contre-vérification. */
+  const DATE_RE = '(\\d{1,2}\\s+[a-zéèûô.]+\\s+\\d{4},?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)';
+  function parsePdfLines(lines) {
+    const rows = [], fiat = [], skipped = [];
+    const trade = new RegExp('^([A-Z0-9]{1,15})\\s+(.+?)\\s+(-?\\d[\\d\\u00a0\\u202f]*(?:[.,]\\d+)?)((?:\\s+-?[\\d\\u00a0\\u202f.,]+\\s?[€$£])*)\\s+' + DATE_RE + '$', 'i');
+    const fiatRe = new RegExp('^' + DATE_RE + '\\s+(.*)$', 'i');
+    for (let l of lines) {
+      l = String(l).replace(/\s+/g, ' ').trim(); if (!l) continue;
+      if (/^symbole\s+type\s+quantit/i.test(l)) continue; // en-tête de page répété
+      let m = fiatRe.exec(l);
+      if (m) { if (/(vente|achat) de\s+[A-Za-z0-9]+/i.test(m[2])) fiat.push(l); continue; }
+      m = trade.exec(l);
+      if (m && /^[A-Z0-9]+$/.test(m[1]) && /[a-zé]/i.test(m[2]) && !/\d/.test(m[2])) {
+        const am = m[4].trim() ? m[4].trim().split(/\s+(?=-?\d)/) : [];
+        rows.push([m[1], m[2], m[3], am[0] || '', am[1] || '', am[2] || '', m[5]]);
+      } else skipped.push(l);
+    }
+    return { rows, fiat, skipped };
+  }
+  /* Regroupe les fragments de texte pdf.js en lignes (même ordonnée). */
+  function itemsToLines(items) {
+    const by = [];
+    for (const it of items) { if (!it.str || !it.str.trim()) continue; const y = it.transform[5], x = it.transform[4]; let L = by.find(b => Math.abs(b.y - y) < 2.5); if (!L) by.push(L = { y, parts: [] }); L.parts.push({ x, s: it.str }); }
+    by.sort((a, b) => b.y - a.y);
+    return by.map(L => L.parts.sort((a, b) => a.x - b.x).map(p => p.s.trim()).join(' '));
+  }
+  const api = { parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);
