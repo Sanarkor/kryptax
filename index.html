@@ -2,14 +2,14 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — aide au formulaire 2086</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://min-api.cryptocompare.com https://api.binance.com https://data-api.binance.vision https://api.frankfurter.dev; style-src 'self'; script-src 'self'; img-src 'self' data:">
-<link rel="stylesheet" href="style.css"></head>
+<meta name="theme-color" content="#070b14"><link rel="stylesheet" href="style.css"></head>
 <body>
 <header><h1>Kryptax</h1><p class="sub">Transactions crypto (Revolut et autres) → formulaire 2086</p></header>
 <div class="banner">⚠️ Outil d'aide au calcul, pas un conseil fiscal : vérifiez avec la <a href="https://www.impots.gouv.fr/formulaire/2086/declaration-des-plus-ou-moins-values-sur-actifs-numeriques" target="_blank" rel="noopener">notice officielle</a>. 🔒 Vos données restent dans votre navigateur (seuls des cours publics sont demandés à Binance, à la BCE (Frankfurter) et, si vous mettez une clé, à CryptoCompare).</div>
 <main>
 <section><h2>1. Importer</h2>
- <p>Un ou plusieurs relevés CSV (Revolut ou autre plateforme). Il faut <b>tout l'historique depuis votre premier achat</b>, sur <b>tous</b> vos comptes et portefeuilles.</p>
- <label class="btn">Choisir des fichiers (CSV ou Excel .xlsx)<input type="file" id="files" accept=".csv,.xlsx,text/csv" multiple hidden></label>
+ <p>Un ou plusieurs relevés : <b>PDF Revolut complet</b> (le plus fiable : quantités exactes, et les relevés en euros/dollars confirment les vraies ventes), CSV ou Excel. Il faut <b>tout l'historique depuis votre premier achat</b>, sur <b>tous</b> vos comptes et portefeuilles.</p>
+ <label class="btn">Choisir des fichiers (PDF, CSV ou Excel .xlsx)<input type="file" id="files" accept=".pdf,.csv,.xlsx,text/csv,application/pdf" multiple hidden></label>
  <button id="example" class="ghost">Charger un exemple (fictif)</button>
  <div id="mapping"></div>
  <div id="swaps"></div>
@@ -36,5 +36,5 @@
 <section id="results"></section>
 </main>
 <footer>Kryptax — code ouvert, sans serveur. Méthode : art. 150 VH bis du CGI, notice 2086.</footer>
-<script src="xlsx.mini.min.js"></script><script src="engine.js"></script><script src="pipeline.js"></script><script src="app.js"></script>
+<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js"></script><script src="pipeline.js"></script><script src="app.js"></script>
 </body></html>
