@@ -7,6 +7,9 @@ Page web (GitHub Pages) qui aide à remplir le **formulaire 2086** (plus-values 
 
 En ligne : https://sanarkor.github.io/kryptax/
 
+## Import PDF (recommandé)
+Kryptax lit le **relevé PDF complet** de Revolut directement dans le navigateur avec pdf.js (`pdf.min.js` / `pdf.worker.min.js`, Apache 2.0, inclus localement, aucun CDN, rien n'est envoyé). Il reconnaît les lignes de transactions (`Symbole Type Quantité Prix Valeur Frais Date`, Achat / Vente / Acheter – Revolut X / Vendre – Revolut X, montants en € ou $), les **récompenses** (staking, « Apprendre ») et, dans les relevés EUR/USD/GBP, les lignes « Transfer from Revolut Digital Assets… – **Vente de X** » / « Achat de X ». Les quantités du PDF sont exactes (pas de troncature comme dans l'Excel). Les lignes « Vente de X » servent à la **contre-vérification** : une vente qui y figure est une vraie vente en devise (imposable) ; un échange crypto→crypto n'y figure pas. Les en-têtes et pieds de page sont ignorés. Le type de fichier (PDF, Excel, CSV) est détecté automatiquement.
+
 ## Obtenir le relevé Revolut
 Application Revolut → onglet **Crypto** → **⋯ / Plus** → **Relevés / Documents** → **Relevé de compte (Account statement)** → période « depuis le début » → format **CSV** de préférence (Kryptax lit aussi l'**Excel .xlsx**, mais Revolut y tronque la colonne Quantité : Kryptax la reconstruit avec Valeur / Prix et signale les lignes douteuses). Prenez l'historique **complet depuis votre premier achat**. (Le chemin exact peut changer selon la version de l'appli.)
 
@@ -41,3 +44,5 @@ Test : `node test.js` reproduit l'exemple de la notice officielle (1 000 € inv
 - Petits jetons absents de Binance : cours le plus proche de vos relevés (±30 j, marqué ≈) ou saisie manuelle.
 - Récompenses « Apprendre » sans prix ni valeur : quantité impossible à reconstruire depuis un .xlsx, à corriger à la main (ou valeur 0 si négligeable).
 - Lecture Excel : SheetJS (`xlsx.mini.min.js`, Apache 2.0) inclus localement, aucun CDN.
+
+Test PDF : `python3 testdata/make_pdf.py && node testpdf.mjs` (relevé **fictif**, nécessite `reportlab` et `pdfjs-dist@3` en local). Interface : thème sombre ; l'impression du 2086 reste sur fond blanc.
