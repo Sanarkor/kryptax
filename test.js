@@ -72,4 +72,32 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(E.checkBalances(only27, { AAA: 70, BBB: 60 }, Infinity, back).every(b => b.ok) ? 1 : 0, 1, 'Soldes de clôture avec état reporté');
   let err = 0; try { E.validateState({ foo: 1 }); } catch (x) { err = 1; } eq(err, 1, 'État invalide refusé');
 }
+// Synthèse annuelle (données fictives)
+{
+  const T = [
+    { id: 1, date: Date.UTC(2026, 0, 5), type: 'BUY', asset: 'AAA', qty: 10, eur: 100, fee: 1, feeInKind: true, rawType: 'Achat' },
+    { id: 2, date: Date.UTC(2026, 1, 5), type: 'INTEREST', asset: 'CCC', qty: 2, eur: 0, rawType: 'Récompense Apprendre' },
+    { id: 3, date: Date.UTC(2026, 2, 5), type: 'EXCH_OUT', asset: 'AAA', qty: 2, eur: 30, swapAuto: true },
+    { id: 4, date: Date.UTC(2026, 2, 5), type: 'EXCH_IN', asset: 'BBB', qty: 3, eur: 30 },
+    { id: 5, date: Date.UTC(2026, 3, 5), type: 'SELL', asset: 'AAA', qty: 4, eur: 80, fee: 0.5 },
+    { id: 6, date: Date.UTC(2026, 4, 5), type: 'SEND', asset: 'BBB', qty: 1 }];
+  const P = a => ({ AAA: 20, BBB: 10, CCC: 3 })[a];
+  const r = E.compute(T, P), S = E.summary(T, r, P, 2026);
+  eq(S.nCessions, 1, 'Synthèse : nombre de cessions'); eq(S.produit, 80, 'Synthèse : produit');
+  eq(S.net, r.cessions[0].l224, 'Synthèse : plus-value nette'); eq(S.acquisition, r.cessions[0].fraction, 'Synthèse : prix d’acquisition des actifs cédés');
+  eq(S.fees.inKind, 1, 'Synthèse : frais en nature'); eq(S.fees.explicit, 0.5, 'Synthèse : frais explicites');
+  eq(S.incomeTotal, 6, 'Synthèse : revenus (2 CCC × 3 €)'); eq(S.swaps, 1, 'Synthèse : échanges exclus');
+  eq(S.outcome.SEND.eur, 10, 'Synthèse : sortie transfert'); eq(S.closing.find(c => c.asset === 'BBB').qty, 2, 'Synthèse : solde BBB');
+  const S2 = E.summary(T, r, () => null, 2026); eq(S2.incomeUnknown.length, 1, 'Synthèse : revenu sans cours signalé (pas inventé)');
+}
+// Export : toutes les cessions et toutes les sections (données fictives, 18 cessions)
+{
+  const X = require('./export.js'), T = require('./testdata/fake_many.js')(), P = (a, ts) => ({ AAA: 6, BBB: 7, CCC: 8, DDD: 9, EEE: 10 })[a];
+  const r = E.compute(T, P), Y = E.byYear(r), S = {}; for (const y in Y) S[y] = E.summary(T, r, P, +y);
+  const rows = s => [['Plus-values', 'Gains', '', s.gains], ['Frais', 'Frais totaux', '', s.fees.total], ['Revenus (income)', 'Total', '', s.incomeTotal], ['Sorties (outcome)', 'Ventes', '', s.outcome.SELL.eur], ['Soldes', 'Total', '', s.closingTotal]];
+  const x = X.exportData(Y, S, rows, T), csv = X.makeCsv(x).split('\n');
+  eq(r.cessions.length, 18, 'Export : 18 cessions calculées'); eq(x.cessions.length, 18, 'Export : 18 lignes de cession exportées');
+  eq(x.swaps.length, 4, 'Export : 4 échanges exclus exportés'); eq(new Set(x.summary.map(s => s[1])).size, 5, 'Export : 5 sections de synthèse');
+  const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 18, 'CSV : 18 lignes sous CESSIONS');
+}
 process.exit(ok ? 0 : 1);
