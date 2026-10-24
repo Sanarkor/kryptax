@@ -98,6 +98,6 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const x = X.exportData(Y, S, rows, T), csv = X.makeCsv(x).split('\n');
   eq(r.cessions.length, 18, 'Export : 18 cessions calculées'); eq(x.cessions.length, 18, 'Export : 18 lignes de cession exportées');
   eq(x.swaps.length, 4, 'Export : 4 échanges exclus exportés'); eq(new Set(x.summary.map(s => s[1])).size, 5, 'Export : 5 sections de synthèse');
-  const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 18, 'CSV : 18 lignes sous CESSIONS');
+  const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 19, 'CSV : 18 lignes sous CESSIONS + 1 ligne GLOBAL'); eq(csv[i0 + 2 + 18].split(';')[1] === 'GLOBAL' ? 1 : 0, 1, 'CSV : ligne GLOBAL en fin de tableau');
 }
 process.exit(ok ? 0 : 1);
