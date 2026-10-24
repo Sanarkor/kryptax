@@ -201,6 +201,46 @@
     return { cessions, warnings, holdings: h, total220, frac221, soultes222 };
   }
 
+  /* Synthèse annuelle (façon « Tax summary ») : plus-values, cessions, frais, revenus, sorties, échanges exclus, soldes au 31/12.
+     priceFn(asset, ts) -> cours € ; approx(asset, ts) -> true si cours estimé. Les valeurs inconnues sont signalées, jamais inventées. */
+  function summary(txs, res, priceFn, year, opening, approx) {
+    approx = approx || (() => false);
+    const y0 = Date.UTC(year, 0, 1) - 3600e3, y1 = Date.UTC(year + 1, 0, 1) - 3600e3; // année civile (heure de Paris ≈ UTC+1)
+    const inY = t => t.date >= y0 && t.date < y1 && !(opening && t.date <= stateTs(opening));
+    const C = res.cessions.filter(c => c.date >= y0 && c.date < y1), done = C.filter(c => c.l224 != null);
+    const S = { year, nCessions: C.length, incomplete: C.length !== done.length, produit: 0, total218: 0, acquisition: 0, gains: 0, losses: 0, net: 0,
+      fees: { inKind: 0, explicit: 0, total: 0 }, income: {}, incomeTotal: 0, incomeUnknown: [], outcome: { SELL: { n: 0, eur: 0 }, PAY: { n: 0, eur: 0 }, SEND: { n: 0, eur: 0, unknown: 0 } },
+      swaps: 0, estimated: 0, closing: [], closingTotal: 0, closingDate: null };
+    for (const c of C) { S.produit += c.l213; S.total218 += c.l218; }
+    for (const c of done) { S.acquisition += c.fraction; if (c.l224 >= 0) S.gains += c.l224; else S.losses += c.l224; S.net += c.l224; }
+    const val = t => { if (t.eur > 0) return { v: t.eur }; const p = priceFn(t.asset, t.date); if (p == null || !isFinite(p)) return null; const est = approx(t.asset, t.date); if (est) S.estimated++; return { v: Math.abs(t.qty) * p, est }; };
+    for (const t of txs.filter(inY)) {
+      if (t.type === 'BUY' || t.type === 'SELL' || t.type === 'PAY' || t.type === 'EXCH_IN' || t.type === 'EXCH_OUT') {
+        if (t.feeInKind && (t.type === 'BUY' || t.type === 'EXCH_IN')) S.fees.inKind += Math.abs(t.eur || 0) * feeRatio(t);
+        else if (t.feeInKind) S.fees.inKind += Math.abs(t.fee || 0); else S.fees.explicit += Math.abs(t.fee || 0);
+      }
+      if (t.type === 'FEE' && !t.adjust) { const v = val(t); if (v) S.fees.explicit += v.v; }
+      if (['INTEREST', 'STAKING', 'AIRDROP'].includes(t.type)) {
+        const k = t.type + (t.rawType ? ' · ' + t.rawType : ''), g = S.income[k] = S.income[k] || { type: t.type, label: t.rawType || TYPES[t.type], n: 0, eur: 0, est: false };
+        g.n++; const v = val(t); if (v) { g.eur += v.v; S.incomeTotal += v.v; if (v.est) g.est = true; } else S.incomeUnknown.push(t.asset);
+      }
+      if (t.type === 'SELL' || t.type === 'PAY') { S.outcome[t.type].n++; S.outcome[t.type].eur += Math.abs(t.eur || 0); }
+      if (t.type === 'SEND') { S.outcome.SEND.n++; const v = val(t); if (v) S.outcome.SEND.eur += v.v; else S.outcome.SEND.unknown++; }
+      if (t.type === 'EXCH_OUT' && t.swapAuto) S.swaps++;
+    }
+    S.fees.total = S.fees.inKind + S.fees.explicit;
+    const last = Math.max(...txs.map(t => t.date)), end = Math.min(y1 - 1, isFinite(last) ? Math.max(last, y0) : y1 - 1);
+    S.closingDate = end;
+    const h = holdingsAt(txs, end, opening);
+    for (const [a, q] of Object.entries(h)) {
+      if (q <= EPS || FIATS.includes(a)) continue;
+      const p = priceFn(a, end), ok = p != null && isFinite(p), est = ok && approx(a, end);
+      S.closing.push({ asset: a, qty: q, price: ok ? p : null, eur: ok ? q * p : null, est });
+      if (ok) S.closingTotal += q * p;
+    }
+    S.closing.sort((x, y) => (y.eur || 0) - (x.eur || 0));
+    return S;
+  }
   function byYear(res) {
     const y = {};
     for (const c of res.cessions) { const k = new Date(c.date).getFullYear(); (y[k] = y[k] || { year: k, cessions: [] }).cessions.push(c); }
@@ -285,6 +325,6 @@
     }
     return out;
   }
-  const api = { stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);

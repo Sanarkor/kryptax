@@ -50,3 +50,35 @@ progress{width:180px;height:8px;vertical-align:middle;accent-color:#22d3ee}
 .toprow h1{margin:0}
 #reset{font-size:.95rem;padding:.5em .8em;white-space:nowrap}
 @media print{#reset{display:none}}
+
+.topbar{display:flex;justify-content:flex-end;margin:0 0 .9em}
+#reset{min-height:44px;padding:.55em 1em}
+.cards{display:none}
+.card{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:.7em .8em;margin:.6em 0}
+.card.badc{border-color:#c0504d}
+.card h4{margin:0 0 .4em;font-size:1rem}
+.card dl{display:grid;grid-template-columns:1fr auto;gap:.25em .8em;margin:0}
+.card dt{font-size:.85rem;opacity:.85;min-width:0;overflow-wrap:anywhere}
+.card dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+img,input,select,textarea{max-width:100%}
+@media (max-width:600px){
+ body{overflow-x:hidden}
+ .cards{display:block}.formwrap{display:none}
+ .scroll{overflow-x:visible}
+ .scroll table:not(.form),.scroll table:not(.form) tbody,.scroll table:not(.form) tr,.scroll table:not(.form) td{display:block;width:100%}
+ .scroll table:not(.form) tr.hdr{display:none}
+ .scroll table:not(.form) tr{border-bottom:1px solid rgba(255,255,255,.12);padding:.4em 0}
+ .scroll table:not(.form) td{display:flex;justify-content:space-between;align-items:center;gap:.6em;padding:.2em .2em;text-align:right;overflow-wrap:anywhere}
+ .scroll table:not(.form) td[data-l]::before{content:attr(data-l);font-size:.8rem;opacity:.7;text-align:left;flex:0 0 auto;max-width:45%}
+ .txscroll{max-height:none}
+ #txtable input,#txtable select{max-width:60%}
+ .note,p,li,summary{overflow-wrap:anywhere}
+}
+@media print{.cards{display:block!important}.formwrap{display:none!important}.card{break-inside:avoid}}
+
+.summary{border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:.6em .9em;margin:.6em 0}
+.summary h4{margin:.2em 0 .3em}.summary h5{margin:.7em 0 .2em;font-size:.9rem;opacity:.8;text-transform:uppercase;letter-spacing:.04em}
+.summary dl{display:grid;grid-template-columns:1fr auto;gap:.2em .8em;margin:0}
+.summary dt{min-width:0;overflow-wrap:anywhere}.summary dd{margin:0;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media print{.summary{border-color:#999}}
+@media (max-width:600px){.grid{grid-template-columns:1fr!important}.grid label,.grid input,.grid select{min-width:0;width:100%;box-sizing:border-box}}
