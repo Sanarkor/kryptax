@@ -64,7 +64,7 @@
     $('#progress').textContent = '';
     const r = KP.parsePdfLines(lines);
     if (!r.rows.length && !r.fiat.length) return alert(file.name + ' : aucune transaction reconnue dans ce PDF.');
-    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Revolut', source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
+    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
     txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
     if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
@@ -84,7 +84,7 @@
       <div class="grid">${Object.keys(FIELDS).map(sel).join('')}
       <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label>
       <label>Format des nombres<select data-o="nmode"><option value="">Auto</option><option value="FR">1 234,56</option><option value="EN">1,234.56</option></select></label>
-      <label>Plateforme<input data-o="platform" value="Revolut"></label></div>
+      <label>Plateforme<input data-o="platform" value="Relevé"></label></div>
       ${isXlsx ? '<p class="warn">⚠️ Fichier .xlsx : la colonne Quantité est souvent tronquée (virgule perdue). Kryptax la reconstruit avec Valeur / Prix ou un cours historique, et marque les lignes douteuses. Privilégiez l’export CSV si possible.</p>' : ''}
       <div class="scroll"><table><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${rows.slice(1, 6).map(r => `<tr>${r.map(c => `<td>${esc(c instanceof Date ? c.toLocaleString('fr-FR') : E.fixText(c))}</td>`).join('')}</tr>`).join('')}</table></div>
       <button class="go">Importer ces lignes</button> <button class="ghost cancel">Annuler</button>`;
@@ -130,7 +130,7 @@
       <label>Plateforme<input data-o="platform" value="Coinly"></label>
       <label><span><input type="checkbox" data-o="prices" checked> Réutiliser les valeurs comme cours</span></label></div>
       <div class="scroll"><table><tr>${head.map(x => `<th>${esc(x)}</th>`).join('')}</tr>${rows.slice(1, 6).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div>
-      <p class="hint">Achat = € envoyés → crypto reçue ; vente = crypto → € ; crypto → crypto = échange (2 lignes). Si vous importez déjà vos relevés Revolut, n'importez pas deux fois les mêmes opérations.</p>
+      <p class="hint">Achat = € envoyés → crypto reçue ; vente = crypto → € ; crypto → crypto = échange (2 lignes). Si vous importez déjà le relevé de cette plateforme, n'importez pas deux fois les mêmes opérations.</p>
       <button class="go">Importer ces lignes</button> <button class="ghost cancel">Annuler</button>`;
     $('#mapping').appendChild(box);
     box.querySelector('.cancel').onclick = () => box.remove();
@@ -186,7 +186,7 @@
     const el = $('#swaps'); if (!el) return;
     const byId = {}; txs.forEach(t => byId[t.id] = t);
     const outs = E.sortTx(txs).filter(t => (t.swapAuto && t.type === 'EXCH_OUT') || t.swapForce === 'taxable' && t.rawSwap === 'out');
-    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (« Transfer from Revolut Digital Assets… – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
+    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (ligne de type « … – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
     if (!outs.length) { el.innerHTML = txs.length ? chk : ''; return; }
     const nAuto = outs.filter(t => t.swapAuto).length, nForced = outs.length - nAuto;
     el.innerHTML = `<p class="ok">🔁 ${nAuto} échange${nAuto > 1 ? 's' : ''} crypto→crypto détecté${nAuto > 1 ? 's' : ''}, non imposable${nAuto > 1 ? 's' : ''}${nForced ? ` · ${nForced} forcé${nForced > 1 ? 's' : ''} imposable${nForced > 1 ? 's' : ''}` : ''}.</p>
@@ -218,7 +218,7 @@
       <td>${dt(t.date)}${t.example ? ' <span class="tag">exemple</span>' : ''}</td><td><select data-k="type">${typeOpts(t.type)}</select>${t.rawType ? `<br><span class="hint">${esc(t.rawType)}</span>` : ''}</td>
       <td><input data-k="asset" value="${esc(t.asset)}" size="6"></td><td class="n${t.qtyStatus && !['ok', 'corrigée'].includes(t.qtyStatus) && !t.qtyManual ? ' bad' : ''}"><input data-k="qty" value="${num(t.qty)}" size="10">${t.qtyStatus && t.qtyStatus !== 'ok' && !t.qtyManual ? `<br><span class="hint">qté ${esc(t.qtyStatus)}</span>` : ''}</td>
       <td class="n"><input data-k="eur" value="${num(t.eur)}" size="9">${t.cur ? `<br><span class="hint">${num(t.valCur)} ${t.cur}${t.fx ? ' × ' + num(t.fx) : ' (à convertir)'}</span>` : ''}</td><td class="n"><input data-k="fee" value="${num(t.fee)}" size="6"></td>
-      <td>${esc(t.platform || '')}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : (all.length ? '<tr><td>Aucune vente (cession imposable). Cliquez « Afficher toutes les transactions ».</td></tr>' : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>');
+      <td>${esc(/revolut/i.test(t.platform || '') ? 'Relevé' : (t.platform || ''))}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : (all.length ? '<tr><td>Aucune vente (cession imposable). Cliquez « Afficher toutes les transactions ».</td></tr>' : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>');
   }
   $('#txall').onclick = () => { showAll = !showAll; renderTx(); };
   /* ---------- Soldes de clôture du relevé PDF ---------- */
@@ -229,7 +229,7 @@
       <p class="hint">Fin de période du relevé : ${isFinite(pdfBal.to) ? dt(pdfBal.to) : '?'}. Les petits écarts viennent des frais affichés arrondis ; un gros écart signale une opération manquante.</p>
       <div class="scroll"><table><tr><th>Actif</th><th class="n">Relevé</th><th class="n">Calculé</th><th class="n">Écart</th><th></th></tr>${rows.map(b => `<tr><td>${esc(b.asset)}</td><td class="n">${num(b.expected)}</td><td class="n">${num(b.computed)}</td><td class="n ${b.ok ? '' : 'neg'}">${b.ok ? '0' : num(b.diff)}</td><td>${b.ok ? '✓' : '⚠'}</td></tr>`).join('')}</table></div>
       ${bad.length ? '<button id="baladj" class="small">Ajouter des lignes d’ajustement pour aligner sur le relevé</button>' : ''}</details>`;
-    const btn = $('#baladj'); if (btn) btn.onclick = () => { txs = txs.concat(E.balanceAdjustments(txs, pdfBal.closing, pdfBal.to, opening).map(t => Object.assign({ id: uid(), platform: 'Revolut' }, t))); save(); renderTx(); };
+    const btn = $('#baladj'); if (btn) btn.onclick = () => { txs = txs.concat(E.balanceAdjustments(txs, pdfBal.closing, pdfBal.to, opening).map(t => Object.assign({ id: uid(), platform: 'Relevé', feeInKind: true }, t))); save(); renderTx(); };
   }
   /* ---------- État reporté au 31/12 ---------- */
   function renderOpening() {
@@ -324,7 +324,7 @@
     add('Plus-values', 'Plus-value nette' + (S.incomplete ? ' (incomplet)' : ''), sgn(S.net), S.net);
     add('Cessions', 'Nombre de cessions imposables', String(S.nCessions), S.nCessions); add('Cessions', 'Produit total des cessions (213)', eur(S.produit), S.produit);
     add('Cessions', 'Prix d’acquisition des actifs cédés (fractions 220)', eur(S.acquisition), S.acquisition);
-    add('Frais', 'Frais en nature (Revolut)', eur(S.fees.inKind), S.fees.inKind); add('Frais', 'Frais explicites', eur(S.fees.explicit), S.fees.explicit); add('Frais', 'Frais totaux', eur(S.fees.total), S.fees.total);
+    add('Frais', 'Frais en nature', eur(S.fees.inKind), S.fees.inKind); add('Frais', 'Frais explicites', eur(S.fees.explicit), S.fees.explicit); add('Frais', 'Frais totaux', eur(S.fees.total), S.fees.total);
     for (const g of Object.values(S.income)) add('Revenus (income)', `${g.label} (${g.n})`, (g.est ? '≈ ' : '') + eur(g.eur), g.eur);
     add('Revenus (income)', 'Total revenus' + (S.incomeUnknown.length ? ` (${S.incomeUnknown.length} sans cours)` : ''), eur(S.incomeTotal), S.incomeTotal);
     add('Sorties (outcome)', `Ventes vers euros (${S.outcome.SELL.n})`, eur(S.outcome.SELL.eur), S.outcome.SELL.eur);
@@ -365,7 +365,7 @@
     const unv = livePrice && livePrice.unvalued ? [...livePrice.unvalued].filter(x => manual[x] == null) : [];
     if (unv.length) h += `<div class="note warn">Aucun cours trouvé pour ${unv.map(esc).join(', ')} : compté 0 € dans la ligne 212 (≈, à vérifier). Cours unitaire en € si vous le connaissez : ${unv.map(x => `<label>${esc(x)} <input size="8" data-man="${esc(x)}"></label>`).join(' ')} — ou relancez le calcul plus tard.</div>`;
     h += cmpBlock(Y);
-    h += `<div class="note">🌍 Compte Revolut ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
+    h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
     h += '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="print" class="ghost">Imprimer</button></p>';
     if (window.KryptaxExport) h = KryptaxExport.exportData(Y, {}, () => [], []).totals.map(t => `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cessions)<br>${esc(KryptaxExport.globalText(t))}</div>`).join('') + h;

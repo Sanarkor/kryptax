@@ -25,7 +25,7 @@
       } else qty = Math.abs(E.parseNum(rawQ, o.nmode));
       if (!isFinite(qty)) { if (type === 'IGNORE') qty = 0; else { bad.push(i); return; } }
       let v = isFinite(val) ? val : (price > 0 ? price * qty : 0);
-      const t = { id: uid(), seq: i, date, type, feeInKind: o.feeInKind != null ? !!o.feeInKind : /revolut/i.test(o.platform || ''), rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || undefined };
+      const t = { id: uid(), seq: i, date, type, feeInKind: o.feeInKind != null ? !!o.feeInKind : /revolut|^relev/i.test(o.platform || ''), rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || undefined };
       if (cur === 'EUR') { t.eur = v || 0; t.fee = fee; } else { t.cur = cur; t.valCur = v || 0; t.feeCur = fee; t.unitPriceCur = price || undefined; t.eur = 0; t.fee = 0; t.unitPrice = undefined; t.fxPending = true; }
       out.push(t);
     });
