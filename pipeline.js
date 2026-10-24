@@ -55,6 +55,8 @@
       for (let i = 0; i < tries; i++) {
         if (signal && signal.aborted) throw new Error('Annulé');
         d.calls++;
+        // limitation de débit : au moins GAP ms entre deux appels à la même source
+        const GAP = opt.gap != null ? opt.gap : 150, nx = Math.max(Date.now(), (nextAt[srcName] || 0)); nextAt[srcName] = nx + GAP; if (nx > Date.now()) await sleep(nx - Date.now());
         try {
           const r = await fetchT(url);
           if (r.status === 429 || r.status >= 500) { err = 'HTTP ' + r.status; await sleep(1500 * (i + 1)); continue; }
@@ -65,7 +67,7 @@
       }
       d.fail++; d.last = err; noteErr(srcName, err); return { err };
     }
-    const lastErr = {};
+    const lastErr = {}, nextAt = {};
     function noteErr(src, e) { const k = /Binance/.test(src) ? ['Binance €', 'Binance USDT'] : [src]; k.forEach(x => lastErr[x] = e + (typeof location === 'undefined' ? '' : '')); }
     const day = ts => new Date(ts).toISOString().slice(0, 10);
     /* Taux de change BCE sur une plage (un seul appel), repli : Binance EURUSDT. map jour -> 1 unité de cur en € */
@@ -108,7 +110,7 @@
       }
       return out;
     }
-    const geckoIds = Object.assign({ VVV: 'venice-token', ATH: 'aethir', XDC: 'xdce-crowd-sale', GIGA: 'gigachad-2', GRASS: 'grass', MON: 'monad', MEW: 'cat-in-a-dogs-world', ZKJ: 'polyhedra-network', FLR: 'flare-networks', MATH: 'math', TON: 'the-open-network', HYPE: 'hyperliquid', STG: 'stargate-finance', BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', XRP: 'ripple', DOGE: 'dogecoin', PEPE: 'pepe' }, opt.geckoIds || {});
+    const geckoIds = Object.assign({ VVV: 'venice-token', ATH: 'aethir', XDC: 'xdce-crowd-sale', GIGA: 'gigachad-2', GRASS: 'grass', MON: 'monad', MEW: 'cat-in-a-dogs-world', ZKJ: 'polyhedra-network', FLR: 'flare-networks', MATH: 'math', TON: 'the-open-network', HYPE: 'hyperliquid', STG: 'stargate-finance', DOGS: 'dogs-2', USDC: 'usd-coin', VET: 'vechain', PROVE: 'succinct', ADA: 'cardano', ZRO: 'layerzero', BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', XRP: 'ripple', DOGE: 'dogecoin', PEPE: 'pepe' }, opt.geckoIds || {});
     let gq = Promise.resolve();
     function gget(url) { const r = gq.then(async () => { let x; for (let i = 0; i < 3; i++) { if (dead.has('gecko')) return { err: 'injoignable' }; x = await get('CoinGecko', url, 1); const lim = x.err === 'HTTP 429' || (x.j && x.j.status && x.j.status.error_code === 429); if (!x.err && !lim) break; if (!lim) { dead.add('gecko'); break; } await sleep(4000 * (i + 1)); } await sleep(opt.geckoGap != null ? opt.geckoGap : 2200); return x; }); gq = r.catch(() => {}); return r; }
     async function geckoSeries(a, from, to) { // ≤ 90 jours par appel -> points horaires
@@ -178,8 +180,52 @@
       const k = r.j.result && Object.keys(r.j.result).find(x => x !== 'last'); if (!k) return undefined;
       const out = {}; for (const c of r.j.result[k]) out[Math.floor(c[0] * 1000 / HOUR)] = +c[1]; return out;
     }
+    /* DefiLlama : cours $ à l'heure, 500 points par appel, via l'identifiant CoinGecko (sans clé). */
+    async function llamaSeries(a, from, to) {
+      const id = geckoIds[a]; if (!id) return null; const out = {}; let s = Math.floor(from / 1000) - 3600;
+      while (s <= to / 1000 + 3600) {
+        const r = await get('DefiLlama', `https://coins.llama.fi/chart/coingecko:${id}?start=${s}&span=500&period=1h&searchWidth=1h`);
+        if (r.err) return undefined; const c = r.j && r.j.coins && r.j.coins['coingecko:' + id]; if (!c) return Object.keys(out).length ? out : null;
+        for (const p of c.prices || []) out[Math.round(p.timestamp * 1000 / HOUR)] = +p.price;
+        s += 500 * 3600;
+      }
+      return out;
+    }
+    /* Bitget : 200 bougies 1 h par appel, en remontant le temps. */
+    async function bitgetSeries(a, from, to) {
+      const out = {}; let end = Math.floor(to / HOUR) * HOUR + 3 * HOUR;
+      for (let i = 0; i < 80 && end > from - 2 * HOUR; i++) {
+        const r = await get('Bitget', `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${a}USDT&granularity=1h&endTime=${end}&limit=200`);
+        if (r.err) return undefined; if (!r.j || r.j.code === '40034') return null; const k = r.j.data || []; if (!k.length) break;
+        for (const c of k) out[Math.floor(+c[0] / HOUR)] = +c[1];
+        end = Math.min(...k.map(c => +c[0])) - 1;
+      }
+      return out;
+    }
+    /* Bitstamp : paires en euros, 1000 bougies par appel. */
+    async function bitstampSeries(a, from, to) {
+      const out = {}; let s = Math.floor(from / 1000) - 3600;
+      while (s <= to / 1000 + 3600) {
+        const r = await get('Bitstamp €', `https://www.bitstamp.net/api/v2/ohlc/${a.toLowerCase()}eur/?step=3600&limit=1000&start=${s}`);
+        if (r.err) return undefined; if (r.status === 404 || !r.j || !r.j.data) return null;
+        for (const c of r.j.data.ohlc || []) out[Math.floor(+c.timestamp * 1000 / HOUR)] = +c.open;
+        s += 1000 * 3600;
+      }
+      return out;
+    }
+    /* Crypto.com : paires en $, 300 bougies par appel. */
+    async function cdcSeries(a, from, to) {
+      const out = {}; let s = Math.floor(from / HOUR) * HOUR - HOUR;
+      while (s <= to + HOUR) {
+        const e = s + 299 * HOUR, r = await get('Crypto.com', `https://api.crypto.com/exchange/v1/public/get-candlestick?instrument_name=${a}_USD&timeframe=1h&start_ts=${s}&end_ts=${e}&count=300`);
+        if (r.err) return undefined; if (!r.j || r.j.code === 40004) return null;
+        for (const c of (r.j.result && r.j.result.data) || []) out[Math.floor(+c.t / HOUR)] = +c.o;
+        s = e + HOUR;
+      }
+      return out;
+    }
     const assetDiag = {};
-    /* Chaîne de sources : Binance € → Binance USDT → Gate.io → OKX → Coinbase € → CoinGecko (id explicite). Chaque essai est noté par actif. */
+    /* Chaîne de sources : Binance € → Binance USDT → Gate.io → OKX → DefiLlama → Bitget → Bitstamp € → Crypto.com → Coinbase €/$ → Kraken → CoinGecko (id explicite). Chaque essai est noté par actif. */
     async function series(a, from, to) {
       const log = assetDiag[a] = []; let net = false;
       const tries = [
@@ -187,6 +233,10 @@
         ['Binance USDT', () => binanceSeries(a + 'USDT', from, to), true],
         ['Gate.io', () => gateSeries(a, from, to), true],
         ['OKX', () => okxSeries(a, from, to), true],
+        ['DefiLlama', () => llamaSeries(a, from, to), true],
+        ['Bitget', () => bitgetSeries(a, from, to), true],
+        ['Bitstamp €', () => bitstampSeries(a, from, to), false],
+        ['Crypto.com', () => cdcSeries(a, from, to), true],
         ['Coinbase', () => coinbaseSeries(a + '-EUR', from, to), false],
         ['Coinbase $', () => coinbaseSeries(a + '-USD', from, to), true],
         ['Kraken', () => krakenSeries(a + 'EUR'), false],
