@@ -183,6 +183,57 @@
     }
     return y;
   }
-  const api = { fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  /* Échanges crypto→crypto dans un relevé Revolut : la vente et l'achat apparaissent comme deux lignes
+     à la même seconde (écart ≤ win ms) pour une valeur € proche (±tol). Appariement un-pour-un.
+     Les ventes vers € n'ont pas d'achat simultané. t.swapForce = 'taxable' empêche l'appariement. */
+  function detectSwaps(txs, o) {
+    o = o || {}; const win = o.win != null ? o.win : 5000, tol = o.tol != null ? o.tol : 0.08;
+    const val = t => Math.abs(t.eur || 0) || Math.abs(t.valCur || 0);
+    for (const t of txs) if (t.swapAuto && !t.typeManual) { t.type = t.swapAuto; delete t.swapAuto; delete t.swapWith; }
+    const free = t => !t.typeManual && t.swapForce !== 'taxable';
+    const sells = txs.filter(t => t.type === 'SELL' && free(t)), buys = txs.filter(t => t.type === 'BUY' && free(t));
+    const cand = [];
+    for (const s of sells) for (const b of buys) {
+      if (b.asset === s.asset) continue;
+      const dt = Math.abs(b.date - s.date), vs = val(s), vb = val(b);
+      if (dt > win || !(vs > 0 && vb > 0)) continue;
+      const e = Math.abs(vb - vs) / vs; if (e > tol) continue;
+      cand.push({ s, b, dt, e });
+    }
+    cand.sort((x, y) => x.dt - y.dt || x.e - y.e);
+    const used = new Set(), pairs = [];
+    for (const c of cand) {
+      if (used.has(c.s) || used.has(c.b)) continue; used.add(c.s); used.add(c.b);
+      c.s.swapAuto = 'SELL'; c.b.swapAuto = 'BUY'; c.s.type = 'EXCH_OUT'; c.b.type = 'EXCH_IN';
+      c.s.swapWith = c.b.id; c.b.swapWith = c.s.id; c.b.seq = (c.s.seq || 0) + 0.5;
+      pairs.push({ out: c.s, in: c.b, dt: c.dt, gap: c.e });
+    }
+    return pairs;
+  }
+  /* Contre-vérification avec un relevé en euros (texte collé ou CSV) : lignes « Vente de <ACTIF> » + date.
+     Une vente avec une ligne correspondante (même actif, ±2 s ; même jour si l'heure manque) est confirmée imposable. */
+  function parseFiatSales(text) {
+    const out = [];
+    const reD = /(\d{1,2}\s+[a-zéû.]+\s+\d{4}(?:,?\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)/i;
+    for (const line of String(text || '').split(/\r?\n/)) {
+      const m = /vente de\s+([A-Za-z0-9]+)/i.exec(line); if (!m) continue;
+      const d = reD.exec(line); if (!d) continue;
+      const date = parseDate(d[1].replace(/,(?=\s+\d{1,2}:)/, ','), 'DMY'); if (!isFinite(date)) continue;
+      out.push({ asset: m[1].toUpperCase(), date, hasTime: /:/.test(d[1]), line: line.trim() });
+    }
+    return out;
+  }
+  function crossCheck(txs, fiat) {
+    const sells = txs.filter(t => t.type === 'SELL' || t.type === 'EXCH_OUT'), used = new Set(), res = { confirmed: [], swapButFiat: [], sellNoFiat: [], fiatNoSell: [] };
+    const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+    for (const t of sells) {
+      const f = fiat.find(x => !used.has(x) && x.asset === t.asset && (x.hasTime ? Math.abs(x.date - t.date) <= 2000 : sameDay(x.date, t.date)));
+      if (f) { used.add(f); t.fiatConfirmed = true; (t.type === 'SELL' ? res.confirmed : res.swapButFiat).push({ t, f }); }
+      else { delete t.fiatConfirmed; if (t.type === 'SELL') res.sellNoFiat.push({ t }); }
+    }
+    res.fiatNoSell = fiat.filter(x => !used.has(x));
+    return res;
+  }
+  const api = { parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
