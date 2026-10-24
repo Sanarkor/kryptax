@@ -12,6 +12,11 @@ Application Revolut → onglet **Crypto** → **⋯ / Plus** → **Relevés / Do
 
 Faites de même pour vos **autres plateformes et portefeuilles** : la ligne 212 (valeur globale du portefeuille) doit inclure **tout** ce que vous détenez, où que ce soit.
 
+## Échanges crypto→crypto (détection automatique)
+Le relevé Revolut ne dit pas contre quoi une vente a été faite. Mais un échange crypto→crypto (ex. VVV → HYPE) y apparaît comme **deux lignes à la même seconde** : une vente de la crypto donnée et un achat de la crypto reçue, pour une valeur en € presque identique (l'achat est un peu plus bas à cause des frais). Une vente vers des euros n'a pas d'achat simultané.
+
+Kryptax apparie donc, à l'import, chaque vente avec un achat d'une autre crypto **à ≤ 5 secondes** et de **valeur à ±8 %** (un achat ne sert qu'une fois ; la paire la plus proche dans le temps puis en valeur l'emporte). La paire devient « Échange : sortie » + « Échange : entrée » : non imposable, et l'achat ne s'ajoute pas au prix total d'acquisition (220). Un achat quelques dizaines de secondes plus tard reste un achat distinct. Le tableau « Échanges crypto→crypto détectés » permet de **forcer** une paire en vente imposable ; changer le type d'une ligne à la main l'exclut aussi de la détection. Les lignes « Autre » (euros, dollars) restent ignorées.
+
 ## Réutiliser un export Coinly
 Si vous avez déjà un compte Coinly : exportez l'historique des transactions en CSV (colonnes Date, Sent Amount/Currency, Received Amount/Currency, Fee, Net Worth, Label…). Kryptax reconnaît ce format « Envoyé / Reçu », vous laisse vérifier les colonnes, transforme chaque ligne en achat, vente, échange ou réception, et **reprend les valeurs en € de Coinly comme cours** (moins d'appels d'API). Dans les résultats, la rubrique « Comparer avec le rapport 2086 de Coinly » permet de saisir (ou d'importer en CSV `année;prix de cession;plus-value`) les totaux de votre rapport Coinly et d'afficher les écarts.
 
