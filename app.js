@@ -68,7 +68,7 @@
     txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
     if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
-    save(); renderTx();
+    save(); renderTx(); autoRun();
     let msg = res.txs.length + ' transactions lues dans le PDF' + (nsw ? ', ' + nsw + ' échanges crypto→crypto détectés' : '') + (r.fiat.length ? ', ' + r.fiat.length + ' lignes « Vente de / Achat de » des relevés en devises' : '') + '.';
     if (r.fiat.length) { const cc = E.crossCheck(txs, E.parseFiatSales(fiatText)); msg += ' Contre-vérification : ' + cc.confirmed.length + ' ventes confirmées, ' + (cc.swapButFiat.length + cc.sellNoFiat.length) + ' divergences (voir le tableau des échanges).'; }
     alert(msg + ' Vérifiez les types !');
@@ -96,7 +96,7 @@
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
       o.xlsx = isXlsx; o.source = name;
       const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
-    if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); } save(); box.remove(); renderTx();
+    if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); } save(); box.remove(); renderTx(); autoRun();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
       return alert(res.txs.length + ' transactions importées' + (res.bad.length ? ', ' + res.bad.length + ' lignes ignorées' : '') + (sus ? '. ' + sus + ' quantités reconstruites ou à vérifier' : '') + (usd ? '. ' + usd + ' lignes en devise étrangère, converties en € au calcul (taux BCE)' : '') + (nsw ? '. ' + nsw + ' échanges crypto→crypto détectés (non imposables, voir le tableau)' : '') + '. Vérifiez les types !');
       let n = 0, bad = 0;
@@ -111,7 +111,7 @@
         txs.push({ id: uid(), seq: i, date, type, rawType: g('type'), asset: String(g('asset')).trim().toUpperCase(), qty: Math.abs(qty), eur: isFinite(val) ? val : 0, fee: isFinite(fee) ? fee : 0, platform: o.platform, source: name });
         n++;
       });
-      save(); box.remove(); renderTx(); alert(n + ' transactions importées' + (bad ? ', ' + bad + ' lignes ignorées (date ou quantité illisible)' : '') + '. Vérifiez les types !');
+      save(); box.remove(); renderTx(); if (bad) alert(bad + ' lignes ignorées (date ou quantité illisible).'); autoRun();
     };
   }
 
@@ -161,7 +161,7 @@
           if (c && c[1] > 0) { cache[c[0] + '|h' + Math.floor(date / 3600e3)] = nw / c[1]; np++; }
         }
       });
-      saveCache(); save(); box.remove(); renderTx();
+      saveCache(); save(); box.remove(); renderTx(); autoRun();
       alert(n + ' transactions importées, ' + np + ' cours repris de Coinly' + (bad ? ', ' + bad + ' lignes ignorées' : '') + '. Vérifiez les types !');
     };
   }
@@ -207,10 +207,12 @@
     else return;
     E.detectSwaps(txs); save(); renderTx();
   });
+  function autoRun() { const b = $('#run'); if (b && !b.disabled && txs.length) setTimeout(() => b.click(), 50); }
   function renderTx() {
     renderSwaps();
     const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
     $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
+    $('#txnote').textContent = all.length ? `${all.length} transactions importées, dont ${sales.length} ventes. Le calcul se lance automatiquement après l'import.` : 'Aucune transaction importée.';
     $('#txinfo').textContent = all.length ? (showAll ? `${all.length} transactions affichées (dont ${sales.length} ventes)` : `${sales.length} ventes affichées sur ${all.length} transactions`) : '';
     $('#txall').hidden = !all.length; $('#txall').textContent = showAll ? 'Afficher seulement les ventes' : 'Afficher toutes les transactions';
     renderBalances(); renderOpening();
