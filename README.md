@@ -46,3 +46,10 @@ Test : `node test.js` reproduit l'exemple de la notice officielle (1 000 € inv
 - Lecture Excel : SheetJS (`xlsx.mini.min.js`, Apache 2.0) inclus localement, aucun CDN.
 
 Test PDF : `python3 testdata/make_pdf.py && node testpdf.mjs` (relevé **fictif**, nécessite `reportlab` et `pdfjs-dist@3` en local). Interface : thème sombre ; l'impression du 2086 reste sur fond blanc.
+
+## Cours et robustesse (oct. 2026)
+- Une série horaire par actif sur toute la période (Binance data-api → api.binance.com → Coinbase → CoinGecko), un seul appel Frankfurter pour les taux $ (repli Binance EURUSDT). Délai 8 s par requête, 4 en parallèle, bouton Annuler, barre de progression.
+- Une erreur réseau n'est jamais mémorisée comme « pas de cours » ; les anciens « NA » du cache sont purgés au chargement.
+- Panneau « Sources de prix » : état, nombre d'appels et dernière erreur par source. Sans source joignable : cours observé le plus proche dans vos relevés (≈).
+- Frais Revolut prélevés en nature : quantité nette = quantité affichée × (1 − frais/valeur), 0,09 % sur Revolut X ; le prix d'acquisition (220) est la valeur payée, frais inclus.
+- Bouton « Tout réinitialiser » : efface toutes les données Kryptax de ce navigateur (transactions, saisies, cache de prix) et recharge la page.
