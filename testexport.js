@@ -20,4 +20,5 @@ chk(/GLOBAL/.test(pB) && pB.includes(t.l224.toFixed(2)), 'PDF partie B : ligne G
 chk(/TOTAL GLOBAL/.test(pages[0]) && /3AN|3BN|305/.test(pages[0]), 'PDF page 1 : total global + case 3AN/3BN / seuil 305 €');
 chk(!pages.join('').includes('RENSEIGNER'), 'PDF : aucune ligne « À RENSEIGNER » (jeu fictif complet)');
 const csv = X.makeCsv(x); chk(/GLOBAL/.test(csv) && /TOTAL GLOBAL/.test(csv), 'CSV : ligne GLOBAL et total global');
+chk(!/revolut/i.test(pages.join('') + csv), 'PDF/CSV : aucune mention de la plateforme');
 process.exit(ok ? 0 : 1);
