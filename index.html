@@ -1,15 +1,15 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — aide au formulaire 2086</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://min-api.cryptocompare.com https://api.binance.com https://api.coingecko.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://min-api.cryptocompare.com https://api.binance.com https://data-api.binance.vision https://api.frankfurter.dev; style-src 'self'; script-src 'self'; img-src 'self' data:">
 <link rel="stylesheet" href="style.css"></head>
 <body>
 <header><h1>Kryptax</h1><p class="sub">Transactions crypto (Revolut et autres) → formulaire 2086</p></header>
-<div class="banner">⚠️ Outil d'aide au calcul, pas un conseil fiscal : vérifiez avec la <a href="https://www.impots.gouv.fr/formulaire/2086/declaration-des-plus-ou-moins-values-sur-actifs-numeriques" target="_blank" rel="noopener">notice officielle</a>. 🔒 Vos données restent dans votre navigateur (seuls des cours publics sont demandés à CryptoCompare / Binance).</div>
+<div class="banner">⚠️ Outil d'aide au calcul, pas un conseil fiscal : vérifiez avec la <a href="https://www.impots.gouv.fr/formulaire/2086/declaration-des-plus-ou-moins-values-sur-actifs-numeriques" target="_blank" rel="noopener">notice officielle</a>. 🔒 Vos données restent dans votre navigateur (seuls des cours publics sont demandés à Binance, à la BCE (Frankfurter) et, si vous mettez une clé, à CryptoCompare).</div>
 <main>
 <section><h2>1. Importer</h2>
  <p>Un ou plusieurs relevés CSV (Revolut ou autre plateforme). Il faut <b>tout l'historique depuis votre premier achat</b>, sur <b>tous</b> vos comptes et portefeuilles.</p>
- <label class="btn">Choisir des CSV<input type="file" id="files" accept=".csv,text/csv" multiple hidden></label>
+ <label class="btn">Choisir des fichiers (CSV ou Excel .xlsx)<input type="file" id="files" accept=".csv,.xlsx,text/csv" multiple hidden></label>
  <button id="example" class="ghost">Charger un exemple (fictif)</button>
  <div id="mapping"></div>
 </section>
@@ -29,10 +29,11 @@
 </section>
 <section><h2>3. Calculer</h2>
  <button id="run" class="btn">Récupérer les cours et calculer</button> <span id="progress"></span>
- <p class="hint">Les cours historiques (à l'heure, à la minute si &lt; 7 jours) sont mis en cache dans ce navigateur. En cas de limite d'API, Kryptax attend et reprend.</p>
+ <p class="hint">Cours historiques à l'heure (Binance), devises au taux BCE du jour, mis en cache dans ce navigateur. En cas de limite d'API, Kryptax attend et reprend. Jeton introuvable : cours le plus proche de vos relevés (±30 j, marqué ≈), sinon « à renseigner ».</p>
+ <details><summary class="hint">Option : clé CryptoCompare gratuite (plus de jetons, à la minute)</summary><input id="cckey" placeholder="clé API (gardée dans ce navigateur)" size="40"></details>
 </section>
 <section id="results"></section>
 </main>
 <footer>Kryptax — code ouvert, sans serveur. Méthode : art. 150 VH bis du CGI, notice 2086.</footer>
-<script src="engine.js"></script><script src="app.js"></script>
+<script src="xlsx.mini.min.js"></script><script src="engine.js"></script><script src="pipeline.js"></script><script src="app.js"></script>
 </body></html>

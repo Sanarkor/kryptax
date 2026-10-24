@@ -1,7 +1,7 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
-  const E = window.KryptaxEngine, $ = s => document.querySelector(s);
+  const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   let txs = load(LS.tx, []), cache = load(LS.cache, {}), manual = load(LS.manual, {});
@@ -39,12 +39,20 @@
     return m;
   }
   $('#files').addEventListener('change', async e => {
-    for (const file of e.target.files) showMapping(file.name, parseCSV(await file.text()));
+    for (const file of e.target.files) {
+      if (/\.xlsx?$/i.test(file.name)) {
+        if (!window.XLSX) { alert('Lecteur Excel indisponible.'); continue; }
+        const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+        showMapping(file.name, rows, true);
+      } else showMapping(file.name, parseCSV(await file.text()), false);
+    }
     e.target.value = '';
   });
-  function showMapping(name, rows) {
+  function showMapping(name, rows, isXlsx) {
     if (rows.length < 2) return alert(name + ' : fichier vide ?');
     if (rows[0].some(h => /sent amount|received amount|montant envoy|montant re/i.test(h))) return showMapping2(name, rows);
+    rows[0] = rows[0].map(x => E.fixText(String(x)));
     const head = rows[0], m = guessMap(head), box = document.createElement('div'); box.className = 'note';
     const sel = f => `<label>${LABELS[f]}<select data-f="${f}"><option value="">—</option>${head.map((h, i) => `<option value="${i}"${m[f] === i ? ' selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`;
     box.innerHTML = `<b>${esc(name)}</b> — ${rows.length - 1} lignes. Vérifiez les colonnes :
@@ -52,7 +60,8 @@
       <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label>
       <label>Format des nombres<select data-o="nmode"><option value="">Auto</option><option value="FR">1 234,56</option><option value="EN">1,234.56</option></select></label>
       <label>Plateforme<input data-o="platform" value="Revolut"></label></div>
-      <div class="scroll"><table><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${rows.slice(1, 6).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div>
+      ${isXlsx ? '<p class="warn">⚠️ Fichier .xlsx : la colonne Quantité est souvent tronquée (virgule perdue). Kryptax la reconstruit avec Valeur / Prix ou un cours historique, et marque les lignes douteuses. Privilégiez l’export CSV si possible.</p>' : ''}
+      <div class="scroll"><table><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${rows.slice(1, 6).map(r => `<tr>${r.map(c => `<td>${esc(c instanceof Date ? c.toLocaleString('fr-FR') : E.fixText(c))}</td>`).join('')}</tr>`).join('')}</table></div>
       <button class="go">Importer ces lignes</button> <button class="ghost cancel">Annuler</button>`;
     $('#mapping').appendChild(box);
     box.querySelector('.cancel').onclick = () => box.remove();
@@ -60,6 +69,10 @@
       const mp = {}; box.querySelectorAll('[data-f]').forEach(s => { if (s.value !== '') mp[s.dataset.f] = +s.value; });
       const o = {}; box.querySelectorAll('[data-o]').forEach(s => o[s.dataset.o] = s.value);
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
+      o.xlsx = isXlsx; o.source = name;
+      const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); save(); box.remove(); renderTx();
+      const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
+      return alert(res.txs.length + ' transactions importées' + (res.bad.length ? ', ' + res.bad.length + ' lignes ignorées' : '') + (sus ? '. ' + sus + ' quantités reconstruites ou à vérifier' : '') + (usd ? '. ' + usd + ' lignes en devise étrangère, converties en € au calcul (taux BCE)' : '') + '. Vérifiez les types !');
       let n = 0, bad = 0;
       rows.slice(1).forEach((r, i) => {
         const g = f => mp[f] == null ? '' : r[mp[f]];
@@ -139,59 +152,39 @@
     const s = E.sortTx(txs); $('#txcount').textContent = s.length ? '(' + s.length + ')' : '';
     $('#txtable').innerHTML = s.length ? `<tr><th>Date</th><th>Type</th><th>Crypto</th><th class="n">Quantité</th><th class="n">Montant €</th><th class="n">Frais €</th><th>Plateforme</th><th></th></tr>` + s.map(t => `<tr data-id="${t.id}" class="${E.CHECK.includes(t.type) ? 'chk' : ''}">
       <td>${dt(t.date)}${t.example ? ' <span class="tag">exemple</span>' : ''}</td><td><select data-k="type">${typeOpts(t.type)}</select>${t.rawType ? `<br><span class="hint">${esc(t.rawType)}</span>` : ''}</td>
-      <td><input data-k="asset" value="${esc(t.asset)}" size="6"></td><td class="n"><input data-k="qty" value="${num(t.qty)}" size="10"></td>
-      <td class="n"><input data-k="eur" value="${num(t.eur)}" size="9"></td><td class="n"><input data-k="fee" value="${num(t.fee)}" size="6"></td>
+      <td><input data-k="asset" value="${esc(t.asset)}" size="6"></td><td class="n${t.qtyStatus && !['ok', 'corrigée'].includes(t.qtyStatus) && !t.qtyManual ? ' bad' : ''}"><input data-k="qty" value="${num(t.qty)}" size="10">${t.qtyStatus && t.qtyStatus !== 'ok' && !t.qtyManual ? `<br><span class="hint">qté ${esc(t.qtyStatus)}</span>` : ''}</td>
+      <td class="n"><input data-k="eur" value="${num(t.eur)}" size="9">${t.cur ? `<br><span class="hint">${num(t.valCur)} ${t.cur}${t.fx ? ' × ' + num(t.fx) : ' (à convertir)'}</span>` : ''}</td><td class="n"><input data-k="fee" value="${num(t.fee)}" size="6"></td>
       <td>${esc(t.platform || '')}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>';
   }
   $('#txtable').addEventListener('change', e => {
     const tr = e.target.closest('tr'), t = txs.find(x => x.id === tr.dataset.id), k = e.target.dataset.k; if (!t || !k) return;
     t[k] = k === 'type' ? e.target.value : k === 'asset' ? e.target.value.trim().toUpperCase() : Math.abs(E.parseNum(e.target.value)) || 0;
-    save(); if (k === 'type') renderTx();
+    if (k === 'qty') t.qtyManual = true; if (k === 'eur' && t.cur) delete t.fxPending;
+    save(); if (k === 'type' || k === 'qty') renderTx();
   });
   $('#txtable').addEventListener('click', e => { if (!e.target.hasAttribute('data-del')) return; txs = txs.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); renderTx(); });
   $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; save(); renderTx(); $('#results').innerHTML = ''; } };
 
   /* ---------- Cours historiques ---------- */
   const HOUR = 3600e3;
-  const key = (a, ts) => a + '|' + Math.floor(ts / HOUR);
+  let livePrice = null;
   function priceFn(a, ts, txId) {
     if (manual[a + '@' + txId] != null) return manual[a + '@' + txId];
-    const v = cache[key(a, ts)]; return (v == null || v === 'NA') ? null : v;
-  }
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  async function getJSON(url, tries = 5) {
-    for (let i = 0; i < tries; i++) {
-      try {
-        const r = await fetch(url);
-        if (r.status === 429 || r.status >= 500) { await sleep(2000 * (i + 1)); continue; }
-        const j = await r.json();
-        if (j && j.Response === 'Error' && /rate|limit/i.test(j.Message || '')) { $('#progress').textContent = 'Limite d’API atteinte, pause…'; await sleep(5000 * (i + 1)); continue; }
-        return j;
-      } catch (e) { await sleep(1500 * (i + 1)); }
-    }
-    return null;
-  }
-  async function fetchPrice(a, ts) {
-    const sec = Math.floor(ts / 1000), recent = Date.now() - ts < 6.5 * 24 * HOUR;
-    const j = await getJSON(`https://min-api.cryptocompare.com/data/v2/histo${recent ? 'minute' : 'hour'}?fsym=${encodeURIComponent(a)}&tsym=EUR&limit=1&toTs=${sec}`);
-    const d = j && j.Data && j.Data.Data; if (d && d.length) { const c = d[d.length - 1]; if (c.close > 0) return c.close; }
-    // repli : Binance (paire ASSET/EUR, bougie 1 h)
-    const b = await getJSON(`https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(a)}EUR&interval=1h&startTime=${Math.floor(ts / HOUR) * HOUR}&limit=1`, 2);
-    if (Array.isArray(b) && b.length) return +b[0][4];
-    return null;
+    if (livePrice) return livePrice(a, ts);
+    const v = cache[a + '|' + Math.floor(ts / HOUR)]; return (v == null || v === 'NA') ? null : v;
   }
   $('#run').onclick = async () => {
-    const need = E.neededPrices(txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] }))).filter(n => manual[n.asset + '@' + n.txId] == null && cache[key(n.asset, n.ts)] == null);
-    const uniq = [...new Map(need.map(n => [key(n.asset, n.ts), n])).values()];
     $('#run').disabled = true;
-    for (let i = 0; i < uniq.length; i++) {
-      $('#progress').textContent = `Cours ${i + 1}/${uniq.length} : ${uniq[i].asset} au ${dt(uniq[i].ts)}…`;
-      const p = await fetchPrice(uniq[i].asset, uniq[i].ts);
-      cache[key(uniq[i].asset, uniq[i].ts)] = p == null ? 'NA' : p; saveCache(); await sleep(250);
-    }
-    $('#progress').textContent = uniq.length ? 'Cours récupérés.' : 'Cours déjà en cache.'; $('#run').disabled = false;
-    renderResults();
+    try {
+      const src = KP.makeSources((u) => fetch(u), { ccKey: localStorage.getItem('kryptax.cckey') || '', fxCache: load('kryptax.fx', {}) });
+      livePrice = await KP.prepare(txs, src, cache, m => $('#progress').textContent = m);
+      saveCache(); localStorage.setItem('kryptax.fx', JSON.stringify(src.fxCache)); save(); renderTx();
+      $('#progress').textContent = 'Calcul terminé.';
+    } catch (e) { $('#progress').textContent = 'Erreur : ' + e.message; }
+    $('#run').disabled = false; renderResults();
   };
+  $('#cckey').value = localStorage.getItem('kryptax.cckey') || '';
+  $('#cckey').onchange = e => localStorage.setItem('kryptax.cckey', e.target.value.trim());
 
   /* ---------- Résultats 2086 ---------- */
   const ROWS = [
@@ -215,9 +208,10 @@
       h += '</table></div>';
       for (const c of y.cessions.filter(c => c.status !== 'ok')) {
         if (!c.missing.length) { h += `<div class="note warn">Cession du ${dt(c.date)} : calcul suspendu, une cession antérieure est incomplète (la ligne 221 en dépend).</div>`; continue; }
-        h += `<div class="note warn">Cession du ${dt(c.date)} : cours introuvable pour ${c.missing.map(esc).join(', ')}. Renseignez le cours unitaire en € à ce moment : ${c.missing.map(a => `<label>${esc(a)} <input size="8" data-man="${esc(a)}@${c.tx.id}"></label>`).join(' ')} ou la valeur globale (ligne 212) : <input size="10" data-o212="${c.tx.id}"></div>`;
+        h += `<div class="note warn">Cession du ${dt(c.date)} : cours introuvable pour ${c.missing.map(esc).join(', ')}. Renseignez le cours unitaire en € à ce moment : ${c.missing.map(a => `<label>${esc(a)} <input size="8" data-man="${esc(a)}@${c.tx.id}"></label>`).join(' ')} (0 si valeur négligeable) ou la valeur globale (ligne 212) : <input size="10" data-o212="${c.tx.id}"></div>`;
       }
-      h += `<p class="hint">Détail 212 : ${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${eur(d.price)}` : esc(d.asset)).join(' + ')).join(' ; ')}</p>`;
+      const ap = (a, c) => livePrice && livePrice.approx && livePrice.approx.has(a + '|' + c.date) ? '≈' : '';
+      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ')).join(' ;<br>')}</p></details>`;
       h += `<p>Ligne 51 — total des prix de cession (218) : <b>${eur(y.total218)}</b>${y.exonere ? ' → <b>≤ 305 € : cessions exonérées</b>, pas d’autres lignes à remplir.' : ''}</p>`;
       h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : (y.total224 >= 0 ? '+' : '') + eur(y.total224)}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : flat tax = 12,8 % d’impôt + prélèvements sociaux (≈ 30 % au total ; taux des prélèvements sociaux à vérifier pour votre année) → environ ${eur(Math.max(0, y.total224) * 0.30)}. Option barème progressif : case 3CN.</div>`;
@@ -246,7 +240,7 @@
     if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
     const k = e.target.dataset.cmp; if (k) { const v = E.parseNum(e.target.value); if (isFinite(v)) manual[k] = v; else delete manual[k]; save(); renderResults(); return; }
     const m = e.target.dataset.man, o = e.target.dataset.o212, v = E.parseNum(e.target.value);
-    if (m) { if (v > 0) manual[m] = v; else delete manual[m]; }
+    if (m) { if (v >= 0) manual[m] = v; else delete manual[m]; }
     if (o) { if (v > 0) manual['212@' + o] = v; else delete manual['212@' + o]; }
     save(); renderResults();
   });
