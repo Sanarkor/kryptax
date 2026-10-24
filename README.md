@@ -1,2 +1,36 @@
-# kryptax
-Kryptax — aide au formulaire 2086 (plus-values crypto), 100 % dans le navigateur
+# Kryptax
+
+Page web (GitHub Pages) qui aide à remplir le **formulaire 2086** (plus-values sur actifs numériques) à partir de vos transactions crypto Revolut et d'autres plateformes.
+
+> ⚠️ Outil d'aide au calcul, **pas un conseil fiscal** : vérifiez avec la notice officielle 2086 (impots.gouv.fr).
+> 🔒 **Vos données restent dans votre navigateur** : rien n'est envoyé à un serveur. Seuls des cours publics sont demandés à CryptoCompare (puis Binance en secours). Les données sont gardées dans le `localStorage` de votre navigateur (bouton « Tout effacer »).
+
+En ligne : https://sanarkor.github.io/kryptax/
+
+## Obtenir le relevé Revolut
+Application Revolut → onglet **Crypto** → **⋯ / Plus** → **Relevés / Documents** → **Relevé de compte (Account statement)** → période « depuis le début » → format **Excel/CSV**. Prenez l'historique **complet depuis votre premier achat**. (Le chemin exact peut changer selon la version de l'appli.)
+
+Faites de même pour vos **autres plateformes et portefeuilles** : la ligne 212 (valeur globale du portefeuille) doit inclure **tout** ce que vous détenez, où que ce soit.
+
+## Réutiliser un export Coinly
+Si vous avez déjà un compte Coinly : exportez l'historique des transactions en CSV (colonnes Date, Sent Amount/Currency, Received Amount/Currency, Fee, Net Worth, Label…). Kryptax reconnaît ce format « Envoyé / Reçu », vous laisse vérifier les colonnes, transforme chaque ligne en achat, vente, échange ou réception, et **reprend les valeurs en € de Coinly comme cours** (moins d'appels d'API). Dans les résultats, la rubrique « Comparer avec le rapport 2086 de Coinly » permet de saisir (ou d'importer en CSV `année;prix de cession;plus-value`) les totaux de votre rapport Coinly et d'afficher les écarts.
+
+## Utilisation
+1. **Importer** un ou plusieurs CSV. Kryptax devine les colonnes (Symbol, Type, Quantity, Price, Value, Fees, Date…) : vérifiez-les dans l'aperçu, choisissez le format des dates (JJ/MM ou MM/JJ) et des nombres (1 234,56 ou 1,234.56).
+2. **Vérifier les types** ligne par ligne : Achat, Vente (imposable), Paiement en crypto (imposable), Échange crypto→crypto sortie/entrée (non imposable), Staking/Airdrop/Intérêts (à vérifier), Réception/Envoi, Frais, Ignorer. Un échange BTC→ETH = une ligne « sortie » BTC + une ligne « entrée » ETH.
+3. **Ajouter à la main** les opérations d'autres plateformes ou portefeuilles.
+4. **Calculer** : Kryptax reconstruit vos quantités à chaque cession, récupère les cours historiques (à l'heure, ou à la minute pour les 7 derniers jours), puis remplit les lignes 211 à 224 par cession, la ligne 51 (total des prix de cession, exonération si ≤ 305 €) et la ligne 52 (total), à reporter en **3AN** (plus-value) ou **3BN** (moins-value) de la 2042-C.
+5. Si un cours est introuvable (petit jeton), la cession est **« à renseigner »** : saisissez le cours ou directement la valeur globale (ligne 212).
+6. **Exporter en CSV** ou **Imprimer / PDF**.
+
+N'oubliez pas le formulaire **3916-bis** pour chaque compte d'actifs numériques ouvert à l'étranger (Revolut, Binance…).
+
+## Méthode (art. 150 VH bis du CGI)
+Plus-value = 218 − [223 × (217 / 212)], avec 223 = 220 − 221 − 222. Le prix total d'acquisition (220) cumule les achats en euros (frais inclus) ; après chaque cession, la fraction de capital initial `223 × 217 / 212` s'ajoute à la ligne 221. Les frais réduisent le prix de cession (218) mais pas le quotient 217/212.
+
+Test : `node test.js` reproduit l'exemple de la notice officielle (1 000 € investis ; cession de 450 € pour un portefeuille de 1 200 € → +75 € ; puis cession de 1 300 € → +675 €).
+
+## Limites
+- Staking, airdrops, intérêts : comptés à 0 € de coût et signalés « à vérifier », sans trancher leur fiscalité.
+- Soultes (216, 222) non gérées automatiquement (0 par défaut).
+- Formats Revolut non encore testés sur un vrai relevé.
