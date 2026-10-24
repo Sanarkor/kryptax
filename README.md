@@ -3,12 +3,12 @@
 Page web (GitHub Pages) qui aide à remplir le **formulaire 2086** (plus-values sur actifs numériques) à partir de vos transactions crypto Revolut et d'autres plateformes.
 
 > ⚠️ Outil d'aide au calcul, **pas un conseil fiscal** : vérifiez avec la notice officielle 2086 (impots.gouv.fr).
-> 🔒 **Vos données restent dans votre navigateur** : rien n'est envoyé à un serveur. Seuls des cours publics sont demandés à CryptoCompare (puis Binance en secours). Les données sont gardées dans le `localStorage` de votre navigateur (bouton « Tout effacer »).
+> 🔒 **Vos données restent dans votre navigateur** : rien n'est envoyé à un serveur. Seuls des cours publics sont demandés : Binance (cours à l'heure), BCE via Frankfurter (taux USD→EUR pour Revolut X), CryptoCompare si vous saisissez une clé gratuite. Les données sont gardées dans le `localStorage` de votre navigateur (bouton « Tout effacer »).
 
 En ligne : https://sanarkor.github.io/kryptax/
 
 ## Obtenir le relevé Revolut
-Application Revolut → onglet **Crypto** → **⋯ / Plus** → **Relevés / Documents** → **Relevé de compte (Account statement)** → période « depuis le début » → format **Excel/CSV**. Prenez l'historique **complet depuis votre premier achat**. (Le chemin exact peut changer selon la version de l'appli.)
+Application Revolut → onglet **Crypto** → **⋯ / Plus** → **Relevés / Documents** → **Relevé de compte (Account statement)** → période « depuis le début » → format **CSV** de préférence (Kryptax lit aussi l'**Excel .xlsx**, mais Revolut y tronque la colonne Quantité : Kryptax la reconstruit avec Valeur / Prix et signale les lignes douteuses). Prenez l'historique **complet depuis votre premier achat**. (Le chemin exact peut changer selon la version de l'appli.)
 
 Faites de même pour vos **autres plateformes et portefeuilles** : la ligne 212 (valeur globale du portefeuille) doit inclure **tout** ce que vous détenez, où que ce soit.
 
@@ -33,4 +33,6 @@ Test : `node test.js` reproduit l'exemple de la notice officielle (1 000 € inv
 ## Limites
 - Staking, airdrops, intérêts : comptés à 0 € de coût et signalés « à vérifier », sans trancher leur fiscalité.
 - Soultes (216, 222) non gérées automatiquement (0 par défaut).
-- Formats Revolut non encore testés sur un vrai relevé.
+- Petits jetons absents de Binance : cours le plus proche de vos relevés (±30 j, marqué ≈) ou saisie manuelle.
+- Récompenses « Apprendre » sans prix ni valeur : quantité impossible à reconstruire depuis un .xlsx, à corriger à la main (ou valeur 0 si négligeable).
+- Lecture Excel : SheetJS (`xlsx.mini.min.js`, Apache 2.0) inclus localement, aucun CDN.
