@@ -1,6 +1,6 @@
 # Kryptax
 
-Page web (GitHub Pages) qui aide à remplir le **formulaire 2086** (plus-values sur actifs numériques) à partir de les relevés de transactions de vos plateformes crypto.
+Formulaire 2086 pour la fiscalité française : page web (GitHub Pages) qui aide à remplir la déclaration **2086** (plus-values sur actifs numériques) à partir des relevés de vos comptes crypto.
 
 > ⚠️ Outil d'aide au calcul, **pas un conseil fiscal** : vérifiez avec la notice officielle 2086 (impots.gouv.fr).
 > 🔒 **Vos données restent dans votre navigateur** : rien n'est envoyé à un serveur. Seuls des cours publics sont demandés, sans clé API : Binance, Gate.io, OKX, DefiLlama, Bitget, Bitstamp, Crypto.com, Coinbase, Kraken, CoinGecko (cours à l'heure) et la BCE via Frankfurter (taux USD→EUR). Les données sont gardées dans le `localStorage` de votre navigateur (bouton « Tout effacer »).
