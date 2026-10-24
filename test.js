@@ -97,7 +97,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const rows = s => [['Plus-values', 'Gains', '', s.gains], ['Frais', 'Frais totaux', '', s.fees.total], ['Revenus (income)', 'Total', '', s.incomeTotal], ['Sorties (outcome)', 'Ventes', '', s.outcome.SELL.eur], ['Soldes', 'Total', '', s.closingTotal]];
   const x = X.exportData(Y, S, rows, T), csv = X.makeCsv(x).split('\n');
   eq(r.cessions.length, 18, 'Export : 18 cessions calculées'); eq(x.cessions.length, 18, 'Export : 18 lignes de cession exportées');
-  eq(x.swaps.length, 4, 'Export : 4 échanges exclus exportés'); eq(new Set(x.summary.map(s => s[1])).size, 5, 'Export : 5 sections de synthèse');
+  eq(x.swapCount, 4, 'Export : 4 échanges exclus comptés (non listés)'); eq(csv.some(l => /Soldes|Revenus/.test(l)) ? 1 : 0, 0, 'Export : pas de soldes ni de revenus');
   const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 19, 'CSV : 18 lignes sous CESSIONS + 1 ligne GLOBAL'); eq(csv[i0 + 2 + 18].split(';')[1] === 'GLOBAL' ? 1 : 0, 1, 'CSV : ligne GLOBAL en fin de tableau');
+  eq(X.FORM.map(f => f[0]).join(',') === '211,212,213,214,215,216,217,218,220,221,222,223,224' ? 1 : 0, 1, 'Export : lignes 211 à 224 de la 2086 dans l’ordre');
 }
 process.exit(ok ? 0 : 1);

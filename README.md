@@ -3,7 +3,7 @@
 Page web (GitHub Pages) qui aide à remplir le **formulaire 2086** (plus-values sur actifs numériques) à partir de les relevés de transactions de vos plateformes crypto.
 
 > ⚠️ Outil d'aide au calcul, **pas un conseil fiscal** : vérifiez avec la notice officielle 2086 (impots.gouv.fr).
-> 🔒 **Vos données restent dans votre navigateur** : rien n'est envoyé à un serveur. Seuls des cours publics sont demandés, sans clé API : Binance, Gate.io, OKX, Coinbase, Kraken, CoinGecko (cours à l'heure) et la BCE via Frankfurter (taux USD→EUR). Les données sont gardées dans le `localStorage` de votre navigateur (bouton « Tout effacer »).
+> 🔒 **Vos données restent dans votre navigateur** : rien n'est envoyé à un serveur. Seuls des cours publics sont demandés, sans clé API : Binance, Gate.io, OKX, DefiLlama, Bitget, Bitstamp, Crypto.com, Coinbase, Kraken, CoinGecko (cours à l'heure) et la BCE via Frankfurter (taux USD→EUR). Les données sont gardées dans le `localStorage` de votre navigateur (bouton « Tout effacer »).
 
 En ligne : https://sanarkor.github.io/kryptax/
 
@@ -29,7 +29,7 @@ Si vous avez déjà un compte Coinly : exportez l'historique des transactions en
 3. **Ajouter à la main** les opérations d'autres plateformes ou portefeuilles.
 4. **Calculer** : Kryptax reconstruit vos quantités à chaque cession, récupère les cours historiques (à l'heure, ou à la minute pour les 7 derniers jours), puis remplit les lignes 211 à 224 par cession, la ligne 51 (total des prix de cession, exonération si ≤ 305 €) et la ligne 52 (total), à reporter en **3AN** (plus-value) ou **3BN** (moins-value) de la 2042-C.
 5. Si un cours est introuvable (petit jeton), la cession est **« à renseigner »** : saisissez le cours ou directement la valeur globale (ligne 212).
-6. **Exporter** en PDF, CSV ou xlsx : tableau 2086 en deux parties (A = 211–218, B = 220–224) avec une ligne **GLOBAL** (totaux 213, 214, 218, somme des 224), la case 3AN/3BN et le rappel du seuil de 305 €.
+6. **Exporter** en PDF, CSV ou xlsx : uniquement les cessions imposables, en un tableau (une ligne par cession, colonnes 211 à 224 avec les libellés de la déclaration 2086) terminé par une ligne **GLOBAL** (totaux 213, 214, 218, somme des 224). Première page : synthèse courte (total des cessions, plus-value nette, case 3AN/3BN, seuil de 305 €, nombre d'échanges crypto→crypto exclus). Le xlsx ajoute une feuille « Formulaire 2086 » (une colonne par cession) et le calcul de la ligne 224.
 
 N'oubliez pas le formulaire **3916-bis** pour chaque compte d'actifs numériques ouvert à l'étranger.
 
@@ -48,7 +48,7 @@ Test : `node test.js` reproduit l'exemple de la notice officielle (1 000 € inv
 Test PDF : `python3 testdata/make_pdf.py && node testpdf.mjs` (relevé **fictif**, nécessite `reportlab` et `pdfjs-dist@3` en local). Interface : thème sombre ; l'impression du 2086 reste sur fond blanc.
 
 ## Cours et robustesse (oct. 2026)
-- Une série horaire par actif sur toute la période (Binance → Gate.io → OKX → Coinbase €/$ → Kraken → CoinGecko, sans clé API ; diagnostic par actif et par source), un seul appel Frankfurter pour les taux $ (repli Binance EURUSDT). Délai 8 s par requête, 4 en parallèle, bouton Annuler, barre de progression.
+- Une série horaire par actif sur toute la période (Binance → Gate.io → OKX → DefiLlama → Bitget → Bitstamp € → Crypto.com → Coinbase €/$ → Kraken → CoinGecko, sans clé API, avec cache et limitation de débit ; diagnostic par actif et par source), un seul appel Frankfurter pour les taux $ (repli Binance EURUSDT). Délai 8 s par requête, 4 en parallèle, bouton Annuler, barre de progression.
 - Une erreur réseau n'est jamais mémorisée comme « pas de cours » ; les anciens « NA » du cache sont purgés au chargement.
 - Panneau « Sources de prix » : état, nombre d'appels et dernière erreur par source. Sans source joignable : cours observé le plus proche dans vos relevés (≈).
 - Frais prélevés en nature : quantité nette = quantité affichée × (1 − frais/valeur) ; le prix d'acquisition (220) est la valeur payée, frais inclus.
