@@ -51,6 +51,7 @@
     /* -> { j } réponse JSON (même 4xx), ou { err } erreur réseau / 429 / 5xx après réessais */
     async function get(srcName, url, tries = 2) {
       const d = D(srcName); let err = '';
+      if (opt.block && opt.block.some(b => srcName.includes(b))) { d.calls++; d.fail++; d.last = 'bloqué (simulation)'; noteErr(srcName, d.last); return { err: d.last }; }
       for (let i = 0; i < tries; i++) {
         if (signal && signal.aborted) throw new Error('Annulé');
         d.calls++;
@@ -62,8 +63,10 @@
           d.ok++; return { j };
         } catch (e) { if (signal && signal.aborted) throw new Error('Annulé'); err = e && e.name === 'AbortError' ? 'délai dépassé (8 s)' : (e && e.message) || 'réseau'; if (i + 1 < tries) await sleep(500); }
       }
-      d.fail++; d.last = err; return { err };
+      d.fail++; d.last = err; noteErr(srcName, err); return { err };
     }
+    const lastErr = {};
+    function noteErr(src, e) { const k = /Binance/.test(src) ? ['Binance €', 'Binance USDT'] : [src]; k.forEach(x => lastErr[x] = e + (typeof location === 'undefined' ? '' : '')); }
     const day = ts => new Date(ts).toISOString().slice(0, 10);
     /* Taux de change BCE sur une plage (un seul appel), repli : Binance EURUSDT. map jour -> 1 unité de cur en € */
     async function fxRange(cur, from, to) {
@@ -74,7 +77,7 @@
       return m;
     }
     /* Série horaire Binance (limit 1000 par appel). null = paire inexistante, undefined = hôte injoignable. */
-    const hosts = ['https://data-api.binance.vision', 'https://api.binance.com'], deadHost = new Set();
+    const hosts = ['https://data-api.binance.vision', 'https://api.binance.com'], deadHost = new Set(), hostFails = {};
     async function binanceSeries(sym, from, to) {
       for (const h of hosts) {
         if (deadHost.has(h)) continue;
@@ -88,7 +91,7 @@
           start = r.j[r.j.length - 1][0] + HOUR; if (r.j.length < 1000) break;
         }
         if (!failed) return out;
-        deadHost.add(h);
+        hostFails[h] = (hostFails[h] || 0) + 1; if (hostFails[h] >= 2) deadHost.add(h); else continue;
       }
       return undefined;
     }
@@ -105,7 +108,7 @@
       }
       return out;
     }
-    const geckoIds = Object.assign({}, opt.geckoIds || {});
+    const geckoIds = Object.assign({ VVV: 'venice-token', ATH: 'aethir', XDC: 'xdce-crowd-sale', GIGA: 'gigachad-2', GRASS: 'grass', MON: 'monad', MEW: 'cat-in-a-dogs-world', ZKJ: 'polyhedra-network', FLR: 'flare-networks', MATH: 'math', TON: 'the-open-network', HYPE: 'hyperliquid', STG: 'stargate-finance', BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', XRP: 'ripple', DOGE: 'dogecoin', PEPE: 'pepe' }, opt.geckoIds || {});
     let gq = Promise.resolve();
     function gget(url) { const r = gq.then(async () => { let x; for (let i = 0; i < 3; i++) { if (dead.has('gecko')) return { err: 'injoignable' }; x = await get('CoinGecko', url, 1); const lim = x.err === 'HTTP 429' || (x.j && x.j.status && x.j.status.error_code === 429); if (!x.err && !lim) break; if (!lim) { dead.add('gecko'); break; } await sleep(4000 * (i + 1)); } await sleep(opt.geckoGap != null ? opt.geckoGap : 2200); return x; }); gq = r.catch(() => {}); return r; }
     async function geckoSeries(a, from, to) { // ≤ 90 jours par appel -> points horaires
@@ -127,20 +130,78 @@
       return out;
     }
     /* Série en € pour un actif : chaîne de sources avec repli automatique. -> { s, src } | null (aucune paire) | undefined (réseau) */
-    let eurusdt;
+    /* Gate.io : bougies 1 h (≤ 1000 par appel), CORS ouvert, liste beaucoup de petits jetons. [ts s, vol, close, high, low, open, …] */
+    async function gateSeries(a, from, to) {
+      const out = {}; let s = Math.floor(from / 1000) - 3600;
+      while (s <= to / 1000 + 3600) {
+        const e = Math.min(s + 999 * 3600, Math.floor(to / 1000) + 7200);
+        const r = await get('Gate.io', `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${a}_USDT&interval=1h&from=${s}&to=${e}`);
+        if (r.err) return undefined; if (!Array.isArray(r.j)) return r.j && /INVALID/.test(r.j.label || '') ? null : undefined;
+        for (const k of r.j) out[Math.floor(+k[0] * 1000 / HOUR)] = +k[5];
+        s = e + 3600;
+      }
+      return out;
+    }
+    /* OKX : 100 bougies par appel en remontant le temps (dernier recours, plus d'appels). */
+    async function okxSeries(a, from, to) {
+      const out = {}; let after = Math.floor(to / HOUR) * HOUR + 3 * HOUR;
+      for (let i = 0; i < 60 && after > from - 2 * HOUR; i++) {
+        const r = await get('OKX', `https://www.okx.com/api/v5/market/history-candles?instId=${a}-USDT&bar=1H&limit=100&after=${after}`);
+        if (r.err) return undefined; if (!r.j || r.j.code === '51001') return null; if (!Array.isArray(r.j.data)) return undefined;
+        if (!r.j.data.length) break;
+        for (const k of r.j.data) out[Math.floor(+k[0] / HOUR)] = +k[1];
+        after = +r.j.data[r.j.data.length - 1][0];
+      }
+      return out;
+    }
+    /* USDT -> € : Binance EURUSDT, sinon taux BCE USD (USDT ≈ 1 $). */
+    let usdEur = null;
+    async function toEur(s, from, to) {
+      if (!usdEur) {
+        const lo = Math.min(from, opt.from || from), hi = Math.max(to, opt.to || to), e = await binanceSeries('EURUSDT', lo, hi), m = {};
+        if (e && Object.keys(e).length) { for (const h in e) m['h' + h] = 1 / e[h]; }
+        else { const fx = await fxRange('USD', lo, hi); for (const d in fx) m[d] = fx[d]; }
+        if (Object.keys(m).length) usdEur = m; else return null;
+      }
+      const days = Object.keys(usdEur).filter(k => k[0] !== 'h').sort(), o = {};
+      for (const h in s) {
+        let r = usdEur['h' + h] || usdEur['h' + (h - 1)] || usdEur['h' + (+h + 1)];
+        if (!r && days.length) { const d = new Date(h * HOUR).toISOString().slice(0, 10); r = usdEur[days.filter(x => x <= d).pop() || days[0]]; }
+        if (r) o[h] = s[h] * r;
+      }
+      return o;
+    }
+    /* Kraken : 720 dernières bougies 1 h seulement (≈ 30 jours) — utile pour les cessions récentes. */
+    async function krakenSeries(pair) {
+      const r = await get('Kraken', `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=60`);
+      if (r.err) return undefined; if (!r.j || (r.j.error || []).some(e => /Unknown asset pair/i.test(e))) return null;
+      const k = r.j.result && Object.keys(r.j.result).find(x => x !== 'last'); if (!k) return undefined;
+      const out = {}; for (const c of r.j.result[k]) out[Math.floor(c[0] * 1000 / HOUR)] = +c[1]; return out;
+    }
+    const assetDiag = {};
+    /* Chaîne de sources : Binance € → Binance USDT → Gate.io → OKX → Coinbase € → CoinGecko (id explicite). Chaque essai est noté par actif. */
     async function series(a, from, to) {
-      let net = false;
-      let s = await binanceSeries(a + 'EUR', from, to); if (s && Object.keys(s).length) return { s, src: 'Binance' }; if (s === undefined) net = true;
-      s = await binanceSeries(a + 'USDT', from, to);
-      if (s && Object.keys(s).length) {
-        if (!eurusdt) eurusdt = await binanceSeries('EURUSDT', Math.min(from, opt.from || from), Math.max(to, opt.to || to));
-        if (eurusdt) { const o = {}; for (const h in s) { const e = eurusdt[h] || eurusdt[h - 1] || eurusdt[+h + 1]; if (e) o[h] = s[h] / e; } return { s: o, src: 'Binance (USDT)' }; }
-      } else if (s === undefined) net = true;
-      s = await coinbaseSeries(a + '-EUR', from, to); if (s && Object.keys(s).length) return { s, src: 'Coinbase' }; if (s === undefined) net = true;
-      if (opt.gecko !== false) { s = await geckoSeries(a, from, to); if (s && Object.keys(s).length) return { s, src: 'CoinGecko' }; if (s === undefined) net = true; }
+      const log = assetDiag[a] = []; let net = false;
+      const tries = [
+        ['Binance €', () => binanceSeries(a + 'EUR', from, to), false],
+        ['Binance USDT', () => binanceSeries(a + 'USDT', from, to), true],
+        ['Gate.io', () => gateSeries(a, from, to), true],
+        ['OKX', () => okxSeries(a, from, to), true],
+        ['Coinbase', () => coinbaseSeries(a + '-EUR', from, to), false],
+        ['Coinbase $', () => coinbaseSeries(a + '-USD', from, to), true],
+        ['Kraken', () => krakenSeries(a + 'EUR'), false],
+        ['CoinGecko', () => opt.gecko === false ? null : geckoSeries(a, from, to), false]];
+      for (const [name, fn, usd] of tries) {
+        let s = await fn();
+        if (s && Object.keys(s).length) {
+          if (usd) { s = await toEur(s, from, to); if (!s || !Object.keys(s).length) { log.push(name + ' : conversion $→€ impossible'); net = true; continue; } }
+          log.push(name + ' : OK'); return { s, src: name };
+        }
+        if (s === undefined) { net = true; log.push(name + ' : ' + (lastErr[name] || 'erreur réseau')); } else log.push(name + ' : paire absente');
+      }
       return net ? undefined : null;
     }
-    return { fxRange, series, diag, stats };
+    return { fxRange, series, diag, stats, assetDiag };
   }
   /* Exécute des tâches avec au plus n en parallèle. */
   async function pool(items, n, fn, signal) {
@@ -160,16 +221,25 @@
 
   /* Prépare : conversion devises, quantités tronquées, cours nécessaires. cache[key]= prix | 'NA' */
   /* Recherche de cours : cache horaire (±2 h) puis cours observé dans les relevés (≤30 j, sinon le plus proche), marqué ≈. */
-  function priceLookup(txs, cache, manual) {
-    const obs = observed(txs), approx = new Set();
+  function priceLookup(txs, cache, manual, opts) {
+    const obs = observed(txs), approx = new Set(), unvalued = new Set();
     const fn = (a, ts, txId) => {
       if (manual && txId != null && manual[a + '@' + txId] != null) return manual[a + '@' + txId];
       if (manual && manual[a] != null) return manual[a];
       const h = Math.floor(ts / HOUR);
       for (const d of [0, -1, 1, -2, 2]) { const v = cache[a + '|h' + (h + d)]; if (typeof v === 'number') return v; }
-      const o = obs(a, ts) != null ? obs(a, ts) : obs(a, ts, true); if (o != null) approx.add(a + '|' + ts); return o;
+      let o = obs(a, ts);
+      if (o == null) { // cours du même actif le plus proche dans le cache (autre heure)
+        let best = null, bd = Infinity; const pre = a + '|h';
+        for (const k in cache) if (k.startsWith(pre) && typeof cache[k] === 'number') { const dd = Math.abs(+k.slice(pre.length) - h); if (dd < bd) { bd = dd; best = cache[k]; } }
+        o = best;
+      }
+      if (o == null) o = obs(a, ts, true);
+      if (o != null) { approx.add(a + '|' + ts); return o; }
+      if (opts && opts.zeroIfUnknown) { unvalued.add(a); approx.add(a + '|' + ts); return 0; } // jamais de calcul bloqué : actif non valorisé, signalé
+      return null;
     };
-    fn.approx = approx; return fn;
+    fn.approx = approx; fn.unvalued = unvalued; return fn;
   }
   /* progress(étape, fait, total) ; opt.signal pour annuler ; opt.onSave() appelé régulièrement (cache persistant). */
   async function prepare(txs, src, cache, log, opt) {
@@ -204,7 +274,7 @@
       log('Cours', ++done, assets.length); save();
     }, signal);
     // 3. quantités tronquées (xlsx)
-    const fn = priceLookup(txs, cache, opt.manual), obs0 = observed(txs);
+    const fn = priceLookup(txs, cache, opt.manual, { zeroIfUnknown: true }), obs0 = observed(txs);
     for (const t of rec) {
       const p = fn(t.asset, t.date) || obs0(t.asset, t.date);
       if (p && t.eur > 0) { t.qty = E.scaleToValue(t.qtyRaw, p, t.eur); t.qtyStatus = 'reconstruite (cours historique)'; }
