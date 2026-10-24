@@ -25,7 +25,10 @@
    <label>Frais €<input name="fee" inputmode="decimal"></label>
    <label>Plateforme<input name="platform" placeholder="Ledger, Binance…"></label>
    <button>Ajouter</button></form></details>
- <div class="scroll"><table id="txtable"></table></div>
+ <div class="txbar"><span id="txinfo"></span> <button id="txall" class="small ghost">Afficher toutes les transactions</button></div>
+ <div class="scroll txscroll"><table id="txtable"></table></div>
+ <div id="balances"></div>
+ <div id="opening"></div>
  <button id="clear" class="ghost">Effacer les transactions</button> <button id="clearman" class="ghost">Effacer les saisies manuelles</button> <button id="reset" class="danger">Tout réinitialiser</button>
 </section>
 <section><h2>3. Calculer</h2>

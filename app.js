@@ -8,6 +8,7 @@
   // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
   for (const k in cache) if (typeof cache[k] !== 'number' || !/\|h\d+$|\|none$/.test(k)) delete cache[k];
   const save = () => { localStorage.setItem(LS.tx, JSON.stringify(txs)); localStorage.setItem(LS.manual, JSON.stringify(manual)); };
+  let showAll = false, pdfBal = load('kryptax.balances', null), opening = load('kryptax.opening', null);
   const saveCache = () => { try { localStorage.setItem(LS.cache, JSON.stringify(cache)); } catch (e) {} };
   const eur = n => (n == null || !isFinite(n)) ? '—' : n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   const num = n => (n == null || !isFinite(n)) ? '' : (+n).toLocaleString('fr-FR', { maximumFractionDigits: 8 });
@@ -65,6 +66,7 @@
     if (!r.rows.length && !r.fiat.length) return alert(file.name + ' : aucune transaction reconnue dans ce PDF.');
     const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Revolut', source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
     txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
+    if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
     if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
     save(); renderTx();
     let msg = res.txs.length + ' transactions lues dans le PDF' + (nsw ? ', ' + nsw + ' échanges crypto→crypto détectés' : '') + (r.fiat.length ? ', ' + r.fiat.length + ' lignes « Vente de / Achat de » des relevés en devises' : '') + '.';
@@ -93,7 +95,8 @@
       const o = {}; box.querySelectorAll('[data-o]').forEach(s => o[s.dataset.o] = s.value);
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
       o.xlsx = isXlsx; o.source = name;
-      const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length; save(); box.remove(); renderTx();
+      const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
+    if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); } save(); box.remove(); renderTx();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
       return alert(res.txs.length + ' transactions importées' + (res.bad.length ? ', ' + res.bad.length + ' lignes ignorées' : '') + (sus ? '. ' + sus + ' quantités reconstruites ou à vérifier' : '') + (usd ? '. ' + usd + ' lignes en devise étrangère, converties en € au calcul (taux BCE)' : '') + (nsw ? '. ' + nsw + ' échanges crypto→crypto détectés (non imposables, voir le tableau)' : '') + '. Vérifiez les types !');
       let n = 0, bad = 0;
@@ -196,12 +199,43 @@
   });
   function renderTx() {
     renderSwaps();
-    const s = E.sortTx(txs); $('#txcount').textContent = s.length ? '(' + s.length + ')' : '';
+    const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
+    $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
+    $('#txinfo').textContent = all.length ? (showAll ? `${all.length} transactions affichées (dont ${sales.length} ventes)` : `${sales.length} ventes affichées sur ${all.length} transactions`) : '';
+    $('#txall').hidden = !all.length; $('#txall').textContent = showAll ? 'Afficher seulement les ventes' : 'Afficher toutes les transactions';
+    renderBalances(); renderOpening();
     $('#txtable').innerHTML = s.length ? `<tr><th>Date</th><th>Type</th><th>Crypto</th><th class="n">Quantité</th><th class="n">Montant €</th><th class="n">Frais €</th><th>Plateforme</th><th></th></tr>` + s.map(t => `<tr data-id="${t.id}" class="${E.CHECK.includes(t.type) ? 'chk' : ''}">
       <td>${dt(t.date)}${t.example ? ' <span class="tag">exemple</span>' : ''}</td><td><select data-k="type">${typeOpts(t.type)}</select>${t.rawType ? `<br><span class="hint">${esc(t.rawType)}</span>` : ''}</td>
       <td><input data-k="asset" value="${esc(t.asset)}" size="6"></td><td class="n${t.qtyStatus && !['ok', 'corrigée'].includes(t.qtyStatus) && !t.qtyManual ? ' bad' : ''}"><input data-k="qty" value="${num(t.qty)}" size="10">${t.qtyStatus && t.qtyStatus !== 'ok' && !t.qtyManual ? `<br><span class="hint">qté ${esc(t.qtyStatus)}</span>` : ''}</td>
       <td class="n"><input data-k="eur" value="${num(t.eur)}" size="9">${t.cur ? `<br><span class="hint">${num(t.valCur)} ${t.cur}${t.fx ? ' × ' + num(t.fx) : ' (à convertir)'}</span>` : ''}</td><td class="n"><input data-k="fee" value="${num(t.fee)}" size="6"></td>
-      <td>${esc(t.platform || '')}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>';
+      <td>${esc(t.platform || '')}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : (all.length ? '<tr><td>Aucune vente (cession imposable). Cliquez « Afficher toutes les transactions ».</td></tr>' : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>');
+  }
+  $('#txall').onclick = () => { showAll = !showAll; renderTx(); };
+  /* ---------- Soldes de clôture du relevé PDF ---------- */
+  function renderBalances() {
+    const el = $('#balances'); if (!pdfBal || !txs.length) { el.innerHTML = ''; return; }
+    const rows = E.checkBalances(txs, pdfBal.closing, pdfBal.to, opening), bad = rows.filter(b => !b.ok);
+    el.innerHTML = `<details${bad.length ? ' open' : ''}><summary>📊 Soldes de clôture : relevé PDF vs calculés — ${bad.length ? bad.length + ' écart(s)' : 'aucun écart ✓'}</summary>
+      <p class="hint">Fin de période du relevé : ${isFinite(pdfBal.to) ? dt(pdfBal.to) : '?'}. Les petits écarts viennent des frais affichés arrondis ; un gros écart signale une opération manquante.</p>
+      <div class="scroll"><table><tr><th>Actif</th><th class="n">Relevé</th><th class="n">Calculé</th><th class="n">Écart</th><th></th></tr>${rows.map(b => `<tr><td>${esc(b.asset)}</td><td class="n">${num(b.expected)}</td><td class="n">${num(b.computed)}</td><td class="n ${b.ok ? '' : 'neg'}">${b.ok ? '0' : num(b.diff)}</td><td>${b.ok ? '✓' : '⚠'}</td></tr>`).join('')}</table></div>
+      ${bad.length ? '<button id="baladj" class="small">Ajouter des lignes d’ajustement pour aligner sur le relevé</button>' : ''}</details>`;
+    const btn = $('#baladj'); if (btn) btn.onclick = () => { txs = txs.concat(E.balanceAdjustments(txs, pdfBal.closing, pdfBal.to, opening).map(t => Object.assign({ id: uid(), platform: 'Revolut' }, t))); save(); renderTx(); };
+  }
+  /* ---------- État reporté au 31/12 ---------- */
+  function renderOpening() {
+    const el = $('#opening'), yrs = [...new Set(txs.map(t => new Date(t.date).getFullYear()))].sort();
+    el.innerHTML = `<details${opening ? ' open' : ''}><summary>📅 Report d’une année sur l’autre (état au 31/12)</summary>
+      ${opening ? `<p class="ok">État chargé au <b>${opening.date.split('-').reverse().join('/')}</b> : ${Object.keys(opening.holdings).length} actifs, ligne 220 = ${eur(opening.l220)}, ligne 221 = ${eur(opening.l221)}${opening.incomplete ? ' <span class="neg">(calcul de l’année précédente incomplet)</span>' : ''}. Les opérations jusqu’à cette date sont ignorées. <button id="opdel" class="small ghost">Retirer</button></p>`
+        : '<p class="hint">Sans état reporté, il faut importer <b>tout l’historique</b> depuis votre premier achat de crypto : les lignes 220 et 221 cumulent toutes les années. Exportez l’état au 31/12 chaque année et réimportez-le l’année suivante.</p>'}
+      <p>${yrs.map(y => `<button class="small" data-st="${y}">Exporter l’état au 31/12/${y}</button>`).join(' ')} <label class="btn small">Importer un état (.json)<input type="file" id="opfile" accept=".json,application/json" hidden></label></p>
+      <p class="hint">Le fichier reste sur votre appareil (aucun envoi).</p></details>`;
+    el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+      const st = E.stateAt(txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] })), (a, ts) => priceFn(a, ts), +b.dataset.st, opening);
+      if (st.incomplete && !confirm('Des cessions de cette année sont incomplètes (cours manquants) : la ligne 221 sera fausse. Exporter quand même ?')) return;
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(st, null, 2)], { type: 'application/json' })); a.download = 'kryptax-etat-' + st.date + '.json'; a.click();
+    });
+    $('#opfile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { opening = E.validateState(JSON.parse(await f.text())); localStorage.setItem('kryptax.opening', JSON.stringify(opening)); renderTx(); $('#results').innerHTML = ''; } catch (x) { alert('Import impossible : ' + x.message); } };
+    const d = $('#opdel'); if (d) d.onclick = () => { opening = null; localStorage.removeItem('kryptax.opening'); renderTx(); $('#results').innerHTML = ''; };
   }
   $('#txtable').addEventListener('change', e => {
     const tr = e.target.closest('tr'), t = txs.find(x => x.id === tr.dataset.id), k = e.target.dataset.k; if (!t || !k) return;
@@ -217,7 +251,7 @@
     Object.keys(localStorage).filter(k => k.startsWith('kryptax.')).forEach(k => localStorage.removeItem(k));
     location.reload(); // la page revient à son état initial
   };
-  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; fiatText = ''; localStorage.removeItem('kryptax.fiat'); save(); renderTx(); $('#results').innerHTML = ''; } };
+  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; fiatText = ''; pdfBal = null; localStorage.removeItem('kryptax.fiat'); localStorage.removeItem('kryptax.balances'); save(); renderTx(); $('#results').innerHTML = ''; } };
 
   /* ---------- Cours historiques ---------- */
   const HOUR = 3600e3;
@@ -307,7 +341,7 @@
     const withOverride = txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] }));
     // le moteur passe (asset, ts) ; on retrouve la cession concernée par son horodatage
     const byTs = {}; txs.forEach(t => { if (t.type === 'SELL' || t.type === 'PAY') byTs[t.date] = byTs[t.date] || t.id; });
-    return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]));
+    return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening);
   }
   $('#results').addEventListener('change', e => {
     if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
