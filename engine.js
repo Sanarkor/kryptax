@@ -103,7 +103,7 @@
   }
 
   function sortTx(txs) { return txs.slice().sort((a, b) => a.date - b.date || (a.seq || 0) - (b.seq || 0)); }
-  const EPS = 1e-12;
+  const EPS = 1e-8; // poussière (résidus d'arrondi)
 
   /* Liste des cours nécessaires : pour chaque cession, chaque actif détenu (hors actif cédé). */
   function neededPrices(txs) {
@@ -116,8 +116,18 @@
     }
     return need;
   }
+  /* Revolut prélève les frais d'achat EN NATURE : quantité créditée = quantité affichée × (1 − frais / valeur). */
+  function feeRatio(t) {
+    if (!t.feeInKind) return 0;
+    const v = t.cur ? Math.abs(t.valCur || 0) : Math.abs(t.eur || 0), f = t.cur ? Math.abs(t.feeCur || 0) : Math.abs(t.fee || 0);
+    if (!(v > 0)) return 0;
+    // Revolut X : frais « taker » de 0,09 % prélevés sur l'actif reçu ; le relevé arrondit le montant au centime (0,00 $ affiché).
+    if (/revolut x/i.test(t.rawType || '')) return 0.0009;
+    return f > 0 && f < v ? f / v : 0;
+  }
+  function netQty(t) { const q = Math.abs(t.qty || 0); return (t.type === 'BUY' || t.type === 'EXCH_IN') ? q * (1 - feeRatio(t)) : q; }
   function apply(h, t) {
-    const a = t.asset, q = Math.abs(t.qty || 0);
+    const a = t.asset, q = netQty(t);
     const add = (x, n) => { h[x] = (h[x] || 0) + n; };
     switch (t.type) {
       case 'BUY': case 'EXCH_IN': case 'STAKING': case 'AIRDROP': case 'INTEREST': case 'RECEIVE': add(a, q); break;
@@ -138,9 +148,9 @@
     for (const t of sortTx(txs)) {
       if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
       if (t.type === 'RECEIVE' || t.type === 'SEND') warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
-      if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + Math.abs(t.fee || 0);
+      if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // Revolut : la valeur payée inclut déjà les frais
       if (t.type === 'SELL' || t.type === 'PAY') {
-        const p213 = Math.abs(t.eur || 0), p214 = Math.abs(t.fee || 0), p216 = t.soulte || 0;
+        const p213 = Math.abs(t.eur || 0), p214 = t.feeInKind ? 0 : Math.abs(t.fee || 0), p216 = t.soulte || 0;
         const held = Object.assign({}, h);
         const lines = []; let v212 = 0, missing = [];
         if (t.override212 > 0) { v212 = t.override212; lines.push({ asset: '(saisie manuelle)', value: v212 }); }
@@ -234,6 +244,28 @@
     res.fiatNoSell = fiat.filter(x => !used.has(x));
     return res;
   }
-  const api = { parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  /* Compare le solde de clôture d'un relevé aux quantités reconstituées. */
+  function checkBalances(txs, closing, ts) {
+    const h = holdingsAt(txs, isFinite(ts) ? ts : Infinity), out = [];
+    for (const a of new Set(Object.keys(closing).concat(Object.keys(h)))) {
+      if (FIATS.includes(a)) continue;
+      const exp = closing[a] || 0, got = h[a] || 0, d = got - exp;
+      if (!(a in closing) && Math.abs(got) < 1e-8) continue;
+      out.push({ asset: a, expected: exp, computed: got, diff: d, ok: Math.abs(d) <= Math.max(1e-8, 1e-6 * Math.abs(exp)) });
+    }
+    return out.sort((x, y) => x.ok - y.ok || x.asset.localeCompare(y.asset));
+  }
+  /* Ajustements pour aligner les quantités sur le solde de clôture d'un relevé (arrondis des frais affichés).
+     Une ligne FEE (ou RECEIVE si négatif) par actif, juste après sa première entrée. */
+  function balanceAdjustments(txs, closing, ts) {
+    const out = [];
+    for (const b of checkBalances(txs, closing, ts)) {
+      if (b.ok) continue;
+      const first = sortTx(txs).find(t => t.asset === b.asset && ['BUY', 'EXCH_IN', 'RECEIVE', 'INTEREST', 'STAKING', 'AIRDROP'].includes(t.type));
+      out.push({ type: b.diff > 0 ? 'FEE' : 'RECEIVE', asset: b.asset, qty: Math.abs(b.diff), eur: 0, fee: 0, date: first ? first.date : ts, seq: first ? (first.seq || 0) + 0.9 : 0, adjust: true, rawType: 'Ajustement solde relevé' });
+    }
+    return out;
+  }
+  const api = { balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
