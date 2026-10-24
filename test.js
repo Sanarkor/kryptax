@@ -53,4 +53,51 @@ eq(ty('s1') === 'SELL' && ty('b1') === 'BUY' ? 1 : 0, 1, 'Forcer imposable');
 const fz = E.parseFiatSales('Transfer from Revolut Digital Assets Europe Ltd - Vente de BBB;21/05/2026 11:00:01;80,00\nautre ligne\n21/05/2026 12:00:00 Vente de ZZZ 5');
 E.detectSwaps(sw); const cc = E.crossCheck(sw, fz.map(x => Object.assign(x, { date: x.asset === 'BBB' ? T0 + 3600e3 + 1e3 : x.date })));
 eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'Vente confirmée par le relevé €'); eq(cc.sellNoFiat.length, 2, 'Ventes absentes du relevé € signalées (s1 forcée, s3)'); eq(cc.fiatNoSell.length, 1, 'Ligne € sans vente signalée');
+// État reporté au 31/12 : historique complet sur 2 ans == calcul 2027 à partir de l'état exporté (données fictives)
+{
+  const P = (a, ts) => a === 'AAA' ? (ts < Date.UTC(2027, 0, 1) ? 10 : 20) : a === 'BBB' ? 5 : null;
+  const full = [
+    { id: 'a', date: Date.UTC(2026, 1, 1), type: 'BUY', asset: 'AAA', qty: 100, eur: 800, fee: 0 },
+    { id: 'b', date: Date.UTC(2026, 2, 1), type: 'BUY', asset: 'BBB', qty: 50, eur: 200, fee: 0 },
+    { id: 'c', date: Date.UTC(2026, 5, 1), type: 'SELL', asset: 'AAA', qty: 10, eur: 100, fee: 0 },
+    { id: 'd', date: Date.UTC(2027, 2, 1), type: 'BUY', asset: 'BBB', qty: 10, eur: 50, fee: 0 },
+    { id: 'e', date: Date.UTC(2027, 4, 1), type: 'SELL', asset: 'AAA', qty: 20, eur: 400, fee: 0 }];
+  const ref = E.compute(full, P), st = E.stateAt(full, P, 2026);
+  const back = E.validateState(JSON.parse(JSON.stringify(st)));
+  const only27 = full.filter(t => t.date >= Date.UTC(2027, 0, 1)), r27 = E.compute(only27, P, back);
+  eq(st.holdings.AAA, 90, 'État 31/12 : solde AAA'); eq(st.l220, 1000, 'État 31/12 : ligne 220'); eq(st.l221, ref.cessions[1].l221, 'État 31/12 : ligne 221');
+  eq(r27.cessions[0].l224, ref.cessions[1].l224, 'Plus-value 2027 identique avec l’état reporté');
+  eq(r27.cessions[0].l212, ref.cessions[1].l212, 'Ligne 212 2027 identique');
+  const ign = E.compute(full, P, back); eq(ign.cessions.length, 1, 'Opérations ≤ 31/12 ignorées si état chargé');
+  eq(E.checkBalances(only27, { AAA: 70, BBB: 60 }, Infinity, back).every(b => b.ok) ? 1 : 0, 1, 'Soldes de clôture avec état reporté');
+  let err = 0; try { E.validateState({ foo: 1 }); } catch (x) { err = 1; } eq(err, 1, 'État invalide refusé');
+}
+// Synthèse annuelle (données fictives)
+{
+  const T = [
+    { id: 1, date: Date.UTC(2026, 0, 5), type: 'BUY', asset: 'AAA', qty: 10, eur: 100, fee: 1, feeInKind: true, rawType: 'Achat' },
+    { id: 2, date: Date.UTC(2026, 1, 5), type: 'INTEREST', asset: 'CCC', qty: 2, eur: 0, rawType: 'Récompense Apprendre' },
+    { id: 3, date: Date.UTC(2026, 2, 5), type: 'EXCH_OUT', asset: 'AAA', qty: 2, eur: 30, swapAuto: true },
+    { id: 4, date: Date.UTC(2026, 2, 5), type: 'EXCH_IN', asset: 'BBB', qty: 3, eur: 30 },
+    { id: 5, date: Date.UTC(2026, 3, 5), type: 'SELL', asset: 'AAA', qty: 4, eur: 80, fee: 0.5 },
+    { id: 6, date: Date.UTC(2026, 4, 5), type: 'SEND', asset: 'BBB', qty: 1 }];
+  const P = a => ({ AAA: 20, BBB: 10, CCC: 3 })[a];
+  const r = E.compute(T, P), S = E.summary(T, r, P, 2026);
+  eq(S.nCessions, 1, 'Synthèse : nombre de cessions'); eq(S.produit, 80, 'Synthèse : produit');
+  eq(S.net, r.cessions[0].l224, 'Synthèse : plus-value nette'); eq(S.acquisition, r.cessions[0].fraction, 'Synthèse : prix d’acquisition des actifs cédés');
+  eq(S.fees.inKind, 1, 'Synthèse : frais en nature'); eq(S.fees.explicit, 0.5, 'Synthèse : frais explicites');
+  eq(S.incomeTotal, 6, 'Synthèse : revenus (2 CCC × 3 €)'); eq(S.swaps, 1, 'Synthèse : échanges exclus');
+  eq(S.outcome.SEND.eur, 10, 'Synthèse : sortie transfert'); eq(S.closing.find(c => c.asset === 'BBB').qty, 2, 'Synthèse : solde BBB');
+  const S2 = E.summary(T, r, () => null, 2026); eq(S2.incomeUnknown.length, 1, 'Synthèse : revenu sans cours signalé (pas inventé)');
+}
+// Export : toutes les cessions et toutes les sections (données fictives, 18 cessions)
+{
+  const X = require('./export.js'), T = require('./testdata/fake_many.js')(), P = (a, ts) => ({ AAA: 6, BBB: 7, CCC: 8, DDD: 9, EEE: 10 })[a];
+  const r = E.compute(T, P), Y = E.byYear(r), S = {}; for (const y in Y) S[y] = E.summary(T, r, P, +y);
+  const rows = s => [['Plus-values', 'Gains', '', s.gains], ['Frais', 'Frais totaux', '', s.fees.total], ['Revenus (income)', 'Total', '', s.incomeTotal], ['Sorties (outcome)', 'Ventes', '', s.outcome.SELL.eur], ['Soldes', 'Total', '', s.closingTotal]];
+  const x = X.exportData(Y, S, rows, T), csv = X.makeCsv(x).split('\n');
+  eq(r.cessions.length, 18, 'Export : 18 cessions calculées'); eq(x.cessions.length, 18, 'Export : 18 lignes de cession exportées');
+  eq(x.swaps.length, 4, 'Export : 4 échanges exclus exportés'); eq(new Set(x.summary.map(s => s[1])).size, 5, 'Export : 5 sections de synthèse');
+  const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 19, 'CSV : 18 lignes sous CESSIONS + 1 ligne GLOBAL'); eq(csv[i0 + 2 + 18].split(';')[1] === 'GLOBAL' ? 1 : 0, 1, 'CSV : ligne GLOBAL en fin de tableau');
+}
 process.exit(ok ? 0 : 1);

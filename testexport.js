@@ -1,0 +1,23 @@
+// node testexport.js — génère le PDF (jeu FICTIF, 18 cessions) et vérifie par pdftotext : chaque cession a ses colonnes 211-218 (partie A) et 220-224 (partie B), et la ligne GLOBAL
+global.window = global; global.navigator = { userAgent: 'node' };
+const { jsPDF } = require('./jspdf.umd.min.js'); const at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
+const E = require('./engine.js'), X = require('./export.js'), fs = require('fs'), T = require('./testdata/fake_many.js')();
+const P = (a) => ({ AAA: 6, BBB: 7, CCC: 8, DDD: 9, EEE: 10 })[a];
+const r = E.compute(T, P), Y = E.byYear(r), S = {}; for (const y in Y) S[y] = E.summary(T, r, P, +y);
+const x = X.exportData(Y, S, s => [['Plus-values', 'Net', '', s.net]], T);
+fs.writeFileSync('/tmp/kryptax-test.pdf', Buffer.from(X.makePdf(jsPDF, x, 'Test').output('arraybuffer')));
+const pages = require('child_process').execSync('pdftotext -layout /tmp/kryptax-test.pdf -').toString().split('\f');
+let ok = true; const chk = (c, m) => { ok = ok && c; console.log((c ? 'OK  ' : 'ÉCHEC ') + m); };
+const pA = pages.find(p => /partie A/.test(p)) || '', pB = pages.find(p => /partie B/.test(p)) || '';
+const rowsA = pA.split('\n').filter(l => /^\s*2026\s+\d+\s+\d\d\/\d\d\/2026/.test(l)), rowsB = pB.split('\n').filter(l => /^\s*2026\s+\d+\s+[A-Z]{3}\s/.test(l));
+chk(rowsA.length === 18, 'PDF partie A : ' + rowsA.length + ' cessions (attendu 18)');
+chk(rowsA.every(l => (l.match(/-?\d+\.\d\d/g) || []).length >= 7), 'PDF partie A : colonnes 212-218 présentes sur chaque ligne');
+chk(rowsB.length === 18, 'PDF partie B : ' + rowsB.length + ' cessions (attendu 18)');
+chk(rowsB.every((l, i) => l.includes(x.cessions[i][16].toFixed(2))), 'PDF partie B : ligne 224 de chaque cession présente');
+const t = x.totals[0];
+chk(/GLOBAL/.test(pA) && pA.includes(t.l213.toFixed(2)) && pA.includes(t.l218.toFixed(2)), 'PDF partie A : ligne GLOBAL (213, 218)');
+chk(/GLOBAL/.test(pB) && pB.includes(t.l224.toFixed(2)), 'PDF partie B : ligne GLOBAL (224)');
+chk(/TOTAL GLOBAL/.test(pages[0]) && /3AN|3BN|305/.test(pages[0]), 'PDF page 1 : total global + case 3AN/3BN / seuil 305 €');
+chk(!pages.join('').includes('RENSEIGNER'), 'PDF : aucune ligne « À RENSEIGNER » (jeu fictif complet)');
+const csv = X.makeCsv(x); chk(/GLOBAL/.test(csv) && /TOTAL GLOBAL/.test(csv), 'CSV : ligne GLOBAL et total global');
+process.exit(ok ? 0 : 1);
