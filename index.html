@@ -2,9 +2,9 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — aide au formulaire 2086</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.exchange.coinbase.com https://api.kraken.com https://min-api.cryptocompare.com https://api.binance.com https://data-api.binance.vision https://api.frankfurter.dev https://api.coingecko.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
-<meta name="theme-color" content="#070b14"><link rel="stylesheet" href="style.css"></head>
+<meta name="theme-color" content="#070b14"><link rel="stylesheet" href="style.css?v=20261025c"></head>
 <body>
-<header><h1>Kryptax</h1><p class="sub">Transactions crypto (Revolut et autres) → formulaire 2086</p></header>
+<header><div class="toprow"><h1>Kryptax</h1><button id="reset" class="danger">↺ Tout réinitialiser</button></div><p class="sub">Transactions crypto (Revolut et autres) → formulaire 2086</p></header>
 <div class="banner">⚠️ Outil d'aide au calcul, pas un conseil fiscal : vérifiez avec la <a href="https://www.impots.gouv.fr/formulaire/2086/declaration-des-plus-ou-moins-values-sur-actifs-numeriques" target="_blank" rel="noopener">notice officielle</a>. 🔒 Vos données restent dans votre navigateur (seuls des cours publics sont demandés à Binance, à la BCE (Frankfurter) et, si vous mettez une clé, à CryptoCompare).</div>
 <main>
 <section><h2>1. Importer</h2>
@@ -29,7 +29,7 @@
  <div class="scroll txscroll"><table id="txtable"></table></div>
  <div id="balances"></div>
  <div id="opening"></div>
- <button id="clear" class="ghost">Effacer les transactions</button> <button id="clearman" class="ghost">Effacer les saisies manuelles</button> <button id="reset" class="danger">Tout réinitialiser</button>
+ <button id="clear" class="ghost">Effacer les transactions</button> <button id="clearman" class="ghost">Effacer les saisies manuelles</button>
 </section>
 <section><h2>3. Calculer</h2>
  <button id="run" class="btn">Récupérer les cours et calculer</button> <button id="cancel" class="ghost" hidden>Annuler</button> <progress id="bar" hidden></progress> <span id="progress"></span>
@@ -40,5 +40,5 @@
 <section id="results"></section>
 </main>
 <footer>Kryptax — code ouvert, sans serveur. Méthode : art. 150 VH bis du CGI, notice 2086.</footer>
-<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js"></script><script src="pipeline.js"></script><script src="app.js"></script>
+<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025c"></script><script src="pipeline.js?v=20261025c"></script><script src="app.js?v=20261025c"></script>
 </body></html>

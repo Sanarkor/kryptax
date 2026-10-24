@@ -45,3 +45,8 @@ progress{width:180px;height:8px;vertical-align:middle;accent-color:#22d3ee}
 @media (max-width:600px){#txtable select{max-width:7em}#txtable input{max-width:5.5em}.txscroll{max-height:55vh}}
 @media print{.txscroll{max-height:none}}
 [hidden]{display:none!important}
+
+.toprow{display:flex;align-items:center;justify-content:space-between;gap:.6em;flex-wrap:wrap}
+.toprow h1{margin:0}
+#reset{font-size:.95rem;padding:.5em .8em;white-space:nowrap}
+@media print{#reset{display:none}}
