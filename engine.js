@@ -135,17 +135,36 @@
     }
     if (t.feeQty > 0 && t.type !== 'FEE') add(a, -t.feeQty); // frais prélevés en crypto
   }
-  function holdingsAt(txs, ts) {
-    const h = {};
-    for (const t of sortTx(txs)) { if (t.date > ts) break; apply(h, t); }
+  function holdingsAt(txs, ts, opening) {
+    const h = Object.assign({}, opening ? opening.holdings : {}), o = opening ? stateTs(opening) : -Infinity;
+    for (const t of sortTx(txs)) { if (t.date > ts) break; if (t.date > o) apply(h, t); }
     return h;
   }
 
   /* Calcul 2086. priceFn(asset, ts) -> prix € ou null. */
-  function compute(txs, priceFn) {
-    const h = {}; let total220 = 0, frac221 = 0, soultes222 = 0;
-    const cessions = [], warnings = []; let blocked = false;
+  /* État reporté (JSON « état au 31/12/AAAA ») : { kryptax: 'etat', version: 1, date: 'AAAA-12-31', holdings: {actif: qté}, l220, l221, l222 }.
+     Les opérations antérieures ou égales à cette date sont ignorées ; le calcul part des soldes et cumuls reportés. */
+  function stateTs(st) { return Date.UTC(+st.date.slice(0, 4), +st.date.slice(5, 7) - 1, +st.date.slice(8, 10), 23, 59, 59, 999) - 3600e3; } // fin de journée (heure de Paris, approx. UTC+1)
+  function validateState(o) {
+    if (!o || typeof o !== 'object' || o.kryptax !== 'etat') throw new Error('Ce fichier n’est pas un état Kryptax.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date || '')) throw new Error('Date manquante ou invalide.');
+    const holdings = {};
+    for (const [a, q] of Object.entries(o.holdings || {})) { const n = +q; if (!isFinite(n) || n < 0) throw new Error('Quantité invalide pour ' + a); if (n > EPS) holdings[String(a).toUpperCase()] = n; }
+    const num = (v, k) => { const n = +(v || 0); if (!isFinite(n) || n < 0) throw new Error('Valeur invalide : ' + k); return n; };
+    return { kryptax: 'etat', version: 1, date: o.date, holdings, l220: num(o.l220, '220'), l221: num(o.l221, '221'), l222: num(o.l222, '222'), incomplete: !!o.incomplete };
+  }
+  /* Calcule l'état au 31/12/year (soldes et cumuls 220/221/222), à exporter pour l'année suivante. */
+  function stateAt(txs, priceFn, year, opening) {
+    const date = year + '-12-31', end = stateTs({ date });
+    const r = compute(txs.filter(t => t.date <= end), priceFn, opening);
+    const holdings = {}; for (const [a, q] of Object.entries(r.holdings)) if (q > EPS && !FIATS.includes(a)) holdings[a] = +q.toPrecision(12);
+    return { kryptax: 'etat', version: 1, date, holdings, l220: +r.total220.toFixed(2), l221: +r.frac221.toFixed(2), l222: +(r.soultes222 || 0).toFixed(2), incomplete: r.cessions.some(c => c.l224 == null) };
+  }
+  function compute(txs, priceFn, opening) {
+    const h = Object.assign({}, opening ? opening.holdings : {}); let total220 = opening ? opening.l220 : 0, frac221 = opening ? opening.l221 : 0, soultes222 = opening ? opening.l222 || 0 : 0;
+    const cessions = [], warnings = []; let blocked = false; const o = opening ? stateTs(opening) : -Infinity;
     for (const t of sortTx(txs)) {
+      if (t.date <= o) continue;
       if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
       if (t.type === 'RECEIVE' || t.type === 'SEND') warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
       if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // Revolut : la valeur payée inclut déjà les frais
@@ -179,7 +198,7 @@
       }
       apply(h, t);
     }
-    return { cessions, warnings, holdings: h, total220, frac221 };
+    return { cessions, warnings, holdings: h, total220, frac221, soultes222 };
   }
 
   function byYear(res) {
@@ -245,8 +264,8 @@
     return res;
   }
   /* Compare le solde de clôture d'un relevé aux quantités reconstituées. */
-  function checkBalances(txs, closing, ts) {
-    const h = holdingsAt(txs, isFinite(ts) ? ts : Infinity), out = [];
+  function checkBalances(txs, closing, ts, opening) {
+    const h = holdingsAt(txs, isFinite(ts) ? ts : Infinity, opening), out = [];
     for (const a of new Set(Object.keys(closing).concat(Object.keys(h)))) {
       if (FIATS.includes(a)) continue;
       const exp = closing[a] || 0, got = h[a] || 0, d = got - exp;
@@ -257,15 +276,15 @@
   }
   /* Ajustements pour aligner les quantités sur le solde de clôture d'un relevé (arrondis des frais affichés).
      Une ligne FEE (ou RECEIVE si négatif) par actif, juste après sa première entrée. */
-  function balanceAdjustments(txs, closing, ts) {
+  function balanceAdjustments(txs, closing, ts, opening) {
     const out = [];
-    for (const b of checkBalances(txs, closing, ts)) {
+    for (const b of checkBalances(txs, closing, ts, opening)) {
       if (b.ok) continue;
       const first = sortTx(txs).find(t => t.asset === b.asset && ['BUY', 'EXCH_IN', 'RECEIVE', 'INTEREST', 'STAKING', 'AIRDROP'].includes(t.type));
       out.push({ type: b.diff > 0 ? 'FEE' : 'RECEIVE', asset: b.asset, qty: Math.abs(b.diff), eur: 0, fee: 0, date: first ? first.date : ts, seq: first ? (first.seq || 0) + 0.9 : 0, adjust: true, rawType: 'Ajustement solde relevé' });
     }
     return out;
   }
-  const api = { balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
