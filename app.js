@@ -269,12 +269,13 @@
   function priceFn(a, ts, txId) {
     if (manual[a + '@' + txId] != null) return manual[a + '@' + txId];
     if (manual[a] != null) return manual[a];
-    if (!livePrice || livePrice.txs !== txs) { livePrice = KP.priceLookup(txs, cache, manual); livePrice.txs = txs; } // même sans relancer : cache + cours observés ≈
+    if (!livePrice || livePrice.txs !== txs) { livePrice = KP.priceLookup(txs, cache, manual, { zeroIfUnknown: true }); livePrice.txs = txs; } // même sans relancer : cache + cours observés ≈
     return livePrice(a, ts);
   }
   function renderDiag(src, fnr) {
     const rows = Object.entries(src.diag).map(([k, d]) => `<tr><td>${k}</td><td class="${d.fail ? 'neg' : 'pos'}">${d.fail ? (d.ok ? 'partiel' : 'échec') : 'OK'}</td><td class="num">${d.calls}</td><td>${d.last || ''}</td></tr>`).join('');
     $('#diag').innerHTML = `<details><summary class="hint">Sources de prix : ${Object.values(src.diag).filter(d => d.fail && !d.ok).length ? '⚠ certaines injoignables' : 'OK'} (${Object.values(src.diag).reduce((x, d) => x + d.calls, 0)} appels)</summary><table><tr><th>Source</th><th>État</th><th>Appels</th><th>Dernière erreur</th></tr>${rows}</table></details>` +
+      (src.assetDiag && Object.keys(src.assetDiag).length ? `<details><summary class="hint">Par actif : source utilisée / erreurs</summary><ul class="hint">${Object.entries(src.assetDiag).map(([a, l]) => `<li><b>${esc(a)}</b> — ${l.map(esc).join(' · ')}</li>`).join('')}</ul></details>` : '') +
       (fnr.failed.length ? `<p class="warn">Aucune source joignable pour : ${fnr.failed.join(', ')} → cours observé le plus proche (≈) ; relancez plus tard pour réessayer (les échecs ne sont pas mémorisés).</p>` : '') +
       (fnr.fxMissing ? `<p class="warn">${fnr.fxMissing} lignes en $ sans taux de change : relancez.</p>` : '');
   }
@@ -361,10 +362,13 @@
       h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : '<span class="' + (y.total224 >= 0 ? 'pos' : 'neg') + '">' + (y.total224 >= 0 ? '+' : '') + eur(y.total224) + '</span>'}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : flat tax = 12,8 % d’impôt + prélèvements sociaux (≈ 30 % au total ; taux des prélèvements sociaux à vérifier pour votre année) → environ ${eur(Math.max(0, y.total224) * 0.30)}. Option barème progressif : case 3CN.</div>`;
     }
+    const unv = livePrice && livePrice.unvalued ? [...livePrice.unvalued].filter(x => manual[x] == null) : [];
+    if (unv.length) h += `<div class="note warn">Aucun cours trouvé pour ${unv.map(esc).join(', ')} : compté 0 € dans la ligne 212 (≈, à vérifier). Cours unitaire en € si vous le connaissez : ${unv.map(x => `<label>${esc(x)} <input size="8" data-man="${esc(x)}"></label>`).join(' ')} — ou relancez le calcul plus tard.</div>`;
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte Revolut ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
     h += '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="print" class="ghost">Imprimer</button></p>';
+    if (window.KryptaxExport) h = KryptaxExport.exportData(Y, {}, () => [], []).totals.map(t => `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cessions)<br>${esc(KryptaxExport.globalText(t))}</div>`).join('') + h;
     $('#results').innerHTML = h; lastOut = out; lastY = Y;
   }
   let lastOut = null, lastY = null;
