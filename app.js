@@ -212,7 +212,7 @@
     renderSwaps();
     const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
     $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
-    $('#txnote').textContent = all.length ? `${all.length} transactions importées, dont ${sales.length} ventes. Le calcul se lance automatiquement après l'import.` : 'Aucune transaction importée.';
+    $('#txnote2').textContent = $('#txnote').textContent = all.length ? `${all.length} transactions importées, dont ${sales.length} ventes. Calcul lancé automatiquement après l'import.` : 'Aucune transaction importée.';
     $('#txinfo').textContent = all.length ? (showAll ? `${all.length} transactions affichées (dont ${sales.length} ventes)` : `${sales.length} ventes affichées sur ${all.length} transactions`) : '';
     $('#txall').hidden = !all.length; $('#txall').textContent = showAll ? 'Afficher seulement les ventes' : 'Afficher toutes les transactions';
     renderBalances(); renderOpening();
