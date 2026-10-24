@@ -53,3 +53,6 @@ Test PDF : `python3 testdata/make_pdf.py && node testpdf.mjs` (relevé **fictif*
 - Panneau « Sources de prix » : état, nombre d'appels et dernière erreur par source. Sans source joignable : cours observé le plus proche dans vos relevés (≈).
 - Frais Revolut prélevés en nature : quantité nette = quantité affichée × (1 − frais/valeur), 0,09 % sur Revolut X ; le prix d'acquisition (220) est la valeur payée, frais inclus.
 - Bouton « Tout réinitialiser » : efface toutes les données Kryptax de ce navigateur (transactions, saisies, cache de prix) et recharge la page.
+- Tableau des transactions : seules les ventes (cessions) sont affichées par défaut, avec un compteur ; « Afficher toutes les transactions » montre le reste. Le tableau défile, avec une hauteur limitée et un en-tête fixe.
+- Soldes de clôture : après l'import d'un relevé PDF, Kryptax compare les soldes du « Résumé du compte » avec les soldes calculés et affiche les écarts. Un bouton ajoute des lignes d'ajustement (arrondis des frais).
+- État au 31/12 : « Exporter l'état au 31/12/AAAA » télécharge un JSON local `{kryptax:'etat', date, holdings, l220, l221, l222}`. Réimportez-le l'année suivante : les opérations jusqu'à cette date sont ignorées et le calcul repart de ces soldes et cumuls. Sans ce fichier, il faut tout l'historique depuis le premier achat.

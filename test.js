@@ -53,4 +53,23 @@ eq(ty('s1') === 'SELL' && ty('b1') === 'BUY' ? 1 : 0, 1, 'Forcer imposable');
 const fz = E.parseFiatSales('Transfer from Revolut Digital Assets Europe Ltd - Vente de BBB;21/05/2026 11:00:01;80,00\nautre ligne\n21/05/2026 12:00:00 Vente de ZZZ 5');
 E.detectSwaps(sw); const cc = E.crossCheck(sw, fz.map(x => Object.assign(x, { date: x.asset === 'BBB' ? T0 + 3600e3 + 1e3 : x.date })));
 eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'Vente confirmée par le relevé €'); eq(cc.sellNoFiat.length, 2, 'Ventes absentes du relevé € signalées (s1 forcée, s3)'); eq(cc.fiatNoSell.length, 1, 'Ligne € sans vente signalée');
+// État reporté au 31/12 : historique complet sur 2 ans == calcul 2027 à partir de l'état exporté (données fictives)
+{
+  const P = (a, ts) => a === 'AAA' ? (ts < Date.UTC(2027, 0, 1) ? 10 : 20) : a === 'BBB' ? 5 : null;
+  const full = [
+    { id: 'a', date: Date.UTC(2026, 1, 1), type: 'BUY', asset: 'AAA', qty: 100, eur: 800, fee: 0 },
+    { id: 'b', date: Date.UTC(2026, 2, 1), type: 'BUY', asset: 'BBB', qty: 50, eur: 200, fee: 0 },
+    { id: 'c', date: Date.UTC(2026, 5, 1), type: 'SELL', asset: 'AAA', qty: 10, eur: 100, fee: 0 },
+    { id: 'd', date: Date.UTC(2027, 2, 1), type: 'BUY', asset: 'BBB', qty: 10, eur: 50, fee: 0 },
+    { id: 'e', date: Date.UTC(2027, 4, 1), type: 'SELL', asset: 'AAA', qty: 20, eur: 400, fee: 0 }];
+  const ref = E.compute(full, P), st = E.stateAt(full, P, 2026);
+  const back = E.validateState(JSON.parse(JSON.stringify(st)));
+  const only27 = full.filter(t => t.date >= Date.UTC(2027, 0, 1)), r27 = E.compute(only27, P, back);
+  eq(st.holdings.AAA, 90, 'État 31/12 : solde AAA'); eq(st.l220, 1000, 'État 31/12 : ligne 220'); eq(st.l221, ref.cessions[1].l221, 'État 31/12 : ligne 221');
+  eq(r27.cessions[0].l224, ref.cessions[1].l224, 'Plus-value 2027 identique avec l’état reporté');
+  eq(r27.cessions[0].l212, ref.cessions[1].l212, 'Ligne 212 2027 identique');
+  const ign = E.compute(full, P, back); eq(ign.cessions.length, 1, 'Opérations ≤ 31/12 ignorées si état chargé');
+  eq(E.checkBalances(only27, { AAA: 70, BBB: 60 }, Infinity, back).every(b => b.ok) ? 1 : 0, 1, 'Soldes de clôture avec état reporté');
+  let err = 0; try { E.validateState({ foo: 1 }); } catch (x) { err = 1; } eq(err, 1, 'État invalide refusé');
+}
 process.exit(ok ? 0 : 1);
