@@ -52,7 +52,9 @@ progress{width:180px;height:8px;vertical-align:middle;accent-color:#22d3ee}
 @media print{#reset{display:none}}
 
 .topbar{display:flex;justify-content:flex-end;margin:0 0 .9em}
-#reset{min-height:44px;padding:.55em 1em}
+#reset{min-height:0;font-size:.75rem;padding:.25em .6em;opacity:.75}
+#reset:hover{opacity:1}
+.topbar{margin:0 0 1.4em}
 .cards{display:none}
 .card{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:.7em .8em;margin:.6em 0}
 .card.badc{border-color:#c0504d}
@@ -82,3 +84,8 @@ img,input,select,textarea{max-width:100%}
 .summary dt{min-width:0;overflow-wrap:anywhere}.summary dd{margin:0;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media print{.summary{border-color:#999}}
 @media (max-width:600px){.grid{grid-template-columns:1fr!important}.grid label,.grid input,.grid select{min-width:0;width:100%;box-sizing:border-box}}
+
+.help{margin:0 0 1em;padding:.5em .8em;border:1px solid rgba(255,255,255,.12);border-radius:10px}
+.help summary{cursor:pointer;font-weight:600}
+.help ol{padding-left:1.2em;margin:.6em 0}
+.help li{margin:.3em 0}
