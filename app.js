@@ -71,7 +71,7 @@
     save(); renderTx(); autoRun();
     let msg = res.txs.length + ' transactions lues dans le PDF' + (nsw ? ', ' + nsw + ' échanges crypto→crypto détectés' : '') + (r.fiat.length ? ', ' + r.fiat.length + ' lignes « Vente de / Achat de » des relevés en devises' : '') + '.';
     if (r.fiat.length) { const cc = E.crossCheck(txs, E.parseFiatSales(fiatText)); msg += ' Contre-vérification : ' + cc.confirmed.length + ' ventes confirmées, ' + (cc.swapButFiat.length + cc.sellNoFiat.length) + ' divergences (voir le tableau des échanges).'; }
-    alert(msg + ' Vérifiez les types !');
+    void msg; // plus d'alerte : on passe directement au calcul
   }
   let fiatText = localStorage.getItem('kryptax.fiat') || '';
   function showMapping(name, rows, isXlsx) {
@@ -283,9 +283,9 @@
   }
   let runCtl = null;
   $('#run').onclick = async () => {
-    $('#run').disabled = true; $('#cancel').hidden = false; runCtl = new AbortController();
+    $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = tot != null ? `${step} : ${n}/${tot} (${Math.round((Date.now() - t0) / 1000)} s)` : step; };
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = 'Calcul en cours…'; };
     let src;
     try {
       src = KP.makeSources((u, o) => fetch(u, o), { signal: runCtl.signal, geckoIds: load('kryptax.gecko', {}) });
@@ -294,13 +294,14 @@
       livePrice.txs = txs; renderDiag(src, livePrice);
       persist(); save(); renderTx();
       const st = src.stats;
-      $('#progress').textContent = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
+      failed = livePrice.failed.length > 0; $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
     } catch (e) {
       try { saveCache(); } catch (x) {}
       if (src) renderDiag(src, { failed: [], fxMissing: txs.filter(t => t.fxPending).length });
-      $('#progress').textContent = (/Annul/.test(e.message) ? 'Calcul annulé.' : 'Erreur : ' + e.message + '.') + ' Les cours déjà récupérés sont gardés ; relancez pour reprendre. Les cours manquants restent « à renseigner ».';
+      failed = true; $('#progress').textContent = (/Annul/.test(e.message) ? 'Calcul annulé.' : 'Erreur : ' + e.message + '.') + ' Les cours déjà récupérés sont gardés ; relancez pour reprendre. Les cours manquants restent « à renseigner ».';
     }
-    $('#run').disabled = false; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
+    if (!failed) $('#progress').textContent = 'Calcul terminé.'; else if (!$('#progress').textContent.startsWith('Calcul annulé') && !$('#progress').textContent.startsWith('Erreur')) $('#progress').textContent = 'Certains cours sont introuvables (valeurs ≈ utilisées).';
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = !failed; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
   };
   $('#cancel').onclick = () => runCtl && runCtl.abort();
   $('#cckey').value = localStorage.getItem('kryptax.cckey') || '';
@@ -332,7 +333,6 @@
     add('Sorties (outcome)', `Ventes vers euros (${S.outcome.SELL.n})`, eur(S.outcome.SELL.eur), S.outcome.SELL.eur);
     if (S.outcome.PAY.n) add('Sorties (outcome)', `Paiements en crypto (${S.outcome.PAY.n})`, eur(S.outcome.PAY.eur), S.outcome.PAY.eur);
     if (S.outcome.SEND.n) add('Sorties (outcome)', `Transferts sortants (${S.outcome.SEND.n})`, eur(S.outcome.SEND.eur) + (S.outcome.SEND.unknown ? ` + ${S.outcome.SEND.unknown} sans cours` : ''), S.outcome.SEND.eur);
-    add('Échanges', 'Échanges crypto→crypto exclus (non imposables)', String(S.swaps), S.swaps);
     for (const c of S.closing) add(`Soldes au ${new Date(S.closingDate).toLocaleDateString('fr-FR')}`, `${num(c.qty)} ${c.asset}`, c.eur == null ? 'cours inconnu' : (c.est ? '≈ ' : '') + eur(c.eur), c.eur);
     add(`Soldes au ${new Date(S.closingDate).toLocaleDateString('fr-FR')}`, 'Valeur totale', eur(S.closingTotal), S.closingTotal);
     return R;
@@ -425,8 +425,8 @@
     txs = txs.concat(ex);
     // cours fictifs pré-remplis (pas d'appel réseau) ; LLAMA est volontairement absent → « à renseigner »
     manual['ETH@' + ex[5].id] = 3100; manual['BTC@' + ex[6].id] = 80000; manual['ETH@' + ex[7].id] = 3800; manual['LLAMA@' + ex[6].id] = 0.04; manual['LLAMA@' + ex[7].id] = 0.06;
-    save(); renderTx(); renderResults();
-    alert('Exemple fictif chargé. Le jeton LLAMA n’a pas de cours : la cession de 2024 passe « à renseigner » (essayez 0,05 €).');
+    save(); renderTx(); renderResults(); autoRun();
+    if (0) alert('Exemple fictif chargé. Le jeton LLAMA n’a pas de cours : la cession de 2024 passe « à renseigner » (essayez 0,05 €).');
   };
   renderTx(); if (txs.length) renderResults();
 })();

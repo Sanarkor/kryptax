@@ -101,4 +101,10 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 19, 'CSV : 18 lignes sous CESSIONS + 1 ligne GLOBAL'); eq(csv[i0 + 2 + 18].split(';')[1] === 'GLOBAL' ? 1 : 0, 1, 'CSV : ligne GLOBAL en fin de tableau');
   eq(X.FORM.map(f => f[0]).join(',') === '211,212,213,214,215,216,217,218,220,221,222,223,224' ? 1 : 0, 1, 'Export : lignes 211 à 224 de la 2086 dans l’ordre');
 }
+// CSP : chaque hôte appelé par le code doit figurer dans connect-src
+{
+  const fs = require('fs'), html = fs.readFileSync(__dirname + '/index.html', 'utf8'), csp = (html.match(/connect-src ([^;"]*)/) || [])[1] || '';
+  const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github/.test(h));
+  const miss = hosts.filter(h => !csp.split(/\s+/).includes(h)); eq(miss.length, 0, 'CSP connect-src couvre tous les hôtes appelés' + (miss.length ? ' (manque ' + miss.join(', ') + ')' : ''));
+}
 process.exit(ok ? 0 : 1);

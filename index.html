@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — Formulaire 2086 pour la fiscalité française</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.exchange.coinbase.com https://api.kraken.com https://min-api.cryptocompare.com https://api.binance.com https://data-api.binance.vision https://api.frankfurter.dev https://api.coingecko.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
-<meta name="theme-color" content="#070b14"><link rel="stylesheet" href="style.css?v=20261025l"></head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.binance.com https://data-api.binance.vision https://api.gateio.ws https://www.okx.com https://coins.llama.fi https://api.bitget.com https://www.bitstamp.net https://api.crypto.com https://api.exchange.coinbase.com https://api.kraken.com https://api.coingecko.com https://api.frankfurter.dev https://min-api.cryptocompare.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta name="theme-color" content="#070b14"><link rel="stylesheet" href="style.css?v=20261025n"></head>
 <body>
 <header><div class="topbar"><button id="reset" class="small ghost" title="Effacer toutes les données Kryptax de ce navigateur">↺ Réinitialiser</button></div><h1>Kryptax</h1><p class="sub">Formulaire 2086 pour la fiscalité française</p></header>
 <div class="banner">⚠️ Outil d'aide au calcul, pas un conseil fiscal : vérifiez avec la <a href="https://www.impots.gouv.fr/formulaire/2086/declaration-des-plus-ou-moins-values-sur-actifs-numeriques" target="_blank" rel="noopener">notice officielle</a>. 🔒 Vos données restent dans votre navigateur (seuls des cours publics sont demandés, sans clé).</div>
@@ -14,14 +14,14 @@
   <li><b>Lisez la synthèse</b> : plus-value nette, case <b>3AN</b> (gain) ou <b>3BN</b> (perte) de la 2042-C, exonération si le total des cessions ne dépasse pas 305 €.</li>
   <li><b>Téléchargez le PDF</b> (ou xlsx/CSV) : un tableau avec une ligne par cession imposable et les lignes 211 à 224 à recopier sur la 2086.</li>
  </ol>
- <p class="hint">Les échanges crypto → crypto ne sont pas imposables et sont exclus. Un cours introuvable est remplacé par le plus proche de vos relevés (marqué ≈), ou saisi à la main. Vos fichiers restent dans ce navigateur : rien n'est envoyé. Pensez au formulaire 3916-bis pour chaque compte à l'étranger.</p>
+ <p class="hint">Un cours introuvable est remplacé par le plus proche de vos relevés (marqué ≈), ou saisi à la main. Vos fichiers restent dans ce navigateur : rien n'est envoyé. Pensez au formulaire 3916-bis pour chaque compte à l'étranger.</p>
 </details>
 <section><h2>1. Importer</h2>
  <p class="hint">Importez <b>tout l'historique depuis votre premier achat</b>, avec les relevés de <b>tous vos comptes crypto</b>.</p>
  <label class="btn">Choisir des fichiers (PDF, CSV ou Excel .xlsx)<input type="file" id="files" accept=".pdf,.csv,.xlsx,text/csv,application/pdf" multiple hidden></label>
  <button id="example" class="ghost">Charger un exemple (fictif)</button>
  <div id="mapping"></div>
- <div id="swaps"></div>
+ <div id="swaps" hidden></div>
 </section>
 <section id="txsection" hidden><h2>Données importées <small id="txcount"></small></h2>
  <p class="hint" id="txnote"></p>
@@ -43,13 +43,12 @@
 </section>
 <section><h2>2. Calculer</h2>
  <p class="hint" id="txnote2"></p>
- <button id="run" class="btn">Récupérer les cours et calculer</button> <button id="cancel" class="ghost" hidden>Annuler</button> <progress id="bar" hidden></progress> <span id="progress"></span>
-<div id="diag"></div>
- <p class="hint">Cours historiques à la minute (Binance), CoinGecko pour les petits jetons, devises au taux BCE du jour, mis en cache dans ce navigateur. En cas de limite d'API, Kryptax attend et reprend. Jeton introuvable : cours le plus proche de vos relevés (±30 j, marqué ≈), sinon « à renseigner ».</p>
- <details><summary class="hint">Option : clé CryptoCompare gratuite (plus de jetons, à la minute)</summary><input id="cckey" placeholder="clé API (gardée dans ce navigateur)" size="40"></details>
+ <button id="run" class="small ghost" hidden>↻ Relancer</button> <button id="cancel" class="ghost" hidden>Annuler</button> <progress id="bar" hidden></progress> <span id="progress"></span>
+<div id="diag" hidden></div>
+ <details hidden><summary class="hint">Option : clé CryptoCompare gratuite (plus de jetons, à la minute)</summary><input id="cckey" placeholder="clé API (gardée dans ce navigateur)" size="40"></details>
 </section>
 <section id="results"></section>
 </main>
 <footer>Kryptax — code ouvert, sans serveur. Méthode : art. 150 VH bis du CGI, notice 2086.</footer>
-<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025l"></script><script src="pipeline.js?v=20261025l"></script><script src="jspdf.umd.min.js"></script><script src="jspdf.plugin.autotable.min.js"></script><script src="export.js?v=20261025l"></script><script src="app.js?v=20261025l"></script>
+<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025n"></script><script src="pipeline.js?v=20261025n"></script><script src="jspdf.umd.min.js"></script><script src="jspdf.plugin.autotable.min.js"></script><script src="export.js?v=20261025n"></script><script src="app.js?v=20261025n"></script>
 </body></html>
