@@ -174,15 +174,19 @@
   });
 
   /* ---------- Tableau des transactions ---------- */
+  let swOpen = false;
   function renderSwaps() {
+    const d0 = $('#swdet'); if (d0) swOpen = d0.open;
     const el = $('#swaps'); if (!el) return;
     const byId = {}; txs.forEach(t => byId[t.id] = t);
     const outs = E.sortTx(txs).filter(t => (t.swapAuto && t.type === 'EXCH_OUT') || t.swapForce === 'taxable' && t.rawSwap === 'out');
     const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (« Transfer from Revolut Digital Assets… – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
     if (!outs.length) { el.innerHTML = txs.length ? chk : ''; return; }
-    el.innerHTML = chk + `<h3>Échanges crypto→crypto détectés (${outs.filter(t => t.swapAuto).length})</h3>
+    const nAuto = outs.filter(t => t.swapAuto).length, nForced = outs.length - nAuto;
+    el.innerHTML = `<p class="ok">🔁 ${nAuto} échange${nAuto > 1 ? 's' : ''} crypto→crypto détecté${nAuto > 1 ? 's' : ''}, non imposable${nAuto > 1 ? 's' : ''}${nForced ? ` · ${nForced} forcé${nForced > 1 ? 's' : ''} imposable${nForced > 1 ? 's' : ''}` : ''}.</p>
+      <details id="swdet"${swOpen ? ' open' : ''}><summary class="hint">Voir/corriger les échanges</summary>
       <p class="hint">Une vente et un achat d’une autre crypto à la même seconde (≤ 5 s), pour une valeur proche (±8 %), sont un échange crypto→crypto : non imposable. Une vente vers des euros n’a pas d’achat simultané. Si une ligne est fausse, forcez-la.</p>
-      <div class="scroll"><table><tr><th>Date</th><th>Vendu</th><th>Reçu</th><th class="n">Valeur</th><th>Traitement</th></tr>${outs.map(t => { const b = byId[t.swapWith || t.rawSwapWith]; return `<tr data-sw="${t.id}"><td>${dt(t.date)}</td><td>${num(t.qty)} ${esc(t.asset)}</td><td>${b ? num(b.qty) + ' ' + esc(b.asset) : '—'}</td><td class="n">${eur(t.eur || 0)}</td><td>${t.swapAuto ? 'Échange (non imposable) <button class="small ghost" data-force>Forcer imposable</button>' : 'Vente imposable (forcée) <button class="small ghost" data-unforce>Rétablir échange</button>'}</td></tr>`; }).join('')}</table></div>`;
+      <div class="scroll"><table><tr><th>Date</th><th>Vendu</th><th>Reçu</th><th class="n">Valeur</th><th>Traitement</th></tr>${outs.map(t => { const b = byId[t.swapWith || t.rawSwapWith]; return `<tr data-sw="${t.id}"><td>${dt(t.date)}</td><td>${num(t.qty)} ${esc(t.asset)}</td><td>${b ? num(b.qty) + ' ' + esc(b.asset) : '—'}</td><td class="n">${eur(t.eur || 0)}</td><td>${t.swapAuto ? 'Échange (non imposable) <button class="small ghost" data-force>Forcer imposable</button>' : 'Vente imposable (forcée) <button class="small ghost" data-unforce>Rétablir échange</button>'}</td></tr>`; }).join('')}</table></div></details>` + chk;
   }
   $('#swaps') && $('#swaps').addEventListener('click', e => {
     if (e.target.id === 'fiatgo') {
@@ -215,7 +219,7 @@
   function renderBalances() {
     const el = $('#balances'); if (!pdfBal || !txs.length) { el.innerHTML = ''; return; }
     const rows = E.checkBalances(txs, pdfBal.closing, pdfBal.to, opening), bad = rows.filter(b => !b.ok);
-    el.innerHTML = `<details${bad.length ? ' open' : ''}><summary>📊 Soldes de clôture : relevé PDF vs calculés — ${bad.length ? bad.length + ' écart(s)' : 'aucun écart ✓'}</summary>
+    el.innerHTML = `<details><summary>📊 Soldes de clôture : relevé PDF vs calculés — ${bad.length ? bad.length + ' écart(s)' : 'aucun écart ✓'}</summary>
       <p class="hint">Fin de période du relevé : ${isFinite(pdfBal.to) ? dt(pdfBal.to) : '?'}. Les petits écarts viennent des frais affichés arrondis ; un gros écart signale une opération manquante.</p>
       <div class="scroll"><table><tr><th>Actif</th><th class="n">Relevé</th><th class="n">Calculé</th><th class="n">Écart</th><th></th></tr>${rows.map(b => `<tr><td>${esc(b.asset)}</td><td class="n">${num(b.expected)}</td><td class="n">${num(b.computed)}</td><td class="n ${b.ok ? '' : 'neg'}">${b.ok ? '0' : num(b.diff)}</td><td>${b.ok ? '✓' : '⚠'}</td></tr>`).join('')}</table></div>
       ${bad.length ? '<button id="baladj" class="small">Ajouter des lignes d’ajustement pour aligner sur le relevé</button>' : ''}</details>`;
@@ -224,7 +228,7 @@
   /* ---------- État reporté au 31/12 ---------- */
   function renderOpening() {
     const el = $('#opening'), yrs = [...new Set(txs.map(t => new Date(t.date).getFullYear()))].sort();
-    el.innerHTML = `<details${opening ? ' open' : ''}><summary>📅 Report d’une année sur l’autre (état au 31/12)</summary>
+    el.innerHTML = `<details><summary>📅 Report d’une année sur l’autre (état au 31/12)</summary>
       ${opening ? `<p class="ok">État chargé au <b>${opening.date.split('-').reverse().join('/')}</b> : ${Object.keys(opening.holdings).length} actifs, ligne 220 = ${eur(opening.l220)}, ligne 221 = ${eur(opening.l221)}${opening.incomplete ? ' <span class="neg">(calcul de l’année précédente incomplet)</span>' : ''}. Les opérations jusqu’à cette date sont ignorées. <button id="opdel" class="small ghost">Retirer</button></p>`
         : '<p class="hint">Sans état reporté, il faut importer <b>tout l’historique</b> depuis votre premier achat de crypto : les lignes 220 et 221 cumulent toutes les années. Exportez l’état au 31/12 chaque année et réimportez-le l’année suivante.</p>'}
       <p>${yrs.map(y => `<button class="small" data-st="${y}">Exporter l’état au 31/12/${y}</button>`).join(' ')} <label class="btn small">Importer un état (.json)<input type="file" id="opfile" accept=".json,application/json" hidden></label></p>
@@ -264,7 +268,7 @@
   }
   function renderDiag(src, fnr) {
     const rows = Object.entries(src.diag).map(([k, d]) => `<tr><td>${k}</td><td class="${d.fail ? 'neg' : 'pos'}">${d.fail ? (d.ok ? 'partiel' : 'échec') : 'OK'}</td><td class="num">${d.calls}</td><td>${d.last || ''}</td></tr>`).join('');
-    $('#diag').innerHTML = `<h3>Sources de prix</h3><table><tr><th>Source</th><th>État</th><th>Appels</th><th>Dernière erreur</th></tr>${rows}</table>` +
+    $('#diag').innerHTML = `<details><summary class="hint">Sources de prix : ${Object.values(src.diag).filter(d => d.fail && !d.ok).length ? '⚠ certaines injoignables' : 'OK'} (${Object.values(src.diag).reduce((x, d) => x + d.calls, 0)} appels)</summary><table><tr><th>Source</th><th>État</th><th>Appels</th><th>Dernière erreur</th></tr>${rows}</table></details>` +
       (fnr.failed.length ? `<p class="warn">Aucune source joignable pour : ${fnr.failed.join(', ')} → cours observé le plus proche (≈) ; relancez plus tard pour réessayer (les échecs ne sont pas mémorisés).</p>` : '') +
       (fnr.fxMissing ? `<p class="warn">${fnr.fxMissing} lignes en $ sans taux de change : relancez.</p>` : '');
   }
