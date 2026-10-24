@@ -16,11 +16,14 @@
     IGNORE: 'Ignorer (ex. transfert entre mes portefeuilles)'
   };
   const CHECK = ['STAKING', 'AIRDROP', 'INTEREST', 'RECEIVE', 'SEND'];
-  const FIAT = { EUR: 1 };
+  const FIAT = { EUR: 1 }; const FIATS = ['EUR', 'USD', 'GBP', 'CHF'];
   const STABLE_NOTE = ['USDT', 'USDC', 'DAI', 'EURC'];
 
   function guessType(raw, desc) {
-    const s = (String(raw || '') + ' ' + String(desc || '')).toLowerCase();
+    const s = fixText(String(raw || '') + ' ' + String(desc || '')).toLowerCase();
+    if (/récompense|recompense|apprendre/.test(s)) return 'INTEREST';
+    if (/vendre/.test(s)) return 'SELL';
+    if (/achet/.test(s)) return 'BUY';
     if (/stak/.test(s)) return 'STAKING';
     if (/airdrop/.test(s)) return 'AIRDROP';
     if (/learn|reward|interest|intérêt|cashback|earn/.test(s)) return 'INTEREST';
@@ -38,7 +41,7 @@
   function parseNum(v, mode) {
     if (v == null) return NaN;
     if (typeof v === 'number') return v;
-    let s = String(v).replace(/[\s\u00a0\u202f]/g, '').replace(/[€$£A-Za-z]/g, '');
+    let s = fixText(String(v)).replace(/[\s\u00a0\u202f]/g, '').replace(/[€$£A-Za-z]/g, '');
     if (s === '' || s === '-') return NaN;
     let neg = /^\(.*\)$/.test(s); s = s.replace(/[()]/g, '');
     const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
@@ -57,7 +60,11 @@
   function parseDate(v, mode) {
     if (v == null || v === '') return NaN;
     if (typeof v === 'number') return v;
-    const s = String(v).trim();
+    if (v instanceof Date) return v.getTime();
+    const s = fixText(String(v)).trim();
+    const MOIS = { janv: 0, jan: 0, 'févr': 1, fevr: 1, 'fév': 1, feb: 1, mars: 2, mar: 2, avr: 3, apr: 3, mai: 4, may: 4, juin: 5, jun: 5, juil: 6, jul: 6, 'août': 7, aout: 7, aug: 7, sept: 8, sep: 8, oct: 9, nov: 10, 'déc': 11, dec: 11 };
+    let f = s.match(/^(\d{1,2})\s+([a-zéû]+)\.?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/i);
+    if (f && MOIS[f[2].toLowerCase()] != null) return new Date(+f[3], MOIS[f[2].toLowerCase()], +f[1], +(f[4] || 0), +(f[5] || 0), +(f[6] || 0)).getTime();
     let m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
     if (m && !/^\d{4}/.test(s)) {
       let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
@@ -71,6 +78,30 @@
     return t;
   }
 
+  /* Texte abîmé (mojibake) des exports Revolut .xlsx : « 100,00â_x0082_¬ » → « 100,00 € » */
+  function fixText(v) {
+    if (v == null || typeof v !== 'string') return v;
+    let s = v.replace(/_x([0-9A-Fa-f]{4})_/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+    if (/[ÃÂâ]/.test(s)) {
+      try { const b = new Uint8Array([...s].map(c => c.charCodeAt(0) & 255)); if ([...s].every(c => c.charCodeAt(0) < 256)) { const d = new TextDecoder('utf-8', { fatal: true }).decode(b); s = d; } } catch (e) {}
+    }
+    return s.replace(/\u00a0|\u202f/g, ' ');
+  }
+  const currencyOf = v => /\$|USD/.test(String(v || '')) ? 'USD' : /£|GBP/.test(String(v || '')) ? 'GBP' : 'EUR';
+  /* Quantité numérique tronquée (virgule perdue) : on choisit la puissance de 10 qui colle à Valeur / Prix. */
+  function fixQty(raw, price, value) {
+    if (typeof raw !== 'number' || !Number.isInteger(raw) || raw === 0) return { qty: Math.abs(raw), status: 'ok' };
+    const target = value > 0 && price > 0 ? value / price : null;
+    if (!target) return { qty: Math.abs(raw), status: 'suspect', raw };
+    let best = null;
+    for (let k = -3; k <= 22; k++) { const q = Math.abs(raw) / Math.pow(10, k), e = Math.abs(Math.log10(q / target)); if (!best || e < best.e) best = { q, e }; }
+    return { qty: best.q, status: best.e < 0.15 ? 'corrigée' : 'suspect', raw };
+  }
+  function scaleToValue(raw, price, value) { // même principe avec un cours historique
+    let best = null; for (let k = -3; k <= 22; k++) { const q = Math.abs(raw) / Math.pow(10, k), e = Math.abs(Math.log10(q * price / value)); if (!best || e < best.e) best = { q, e }; }
+    return best.q;
+  }
+
   function sortTx(txs) { return txs.slice().sort((a, b) => a.date - b.date || (a.seq || 0) - (b.seq || 0)); }
   const EPS = 1e-12;
 
@@ -79,7 +110,7 @@
     const need = []; const h = {};
     for (const t of sortTx(txs)) {
       if (t.type === 'SELL' || t.type === 'PAY') {
-        if (!(t.override212 > 0)) for (const a in h) if (h[a] > EPS && a !== t.asset && !(a in FIAT)) need.push({ asset: a, ts: t.date, txId: t.id });
+        if (!(t.override212 > 0)) for (const a in h) if (h[a] > EPS && a !== t.asset && !FIATS.includes(a)) need.push({ asset: a, ts: t.date, txId: t.id });
       }
       apply(h, t);
     }
@@ -115,7 +146,7 @@
         if (t.override212 > 0) { v212 = t.override212; lines.push({ asset: '(saisie manuelle)', value: v212 }); }
         else {
           for (const a in held) {
-            if (held[a] <= EPS) continue;
+            if (held[a] <= EPS || FIATS.includes(a)) continue;
             let p;
             if (a in FIAT) p = FIAT[a];
             else if (a === t.asset && Math.abs(t.qty) > 0) p = p213 / Math.abs(t.qty);
@@ -152,6 +183,6 @@
     }
     return y;
   }
-  const api = { TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
