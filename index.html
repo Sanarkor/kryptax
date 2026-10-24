@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — aide au formulaire 2086</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://min-api.cryptocompare.com https://api.binance.com https://data-api.binance.vision https://api.frankfurter.dev; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.exchange.coinbase.com https://api.kraken.com https://min-api.cryptocompare.com https://api.binance.com https://data-api.binance.vision https://api.frankfurter.dev https://api.coingecko.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
 <meta name="theme-color" content="#070b14"><link rel="stylesheet" href="style.css"></head>
 <body>
 <header><h1>Kryptax</h1><p class="sub">Transactions crypto (Revolut et autres) → formulaire 2086</p></header>
@@ -26,11 +26,12 @@
    <label>Plateforme<input name="platform" placeholder="Ledger, Binance…"></label>
    <button>Ajouter</button></form></details>
  <div class="scroll"><table id="txtable"></table></div>
- <button id="clear" class="danger">Tout effacer</button>
+ <button id="clear" class="ghost">Effacer les transactions</button> <button id="clearman" class="ghost">Effacer les saisies manuelles</button> <button id="reset" class="danger">Tout réinitialiser</button>
 </section>
 <section><h2>3. Calculer</h2>
- <button id="run" class="btn">Récupérer les cours et calculer</button> <span id="progress"></span>
- <p class="hint">Cours historiques à l'heure (Binance), devises au taux BCE du jour, mis en cache dans ce navigateur. En cas de limite d'API, Kryptax attend et reprend. Jeton introuvable : cours le plus proche de vos relevés (±30 j, marqué ≈), sinon « à renseigner ».</p>
+ <button id="run" class="btn">Récupérer les cours et calculer</button> <button id="cancel" class="ghost" hidden>Annuler</button> <progress id="bar" hidden></progress> <span id="progress"></span>
+<div id="diag"></div>
+ <p class="hint">Cours historiques à la minute (Binance), CoinGecko pour les petits jetons, devises au taux BCE du jour, mis en cache dans ce navigateur. En cas de limite d'API, Kryptax attend et reprend. Jeton introuvable : cours le plus proche de vos relevés (±30 j, marqué ≈), sinon « à renseigner ».</p>
  <details><summary class="hint">Option : clé CryptoCompare gratuite (plus de jetons, à la minute)</summary><input id="cckey" placeholder="clé API (gardée dans ce navigateur)" size="40"></details>
 </section>
 <section id="results"></section>

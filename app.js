@@ -5,6 +5,8 @@
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   let txs = load(LS.tx, []), cache = load(LS.cache, {}), manual = load(LS.manual, {});
+  // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
+  for (const k in cache) if (typeof cache[k] !== 'number' || !/\|h\d+$|\|none$/.test(k)) delete cache[k];
   const save = () => { localStorage.setItem(LS.tx, JSON.stringify(txs)); localStorage.setItem(LS.manual, JSON.stringify(manual)); };
   const saveCache = () => { try { localStorage.setItem(LS.cache, JSON.stringify(cache)); } catch (e) {} };
   const eur = n => (n == null || !isFinite(n)) ? '—' : n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -153,7 +155,7 @@
         else { bad++; return; }
         if (o.prices && nw > 0) {
           const c = rC ? [rc, ra] : sC ? [sc, sa] : null;
-          if (c && c[1] > 0) { cache[key(c[0], date)] = nw / c[1]; np++; }
+          if (c && c[1] > 0) { cache[c[0] + '|h' + Math.floor(date / 3600e3)] = nw / c[1]; np++; }
         }
       });
       saveCache(); save(); box.remove(); renderTx();
@@ -209,6 +211,12 @@
     save(); if (k === 'type' || k === 'qty') renderTx();
   });
   $('#txtable').addEventListener('click', e => { if (!e.target.hasAttribute('data-del')) return; txs = txs.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); renderTx(); });
+  $('#clearman').onclick = () => { if (confirm('Effacer les cours et montants saisis à la main ?')) { manual = {}; livePrice = null; save(); renderTx(); renderResults(); } };
+  $('#reset').onclick = () => {
+    if (!confirm('Tout réinitialiser ? Fichiers importés, transactions, saisies manuelles, résultats et cache de prix de ce navigateur seront effacés.')) return;
+    Object.keys(localStorage).filter(k => k.startsWith('kryptax.')).forEach(k => localStorage.removeItem(k));
+    location.reload(); // la page revient à son état initial
+  };
   $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; fiatText = ''; localStorage.removeItem('kryptax.fiat'); save(); renderTx(); $('#results').innerHTML = ''; } };
 
   /* ---------- Cours historiques ---------- */
@@ -216,19 +224,38 @@
   let livePrice = null;
   function priceFn(a, ts, txId) {
     if (manual[a + '@' + txId] != null) return manual[a + '@' + txId];
-    if (livePrice) return livePrice(a, ts);
-    const v = cache[a + '|' + Math.floor(ts / HOUR)]; return (v == null || v === 'NA') ? null : v;
+    if (manual[a] != null) return manual[a];
+    if (!livePrice || livePrice.txs !== txs) { livePrice = KP.priceLookup(txs, cache, manual); livePrice.txs = txs; } // même sans relancer : cache + cours observés ≈
+    return livePrice(a, ts);
   }
+  function renderDiag(src, fnr) {
+    const rows = Object.entries(src.diag).map(([k, d]) => `<tr><td>${k}</td><td class="${d.fail ? 'neg' : 'pos'}">${d.fail ? (d.ok ? 'partiel' : 'échec') : 'OK'}</td><td class="num">${d.calls}</td><td>${d.last || ''}</td></tr>`).join('');
+    $('#diag').innerHTML = `<h3>Sources de prix</h3><table><tr><th>Source</th><th>État</th><th>Appels</th><th>Dernière erreur</th></tr>${rows}</table>` +
+      (fnr.failed.length ? `<p class="warn">Aucune source joignable pour : ${fnr.failed.join(', ')} → cours observé le plus proche (≈) ; relancez plus tard pour réessayer (les échecs ne sont pas mémorisés).</p>` : '') +
+      (fnr.fxMissing ? `<p class="warn">${fnr.fxMissing} lignes en $ sans taux de change : relancez.</p>` : '');
+  }
+  let runCtl = null;
   $('#run').onclick = async () => {
-    $('#run').disabled = true;
+    $('#run').disabled = true; $('#cancel').hidden = false; runCtl = new AbortController();
+    const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = tot != null ? `${step} : ${n}/${tot} (${Math.round((Date.now() - t0) / 1000)} s)` : step; };
+    let src;
     try {
-      const src = KP.makeSources((u) => fetch(u), { ccKey: localStorage.getItem('kryptax.cckey') || '', fxCache: load('kryptax.fx', {}) });
-      livePrice = await KP.prepare(txs, src, cache, m => $('#progress').textContent = m);
-      saveCache(); localStorage.setItem('kryptax.fx', JSON.stringify(src.fxCache)); save(); renderTx();
-      $('#progress').textContent = 'Calcul terminé.';
-    } catch (e) { $('#progress').textContent = 'Erreur : ' + e.message; }
-    $('#run').disabled = false; renderResults();
+      src = KP.makeSources((u, o) => fetch(u, o), { signal: runCtl.signal, geckoIds: load('kryptax.gecko', {}) });
+      const persist = () => saveCache();
+      livePrice = await KP.prepare(txs, src, cache, show, { signal: runCtl.signal, concurrency: 4, onSave: persist, manual });
+      livePrice.txs = txs; renderDiag(src, livePrice);
+      persist(); save(); renderTx();
+      const st = src.stats;
+      $('#progress').textContent = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
+    } catch (e) {
+      try { saveCache(); } catch (x) {}
+      if (src) renderDiag(src, { failed: [], fxMissing: txs.filter(t => t.fxPending).length });
+      $('#progress').textContent = (/Annul/.test(e.message) ? 'Calcul annulé.' : 'Erreur : ' + e.message + '.') + ' Les cours déjà récupérés sont gardés ; relancez pour reprendre. Les cours manquants restent « à renseigner ».';
+    }
+    $('#run').disabled = false; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
   };
+  $('#cancel').onclick = () => runCtl && runCtl.abort();
   $('#cckey').value = localStorage.getItem('kryptax.cckey') || '';
   $('#cckey').onchange = e => localStorage.setItem('kryptax.cckey', e.target.value.trim());
 
