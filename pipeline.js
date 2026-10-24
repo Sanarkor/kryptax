@@ -92,12 +92,14 @@
       }
       return undefined;
     }
-    async function coinbaseSeries(pair, from, to) { // 300 bougies max par appel
+    const dead = new Set(); // source injoignable (erreur réseau) : on ne la réessaie plus pendant ce calcul
+    async function coinbaseSeries(pair, from, to) {
+      if (dead.has('cb')) return undefined; // 300 bougies max par appel
       const out = {}; let s = Math.floor(from / HOUR) * HOUR - HOUR;
       while (s <= to + HOUR) {
         const e = Math.min(s + 299 * HOUR, to + 2 * HOUR);
         const r = await get('Coinbase', `https://api.exchange.coinbase.com/products/${pair}/candles?granularity=3600&start=${new Date(s).toISOString()}&end=${new Date(e).toISOString()}`);
-        if (r.err) return undefined; if (!Array.isArray(r.j)) return null; // NotFound : paire inexistante
+        if (r.err) { if (r.err !== 'HTTP 429') dead.add('cb'); return undefined; } if (!Array.isArray(r.j)) return null; // NotFound : paire inexistante
         for (const k of r.j) out[Math.floor(k[0] * 1000 / HOUR)] = +k[3];
         s = e + HOUR;
       }
@@ -105,7 +107,7 @@
     }
     const geckoIds = Object.assign({}, opt.geckoIds || {});
     let gq = Promise.resolve();
-    function gget(url) { const r = gq.then(async () => { let x; for (let i = 0; i < 3; i++) { x = await get('CoinGecko', url, 1); if (!x.err && !(x.j && x.j.status && x.j.status.error_code === 429)) break; await sleep(4000 * (i + 1)); } await sleep(opt.geckoGap != null ? opt.geckoGap : 2200); return x; }); gq = r.catch(() => {}); return r; }
+    function gget(url) { const r = gq.then(async () => { let x; for (let i = 0; i < 3; i++) { if (dead.has('gecko')) return { err: 'injoignable' }; x = await get('CoinGecko', url, 1); const lim = x.err === 'HTTP 429' || (x.j && x.j.status && x.j.status.error_code === 429); if (!x.err && !lim) break; if (!lim) { dead.add('gecko'); break; } await sleep(4000 * (i + 1)); } await sleep(opt.geckoGap != null ? opt.geckoGap : 2200); return x; }); gq = r.catch(() => {}); return r; }
     async function geckoSeries(a, from, to) { // ≤ 90 jours par appel -> points horaires
       if (!(a in geckoIds)) {
         const r = await gget(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(a)}`);
@@ -188,7 +190,9 @@
     }
     // 2. cours : une série horaire par actif sur la plage utile
     const rec = txs.filter(t => t.qtyStatus === 'à reconstruire' && t.qtyRaw && !t.qtyManual);
-    const need = E.neededPrices(txs).concat(rec.map(t => ({ asset: t.asset, ts: t.date })))
+    const inc = txs.filter(t => ['INTEREST', 'STAKING', 'AIRDROP', 'SEND'].includes(t.type) && !(t.eur > 0)).map(t => ({ asset: t.asset, ts: t.date }));
+    const last = Math.max(...txs.map(t => t.date)), fin = isFinite(last) ? Object.keys(E.holdingsAt(txs, last)).filter(a => !E.FIATS.includes(a)).map(a => ({ asset: a, ts: last })) : []; // revenus et soldes de clôture (synthèse)
+    const need = E.neededPrices(txs).concat(rec.map(t => ({ asset: t.asset, ts: t.date })), inc, fin)
       .filter(n => typeof cache[n.asset + '|h' + Math.floor(n.ts / HOUR)] !== 'number' && cache[n.asset + '|none'] == null);
     const by = {}; for (const n of need) (by[n.asset] = by[n.asset] || []).push(n.ts);
     const assets = Object.keys(by), failed = []; let done = 0;

@@ -174,6 +174,12 @@
   });
 
   /* ---------- Tableau des transactions ---------- */
+  /* Mobile : chaque cellule reçoit le libellé de sa colonne (data-l) pour l'affichage empilé en CSS. */
+  function labelTables(root) {
+    root.querySelectorAll('table:not(.form)').forEach(t => { const hr = t.querySelector('tr'); if (!hr || !hr.querySelector('th')) return; const L = [...hr.children].map(x => x.textContent.trim()); hr.classList.add('hdr');
+      t.querySelectorAll('tr').forEach(r => { if (r === hr) return; [...r.children].forEach((td, i) => { if (L[i] && !td.dataset.l) td.dataset.l = L[i]; }); }); });
+  }
+  new MutationObserver(() => labelTables(document.body)).observe(document.body, { childList: true, subtree: true });
   let swOpen = false;
   function renderSwaps() {
     const d0 = $('#swdet'); if (d0) swOpen = d0.open;
@@ -309,12 +315,40 @@
     ['222', 'Soultes reçues lors d’échanges antérieurs', c => eur(c.l222), ''], ['223', 'Prix total d’acquisition net', c => eur(c.l223), '220 − 221 − 222'],
     ['224', 'Plus-value ou moins-value', c => c.l224 == null ? '<b class="warn">à renseigner</b>' : '<b class="' + (c.l224 >= 0 ? 'pos' : 'neg') + '">' + (c.l224 >= 0 ? '+' : '') + eur(c.l224) + '</b>', '218 − [223 × (217 / 212)]']
   ];
+  let lastS = {};
+  const sgn = v => (v >= 0 ? '+' : '') + eur(v);
+  function summaryRows(S) { // [section, libellé, valeur texte, valeur numérique]
+    const R = [], add = (sec, l, v, n) => R.push([sec, l, v, n]);
+    add('Plus-values', 'Gains', eur(S.gains), S.gains); add('Plus-values', 'Pertes', eur(S.losses), S.losses);
+    add('Plus-values', 'Plus-value nette' + (S.incomplete ? ' (incomplet)' : ''), sgn(S.net), S.net);
+    add('Cessions', 'Nombre de cessions imposables', String(S.nCessions), S.nCessions); add('Cessions', 'Produit total des cessions (213)', eur(S.produit), S.produit);
+    add('Cessions', 'Prix d’acquisition des actifs cédés (fractions 220)', eur(S.acquisition), S.acquisition);
+    add('Frais', 'Frais en nature (Revolut)', eur(S.fees.inKind), S.fees.inKind); add('Frais', 'Frais explicites', eur(S.fees.explicit), S.fees.explicit); add('Frais', 'Frais totaux', eur(S.fees.total), S.fees.total);
+    for (const g of Object.values(S.income)) add('Revenus (income)', `${g.label} (${g.n})`, (g.est ? '≈ ' : '') + eur(g.eur), g.eur);
+    add('Revenus (income)', 'Total revenus' + (S.incomeUnknown.length ? ` (${S.incomeUnknown.length} sans cours)` : ''), eur(S.incomeTotal), S.incomeTotal);
+    add('Sorties (outcome)', `Ventes vers euros (${S.outcome.SELL.n})`, eur(S.outcome.SELL.eur), S.outcome.SELL.eur);
+    if (S.outcome.PAY.n) add('Sorties (outcome)', `Paiements en crypto (${S.outcome.PAY.n})`, eur(S.outcome.PAY.eur), S.outcome.PAY.eur);
+    if (S.outcome.SEND.n) add('Sorties (outcome)', `Transferts sortants (${S.outcome.SEND.n})`, eur(S.outcome.SEND.eur) + (S.outcome.SEND.unknown ? ` + ${S.outcome.SEND.unknown} sans cours` : ''), S.outcome.SEND.eur);
+    add('Échanges', 'Échanges crypto→crypto exclus (non imposables)', String(S.swaps), S.swaps);
+    for (const c of S.closing) add(`Soldes au ${new Date(S.closingDate).toLocaleDateString('fr-FR')}`, `${num(c.qty)} ${c.asset}`, c.eur == null ? 'cours inconnu' : (c.est ? '≈ ' : '') + eur(c.eur), c.eur);
+    add(`Soldes au ${new Date(S.closingDate).toLocaleDateString('fr-FR')}`, 'Valeur totale', eur(S.closingTotal), S.closingTotal);
+    return R;
+  }
+  function summaryHtml(S) {
+    const R = summaryRows(S); let h = '<div class="summary"><h4>Synthèse ' + S.year + '</h4>', sec = '';
+    for (const [s, l, v] of R) { if (s !== sec) { h += (sec ? '</dl>' : '') + `<h5>${esc(s)}</h5><dl>`; sec = s; } h += `<dt>${esc(l)}</dt><dd>${esc(v)}</dd>`; }
+    h += '</dl>';
+    if (S.estimated || Object.values(S.income).some(g => g.est) || S.closing.some(c => c.est)) h += '<p class="hint">≈ cours estimé (tiré de vos relevés, à vérifier).</p>';
+    if (S.incomeUnknown.length) h += `<p class="hint">Revenus sans cours connu : ${[...new Set(S.incomeUnknown)].map(esc).join(', ')} (non valorisés).</p>`;
+    return h + '</div>';
+  }
   function renderResults() {
     const out = computeWithPrices(); const Y = E.byYear(out);
     let h = '<h2>4. Résultats</h2>';
     if (!out.cessions.length) h += '<p>Aucune cession imposable (vente contre € ou paiement en crypto).</p>';
     for (const y of Object.values(Y).sort((a, b) => b.year - a.year)) {
-      h += `<h3>Année ${y.year} — déclaration ${y.year + 1}</h3><div class="scroll"><table class="form"><tr><th>Ligne</th><th></th>${y.cessions.map((c, i) => `<th class="n">Cession ${i + 1}<br><span class="hint">${num(c.qty)} ${esc(c.asset)}</span></th>`).join('')}<th>Formule</th></tr>`;
+      const S = E.summary(txs, out, (a, ts) => priceFn(a, ts), y.year, opening, (a, ts) => !!(livePrice && livePrice.approx && livePrice.approx.has(a + '|' + ts))); lastS[y.year] = S;
+      h += `<h3>Année ${y.year} — déclaration ${y.year + 1}</h3>` + summaryHtml(S) + `<h4>Détail par cession</h4><div class="cards">${y.cessions.map((c, i) => `<div class="card${c.status !== 'ok' ? ' badc' : ''}"><h4>Cession ${i + 1} · ${num(c.qty)} ${esc(c.asset)}</h4><dl>${ROWS.map(([l, lab, f]) => `<dt><b>${l}</b> ${lab}</dt><dd>${f(c)}</dd>`).join('')}</dl></div>`).join('')}</div><div class="scroll formwrap"><table class="form"><tr><th>Ligne</th><th></th>${y.cessions.map((c, i) => `<th class="n">Cession ${i + 1}<br><span class="hint">${num(c.qty)} ${esc(c.asset)}</span></th>`).join('')}<th>Formule</th></tr>`;
       for (const [l, lab, f, fo] of ROWS) h += `<tr><td>${l}</td><td>${lab}</td>${y.cessions.map(c => `<td class="n${c.status !== 'ok' && (l === '212' || l === '224') ? ' bad' : ''}">${f(c)}</td>`).join('')}<td class="formula">${fo}</td></tr>`;
       h += '</table></div>';
       for (const c of y.cessions.filter(c => c.status !== 'ok')) {
@@ -330,7 +364,7 @@
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte Revolut ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
-    h += '<p><button id="csv" class="ghost">Exporter en CSV</button> <button id="print" class="ghost">Imprimer / PDF</button></p>';
+    h += '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="print" class="ghost">Imprimer</button></p>';
     $('#results').innerHTML = h; lastOut = out; lastY = Y;
   }
   let lastOut = null, lastY = null;
@@ -357,10 +391,14 @@
   });
   $('#results').addEventListener('click', e => {
     if (e.target.id === 'print') window.print();
-    if (e.target.id === 'csv') {
-      const lines = [['annee', 'cession', ...ROWS.map(r => r[0] + ' ' + r[1])].join(';')];
-      for (const y of Object.values(lastY)) y.cessions.forEach((c, i) => lines.push([y.year, i + 1, new Date(c.date).toISOString(), ...['l212', 'l213', 'l214', 'l215', 'l216', 'l217', 'l218', 'l220', 'l221', 'l222', 'l223', 'l224'].map(k => c[k] == null ? 'A RENSEIGNER' : c[k].toFixed(2).replace('.', ','))].join(';')));
-      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv' })); a.download = 'kryptax-2086.csv'; a.click();
+    if (['csv', 'xlsx', 'pdfx'].includes(e.target.id)) {
+      const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs), stamp = new Date().toLocaleDateString('sv-SE');
+      const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
+      try {
+        if (e.target.id === 'csv') dl(new Blob([X.makeCsv(data)], { type: 'text/csv;charset=utf-8' }), `kryptax-2086-${stamp}.csv`);
+        if (e.target.id === 'xlsx') dl(new Blob([XLSX.write(X.makeXlsx(XLSX, data), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `kryptax-2086-${stamp}.xlsx`);
+        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, 'Kryptax - formulaire 2086 (' + data.cessions.length + ' cessions)').output('blob'), `kryptax-2086-${stamp}.pdf`);
+      } catch (err) { alert('Export impossible : ' + err.message); }
     }
   });
 
