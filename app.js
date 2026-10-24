@@ -70,9 +70,9 @@
       const o = {}; box.querySelectorAll('[data-o]').forEach(s => o[s.dataset.o] = s.value);
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
       o.xlsx = isXlsx; o.source = name;
-      const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); save(); box.remove(); renderTx();
+      const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length; save(); box.remove(); renderTx();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
-      return alert(res.txs.length + ' transactions importées' + (res.bad.length ? ', ' + res.bad.length + ' lignes ignorées' : '') + (sus ? '. ' + sus + ' quantités reconstruites ou à vérifier' : '') + (usd ? '. ' + usd + ' lignes en devise étrangère, converties en € au calcul (taux BCE)' : '') + '. Vérifiez les types !');
+      return alert(res.txs.length + ' transactions importées' + (res.bad.length ? ', ' + res.bad.length + ' lignes ignorées' : '') + (sus ? '. ' + sus + ' quantités reconstruites ou à vérifier' : '') + (usd ? '. ' + usd + ' lignes en devise étrangère, converties en € au calcul (taux BCE)' : '') + (nsw ? '. ' + nsw + ' échanges crypto→crypto détectés (non imposables, voir le tableau)' : '') + '. Vérifiez les types !');
       let n = 0, bad = 0;
       rows.slice(1).forEach((r, i) => {
         const g = f => mp[f] == null ? '' : r[mp[f]];
@@ -148,7 +148,31 @@
   });
 
   /* ---------- Tableau des transactions ---------- */
+  function renderSwaps() {
+    const el = $('#swaps'); if (!el) return;
+    const byId = {}; txs.forEach(t => byId[t.id] = t);
+    const outs = E.sortTx(txs).filter(t => (t.swapAuto && t.type === 'EXCH_OUT') || t.swapForce === 'taxable' && t.rawSwap === 'out');
+    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (« Transfer from Revolut Digital Assets… – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%"></textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
+    if (!outs.length) { el.innerHTML = txs.length ? chk : ''; return; }
+    el.innerHTML = chk + `<h3>Échanges crypto→crypto détectés (${outs.filter(t => t.swapAuto).length})</h3>
+      <p class="hint">Une vente et un achat d’une autre crypto à la même seconde (≤ 5 s), pour une valeur proche (±8 %), sont un échange crypto→crypto : non imposable. Une vente vers des euros n’a pas d’achat simultané. Si une ligne est fausse, forcez-la.</p>
+      <div class="scroll"><table><tr><th>Date</th><th>Vendu</th><th>Reçu</th><th class="n">Valeur</th><th>Traitement</th></tr>${outs.map(t => { const b = byId[t.swapWith || t.rawSwapWith]; return `<tr data-sw="${t.id}"><td>${dt(t.date)}</td><td>${num(t.qty)} ${esc(t.asset)}</td><td>${b ? num(b.qty) + ' ' + esc(b.asset) : '—'}</td><td class="n">${eur(t.eur || 0)}</td><td>${t.swapAuto ? 'Échange (non imposable) <button class="small ghost" data-force>Forcer imposable</button>' : 'Vente imposable (forcée) <button class="small ghost" data-unforce>Rétablir échange</button>'}</td></tr>`; }).join('')}</table></div>`;
+  }
+  $('#swaps') && $('#swaps').addEventListener('click', e => {
+    if (e.target.id === 'fiatgo') {
+      const f = E.parseFiatSales($('#fiattxt').value), r = E.crossCheck(txs, f), L = (a, m) => a.length ? `<li>${m} (${a.length}) : ${a.map(x => esc((x.t ? x.t.asset + ' ' + dt(x.t.date) : x.asset + ' ' + dt(x.date)))).join(', ')}</li>` : '';
+      $('#fiatres').innerHTML = `<p>${f.length} lignes « Vente de » lues. ${r.confirmed.length} ventes confirmées imposables.</p><ul>${L(r.swapButFiat, '⚠️ Détectées comme échange mais présentes dans le relevé € (à forcer imposable ?)')}${L(r.sellNoFiat, '⚠️ Ventes imposables absentes du relevé € (échange ?)')}${L(r.fiatNoSell, 'Lignes du relevé € sans vente correspondante')}</ul>`;
+      save(); return;
+    }
+    const tr = e.target.closest('tr[data-sw]'); if (!tr) return; const t = txs.find(x => x.id === tr.dataset.sw); if (!t) return;
+    const b = txs.find(x => x.id === (t.swapWith || t.rawSwapWith));
+    if (e.target.hasAttribute('data-force')) { t.rawSwap = 'out'; t.rawSwapWith = t.swapWith; [t, b].forEach(x => { if (x) x.swapForce = 'taxable'; }); }
+    else if (e.target.hasAttribute('data-unforce')) { [t, b].forEach(x => { if (x) delete x.swapForce; }); }
+    else return;
+    E.detectSwaps(txs); save(); renderTx();
+  });
   function renderTx() {
+    renderSwaps();
     const s = E.sortTx(txs); $('#txcount').textContent = s.length ? '(' + s.length + ')' : '';
     $('#txtable').innerHTML = s.length ? `<tr><th>Date</th><th>Type</th><th>Crypto</th><th class="n">Quantité</th><th class="n">Montant €</th><th class="n">Frais €</th><th>Plateforme</th><th></th></tr>` + s.map(t => `<tr data-id="${t.id}" class="${E.CHECK.includes(t.type) ? 'chk' : ''}">
       <td>${dt(t.date)}${t.example ? ' <span class="tag">exemple</span>' : ''}</td><td><select data-k="type">${typeOpts(t.type)}</select>${t.rawType ? `<br><span class="hint">${esc(t.rawType)}</span>` : ''}</td>
@@ -159,7 +183,8 @@
   $('#txtable').addEventListener('change', e => {
     const tr = e.target.closest('tr'), t = txs.find(x => x.id === tr.dataset.id), k = e.target.dataset.k; if (!t || !k) return;
     t[k] = k === 'type' ? e.target.value : k === 'asset' ? e.target.value.trim().toUpperCase() : Math.abs(E.parseNum(e.target.value)) || 0;
-    if (k === 'qty') t.qtyManual = true; if (k === 'eur' && t.cur) delete t.fxPending;
+    if (k === 'qty') t.qtyManual = true; if (k === 'type') { t.typeManual = true; delete t.swapAuto; } if (k === 'eur' && t.cur) delete t.fxPending;
+    if (k === 'type') E.detectSwaps(txs);
     save(); if (k === 'type' || k === 'qty') renderTx();
   });
   $('#txtable').addEventListener('click', e => { if (!e.target.hasAttribute('data-del')) return; txs = txs.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); renderTx(); });

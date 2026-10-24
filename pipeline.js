@@ -82,7 +82,7 @@
   function observed(txs) {
     const o = {};
     for (const t of txs) {
-      if (!['BUY', 'SELL', 'PAY'].includes(t.type) || !(t.qty > 0) || t.qtyStatus === 'suspect' || t.qtyStatus === 'à reconstruire') continue;
+      if (!['BUY', 'SELL', 'PAY', 'EXCH_IN', 'EXCH_OUT'].includes(t.type) || !(t.qty > 0) || t.qtyStatus === 'suspect' || t.qtyStatus === 'à reconstruire') continue;
       const p = t.eur > 0 ? t.eur / t.qty : null; if (p) (o[t.asset] = o[t.asset] || []).push([t.date, p]);
     }
     return (a, ts) => { const L = o[a]; if (!L) return null; let b = null; for (const [d, p] of L) { const e = Math.abs(d - ts); if (e <= 30 * DAY && (!b || e < b.e)) b = { e, p }; } return b && b.p; };

@@ -28,4 +28,29 @@ eq(E.parseNum('68â_x0080_¯116,39â_x0082_¬'), 68116.39, 'montant mojibake'); 
 eq(E.guessType('RÃ©compenseÂ\u00a0Apprendre') === 'INTEREST' ? 1 : 0, 1, 'récompense Learn'); eq(E.guessType('Vendre - Revolut X') === 'SELL' ? 1 : 0, 1, 'Vendre Revolut X');
 eq(new Date(E.parseDate('15 juil. 2026, 12:30:25')).getMonth(), 6, 'date FR juil.'); eq(new Date(E.parseDate('17 mai 2026, 00:09:10')).getDate(), 17, 'date FR mai');
 eq(E.fixQty(81033368, 1.23, 100).qty, 81.033368, 'quantité tronquée XRP'); eq(E.fixQty(73403, 68116.39, 50).qty, 0.00073403, 'quantité tronquée BTC');
+// Détection des échanges crypto→crypto (données fictives)
+const T0 = Date.UTC(2026, 4, 21, 10, 0, 0);
+const sw = [
+  { id: 'b0', date: T0 - 86400e3, type: 'BUY', asset: 'AAA', qty: 100, eur: 300, fee: 0 },
+  { id: 's1', date: T0, type: 'SELL', asset: 'AAA', qty: 50, eur: 150, fee: 0 },            // échange AAA → BBB (même seconde)
+  { id: 'b1', date: T0, type: 'BUY', asset: 'BBB', qty: 10, eur: 148.5, fee: 1.5 },
+  { id: 's2', date: T0 + 3600e3, type: 'SELL', asset: 'BBB', qty: 5, eur: 80, fee: 0.8 },   // vraie vente en € (achat CCC à +27 s)
+  { id: 'b2', date: T0 + 3600e3 + 27e3, type: 'BUY', asset: 'CCC', qty: 7, eur: 79, fee: 0 },
+  { id: 's3', date: T0 + 7200e3, type: 'SELL', asset: 'AAA', qty: 10, eur: 30, fee: 0 },    // deux ventes, un seul achat : un-pour-un
+  { id: 's4', date: T0 + 7200e3 + 1e3, type: 'SELL', asset: 'AAA', qty: 10, eur: 40, fee: 0 },
+  { id: 'b3', date: T0 + 7200e3 + 1e3, type: 'BUY', asset: 'DDD', qty: 1, eur: 39.6, fee: 0 },
+  { id: 'u1', date: T0, type: 'IGNORE', asset: 'USD', qty: 0, eur: 150 }
+];
+const pairs = E.detectSwaps(sw), ty = id => sw.find(t => t.id === id).type;
+eq(pairs.length, 2, 'Échanges détectés');
+eq(ty('s1') === 'EXCH_OUT' && ty('b1') === 'EXCH_IN' ? 1 : 0, 1, 'Même seconde -> échange');
+eq(ty('s2') === 'SELL' && ty('b2') === 'BUY' ? 1 : 0, 1, 'Achat à +27 s non apparié, vente en € imposable');
+eq(ty('s4') === 'EXCH_OUT' && ty('s3') === 'SELL' && ty('u1') === 'IGNORE' ? 1 : 0, 1, 'Appariement un-pour-un (valeur la plus proche)');
+r = E.compute(sw, (a) => ({ BBB: 16, CCC: 11, DDD: 40 })[a]);
+eq(r.total220, 300 + 79, 'Achat d’un échange hors ligne 220'); eq(r.cessions.length, 2, 'Cessions imposables');
+sw.find(t => t.id === 's1').swapForce = 'taxable'; sw.find(t => t.id === 'b1').swapForce = 'taxable'; E.detectSwaps(sw);
+eq(ty('s1') === 'SELL' && ty('b1') === 'BUY' ? 1 : 0, 1, 'Forcer imposable');
+const fz = E.parseFiatSales('Transfer from Revolut Digital Assets Europe Ltd - Vente de BBB;21/05/2026 11:00:01;80,00\nautre ligne\n21/05/2026 12:00:00 Vente de ZZZ 5');
+E.detectSwaps(sw); const cc = E.crossCheck(sw, fz.map(x => Object.assign(x, { date: x.asset === 'BBB' ? T0 + 3600e3 + 1e3 : x.date })));
+eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'Vente confirmée par le relevé €'); eq(cc.sellNoFiat.length, 2, 'Ventes absentes du relevé € signalées (s1 forcée, s3)'); eq(cc.fiatNoSell.length, 1, 'Ligne € sans vente signalée');
 process.exit(ok ? 0 : 1);
