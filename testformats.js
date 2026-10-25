@@ -21,6 +21,12 @@ for (const [f, sale] of [['generique_fr_fictif.csv', 1170.5], ['generique_tab_fi
 { const rows = F.parseCSV('Date,Type,Crypto,Quantité,Montant\n2026-01-05 10:00,Buy,BTC,0.01,800\n2026-05-01 10:00,Sell,BTC,0.002,170\n'), m = G(rows[0]);
   const r = P.importRows(rows.slice(1), m, { cur: m.cur }, uid), res = E.compute(r.txs, () => 60000), Y = E.byYear(res), x = X.exportData(Y, {}, () => [], r.txs, 2026);
   chk(x.cessions.length === 1 && x.cessions[0].l213 === 170 && x.cessions[0].l220 === 800, 'CSV Date,Type,Crypto,Quantité,Montant : case 213 = 170 €, 220 = 800 € (bug corrigé)'); }
+{ // BOM + fins de ligne Windows + guillemets + « 1 234,56 € » construits ici (l'outil de publication retire BOM et CRLF des fichiers)
+  const rows = F.parseCSV('\ufeff"Date";"Type";"Crypto";"Quantité";"Montant"\r\n"05/01/2026";"Achat";"BTC";"0,01";"500,00 €"\r\n"01/05/2026";"Vente";"BTC";"0,002";"1 234,56 €"\r\n'), m = G(rows[0]);
+  const r = P.importRows(rows.slice(1), m, { cur: m.cur }, uid), s = r.txs.find(t => t.type === 'SELL');
+  chk(m.date === 0 && m.eur === 4 && s && Math.abs(s.eur - 1234.56) < 1e-9, 'BOM + CRLF + « ; » + « 1 234,56 € » : vente à 1234,56 €');
+  const c = F.parseCSV('\r\nTransactions\r\nUser,x\r\n' + fs.readFileSync(__dirname + '/testdata/formats/coinbase_fictif.csv', 'utf8').split(/\r?\n/).slice(3).join('\r\n'));
+  chk(F.detect(c) && F.detect(c).id === 'coinbase', 'Coinbase avec préambule et CRLF détecté'); }
 chk(JSON.stringify(G(rd('inconnu_fictif.csv')[0])) === '{}' && F.detect(rd('inconnu_fictif.csv')) == null, 'Fichier inconnu : rien de deviné (message « Format non reconnu »)');
 // 3) Formats de plateformes
 const sum = (r, ty, a) => r.txs.filter(t => t.type === ty && (!a || t.asset === a)).reduce((s, t) => s + t.qty, 0);
