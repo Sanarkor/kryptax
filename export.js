@@ -1,6 +1,6 @@
-/* Export du formulaire 2086 (PDF via jsPDF embarqué, tableur xlsx/CSV) : uniquement les cessions imposables,
+/* Export du formulaire 2086 (PDF via jsPDF embarqué) : uniquement les cessions imposables,
    un tableau avec une ligne par cession et les colonnes 211 à 224 de la déclaration 2086, synthèse courte et ligne GLOBAL.
-   exportData() est pur (testé dans test.js) ; makePdf/makeXlsx/makeCsv utilisent les bibliothèques locales. */
+   exportData() est pur (testé dans test.js) ; makePdf utilise jsPDF embarqué. */
 (function (root) {
   const d = t => new Date(t).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'medium' });
   const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/—/g, '-').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
@@ -25,8 +25,37 @@
     `${e2(c.l218)} - [${e2(c.l223)} x (${e2(c.l217)} / ${e2(c.l212)})] = ${e2(c.l218)} - ${e2(c.l223 * c.l217 / c.l212)} = ${c.l224 >= 0 ? '+' : ''}${e2(c.l224)}`;
   const frac = c => c.l224 == null ? '' : `Fraction de capital initial cédée (ajoutée à la l. 221 des cessions suivantes) : l. 223 x l. 217 / l. 212 = ${e2(c.l223 * c.l217 / c.l212)}`;
   /* years: E.byYear(res) ; sums/summaryRows : conservés pour compatibilité (non exportés) ; txs : seulement pour compter les échanges exclus */
+  /* Opérations particulières (hors cessions) : détectées d'après le type reconnu et le libellé d'origine du relevé.
+     Exclues du calcul de cession (sauf PAY : un paiement en crypto est une cession, signalé « à vérifier »). */
+  const SPECIAL = [['staking', 'staking'], ['airdrop', 'airdrops'], ['interets', 'intérêts et récompenses'], ['minage', 'minage'], ['cadeaux', 'cadeaux et dons'],
+    ['frais', 'frais payés en crypto'], ['transferts', 'dépôts et retraits entre comptes'], ['paiements', 'paiements en crypto d\'un bien ou service']];
+  function specialKind(t) {
+    if (!t || t.adjust) return null;
+    const s = String(t.rawType || '').toLowerCase();
+    if (t.type === 'PAY') return 'paiements';
+    if (!['STAKING', 'AIRDROP', 'INTEREST', 'FEE', 'RECEIVE', 'SEND', 'IGNORE'].includes(t.type)) return null;
+    if (/\bmin(ing|age|ed)\b|mineur|miner/.test(s)) return 'minage';
+    if (/gift|cadeau|\bdons?\b|donation|offert/.test(s)) return 'cadeaux';
+    return { STAKING: 'staking', AIRDROP: 'airdrop', INTEREST: 'interets', FEE: 'frais' }[t.type] || 'transferts';
+  }
+  function special(txs, year) {
+    const c = {};
+    (txs || []).forEach(t => { if (year && new Date(t.date).getFullYear() !== year) return; const k = specialKind(t); if (k) c[k] = (c[k] || 0) + 1; });
+    const cats = SPECIAL.filter(([k]) => c[k]).map(([k, label]) => ({ key: k, label, n: c[k] }));
+    const pay = c.paiements || 0;
+    return { cats, pay, n: cats.reduce((a, x) => a + x.n, 0) - pay };
+  }
+  function specialText(sp, year) {
+    if (!sp || (!sp.n && !sp.pay)) return '';
+    const ex = sp.cats.filter(x => x.key !== 'paiements');
+    let s = '';
+    if (sp.n) s += `Opérations particulières${year ? ' en ' + year : ''}, non traitées comme des cessions : ` + ex.map(x => `${x.label} ${x.n}`).join(' ; ') +
+      `. Leur régime fiscal propre (revenus, BNC, BIC…) n'est pas calculé par Kryptax.`;
+    if (sp.pay) s += (s ? ' ' : '') + `À vérifier : ${sp.pay} paiement${sp.pay > 1 ? 's' : ''} en crypto d'un bien ou service. Un tel paiement est une cession imposable : il est compté dans le tableau ci-dessus.`;
+    return s;
+  }
   function exportData(years, sums, summaryRows, txs, year) {
-    const out = { cessions: [], totals: [], year: year || null, swapCount: (txs || []).filter(t => t.type === 'EXCH_OUT').length };
+    const out = { cessions: [], totals: [], year: year || null, swapCount: (txs || []).filter(t => t.type === 'EXCH_OUT').length, special: special(txs, year) };
     // year : seules les cessions de cette année (le calcul 2086 reste cumulatif depuis le premier achat : l. 220/221/212 viennent de tout l'historique)
     const list = year ? [years[year] || { year, cessions: [] }] : Object.values(years).sort((a, b) => a.year - b.year);
     for (const y of list) {
@@ -38,39 +67,13 @@
     }
     return out;
   }
-  const HEAD = ['Année', 'N°', '211 Date de la cession', 'Actif', 'Quantité', ...FORM.slice(1).map(f => f[0] + ' ' + f[1]), 'Calcul de la ligne 224'];
-  const row = c => [c.year, c.n, c.date, c.asset, c.qty, ...NUM.map(k => c[k] == null ? 'À RENSEIGNER' : c[k]), c.calc];
-  const globalRow = t => [t.year, 'GLOBAL', t.n + ' cessions', '', '', '', t.l213, t.l214, '', '', '', t.l218, '', '', '', '', t.l224, t.incomplete ? 'incomplet' : 'Somme des lignes 224'];
   const globalText = t => `${t.year} : total des cessions (213) ${t.l213.toFixed(2)} € ; frais (214) ${t.l214.toFixed(2)} € ; prix nets (218) ${t.l218.toFixed(2)} € ; plus-value nette globale (224) ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}. ` +
     (t.exonere ? `Total des cessions ≤ 305 € : exonéré, rien à reporter.` : `Total des cessions > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €.`);
-  const synth = x => x.totals.flatMap(t => [
-    [t.year, 'Nombre de cessions imposables', t.n], [t.year, 'Total des prix de cession (213)', t.l213], [t.year, 'Total des frais (214)', t.l214],
-    [t.year, 'Total des prix nets (218)', t.l218], [t.year, 'Plus-value nette globale (somme des 224)', t.l224],
-    [t.year, 'Seuil de 305 €', t.exonere ? 'non dépassé : cessions exonérées' : 'dépassé : imposable'],
-    [t.year, 'Case 2042-C', t.exonere ? 'aucune' : t.box + ' = ' + t.report + ' €']]).concat([['', 'Échanges crypto -> crypto exclus (non imposables)', x.swapCount]]);
-  function makeCsv(x) {
-    const q = v => { const s = typeof v === 'number' ? String(v).replace('.', ',') : String(v == null ? '' : v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const L = r => r.map(q).join(';');
-    return '\ufeff' + [q('SYNTHESE 2086' + (x.year ? ' - ' + title(x.year) : '')), L(['Année', 'Rubrique', 'Valeur']), ...synth(x).map(L), ...x.totals.map(t => q('TOTAL GLOBAL ' + globalText(t))), '',
-      'CESSIONS (2086)', L(HEAD), ...x.cessions.map(c => L(row(c))), ...x.totals.map(t => L(globalRow(t))), ''].join('\n');
-  }
-  /* Détail type formulaire : une colonne par cession, une ligne par numéro de la 2086 */
-  const formSheet = x => [['Ligne', 'Libellé', ...x.cessions.map(c => `Cession ${c.n} (${c.year})`)], ['', 'Actif', ...x.cessions.map(c => c.asset)], ['', 'Quantité cédée', ...x.cessions.map(c => c.qty)],
-    ['211', FORM[0][1], ...x.cessions.map(c => c.date)], ...FORM.slice(1).map((f, i) => [f[0], f[1], ...x.cessions.map(c => c[NUM[i]] == null ? 'À RENSEIGNER' : c[NUM[i]])]), ['', 'Calcul de la ligne 224', ...x.cessions.map(c => c.calc)]];
-  function makeXlsx(XLSX, x) {
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...(x.year ? [[title(x.year)], []] : []), ['Année', 'Rubrique', 'Valeur'], ...synth(x), [], ...x.totals.map(t => ['TOTAL GLOBAL', globalText(t)])]), 'Synthèse');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEAD, ...x.cessions.map(row), ...x.totals.map(globalRow)]), 'Cessions 2086');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(formSheet(x)), 'Formulaire 2086');
-    return wb;
-  }
   const SHORT = ['211 Date de la cession', '212 Valeur globale du portefeuille', '213 Prix de cession', '214 Frais de cession', '215 Prix net des frais (213-214)', '216 Soulte', '217 Prix net des soultes (213-216)', '218 Prix net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions de capital initial', '222 Soultes antérieures', '223 Prix total d\'acquisition net (220-221-222)', '224 Plus ou moins-value'];
   // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
   const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);
   const qfmt = q => String(q).replace('.', ',');
-  const GRAD = [[59, 130, 246], [245, 158, 11], [34, 197, 94]];
-  const gradAt = t => { const s = t * (GRAD.length - 1), i = Math.min(GRAD.length - 2, Math.floor(s)), f = s - i; return GRAD[i].map((c, k) => Math.round(c + (GRAD[i + 1][k] - c) * f)); };
     /* Logo 100 % vectoriel (aucun canvas, aucune image) : pastille « K » en trois aplats bleu / orange / vert + « Kryptax » lettre par lettre en couleurs RVB explicites.
      Tout est en remplissage (setFillColor / setTextColor) : rendu identique dans toutes les visionneuses, y compris en mode sombre. */
   const LOGO_COLORS = [[37, 99, 235], [59, 130, 246], [234, 88, 12], [245, 158, 11], [217, 119, 6], [22, 163, 74], [34, 197, 94]];
@@ -131,7 +134,13 @@
     // 3) Libellés officiels en note de bas de page, seulement s'il reste de la place
     doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 110);
     const note = doc.splitTextToSize(ascii('Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
-    const yn = doc.lastAutoTable.finalY + 3; if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
+    let yn = doc.lastAutoTable.finalY + 3;
+    // 3) Opérations particulières : courte note, prioritaire sur les libellés officiels (reste sur la même page)
+    const st = specialText(x.special, x.year);
+    if (st) { doc.setFontSize(7.4); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 70, 90); const sl = doc.splitTextToSize(ascii(st), W - 2 * M);
+      if (yn + sl.length * 3 + 2 > H - 8) { doc.addPage(); yn = 14; } doc.text(sl, M, yn + 2); doc.setFont('helvetica', 'normal'); yn += sl.length * 3 + 1.5;
+      doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }
+    if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
     const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); doc.text(ascii(LAW), M, H - 5); }
     doc.setTextColor(0, 0, 0);
     return doc;
@@ -142,6 +151,6 @@
   const selectable = (y, now) => y >= now - PAST && y <= now;
   function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => selectable(y.year, now) && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : now; }
   const title = y => `Année ${y} — déclaration ${y + 1}`;
-  const api = { fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
+  const api = { fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);
