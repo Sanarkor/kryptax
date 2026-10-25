@@ -336,7 +336,14 @@
   { const d = $('#donepop');
     if (d) {
       const close = () => { if (d.open) d.close(); };
-      $('#donego').addEventListener('click', () => { close(); const r = $('#results'); if (r) { const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; r.scrollIntoView({ behavior: rm ? 'auto' : 'smooth', block: 'start' }); const h = r.querySelector('h2'); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); } } });
+      $('#donego').addEventListener('click', () => { // même parcours que « Voir le PDF » : pub (si pas déjà vue) puis aperçu
+        close(); const b = currentBlockers(), btn = $('#pdfx');
+        if (btn && !b.length && !runCtl) { btn.click(); return; }
+        if (btn && b.length) pdfRefused(b);
+        const m = $('#pdfmsg'), t = (m && !m.hidden) ? m : $('#results');
+        if (m && !b.length) { m.textContent = 'Votre PDF n’est pas encore prêt : mise à jour des cours en cours, réessayez dans un instant.'; m.hidden = false; }
+        if (t) { const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; t.scrollIntoView({ behavior: rm ? 'auto' : 'smooth', block: 'center' }); }
+      });
       $('#doneclose').addEventListener('click', close);
       d.addEventListener('click', e => { if (e.target === d) close(); });
     }
