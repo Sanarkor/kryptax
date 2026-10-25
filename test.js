@@ -127,11 +127,11 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 // Messages après calcul : « ✅ Aucune erreur » ou erreur courte, pas de compteur ni « Calcul terminé »
 { const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(A.includes('✅ Aucune erreur') ? 1 : 0, 1, 'Message « ✅ Aucune erreur » présent'); eq(/textContent = 'Calcul terminé|transactions importées, dont/.test(A) ? 1 : 0, 0, 'Pas de « Calcul terminé » ni de compteur de transactions'); }
-// Page : plus de bandeau « conseil fiscal », pas d'icône ℹ️, aperçu 👁 sans vraies valeurs
+// Page : plus de bandeau « conseil fiscal », pas d'icône ℹ️, pas d'icône œil
 { const fs = require('fs'), H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="helpbtn" class="small ghost" aria-expanded="false" aria-controls="helppanel">Mode d’emploi<\/button><button id="reset" class="small ghost"/.test(H) && !/Mode d'emploi et aide|details class="help"/.test(H) ? 1 : 0, 1, 'Mode d’emploi : bouton à gauche de Réinitialiser, même style');
   eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes('id="helppanel" class="help" hidden') ? 1 : 0, 1, 'Mode d’emploi conservé (replié)');
-  const pk = A.slice(A.indexOf('function showPeek'), A.indexOf('function cmpBlock')); eq(/c\.l2\d\d|t\.l2\d\d|c\.qty|fr\(/.test(pk) ? 1 : 0, 0, 'Aperçu 👁 : aucun montant réel injecté (valeurs factices floutées)'); }
+  eq(/peek|showPeek|👁/.test(A + fs.readFileSync(__dirname + '/style.css', 'utf8') + H) ? 1 : 0, 0, 'Icône œil (aperçu flouté) supprimée avec sa logique'); }
 // Multi-import (fictif) : cumul, remplacement du même fichier, dédoublonnage des relevés qui se chevauchent
 { const KP = require('./pipeline.js'), D = (m, d) => Date.UTC(2026, m, d, 10);
   const f1 = [{ source: 'a.pdf', type: 'BUY', asset: 'AAA', date: D(0, 5), qty: 2, eur: 100 }, { source: 'a.pdf', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }];
