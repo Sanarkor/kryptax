@@ -395,3 +395,4 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
+{const C=require('fs').readFileSync(__dirname+'/style.css','utf8');const h=/0 0 6px rgba\(255,255,255,\.35\)/;const a=(C.match(/header \.sub\{font-size:1\.04em[^}]*\}/)||[''])[0],b=(C.match(/header \.sub2\{[^}]*\}/)||[''])[0];if(!h.test(a)||!h.test(b))throw new Error('halo sous-titres');console.log('halo ok');}
