@@ -227,3 +227,6 @@ header h1{padding-bottom:.24em}
   background:linear-gradient(90deg,#3b82f6,#22d3ee,#10b981);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;pointer-events:none;animation:none}
 .kofi{display:inline-block;margin-top:6px;text-decoration:none;white-space:nowrap;max-width:100%}
 .kofi[hidden]{display:none}
+header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;color:#94a3b8;max-width:100%;overflow-wrap:break-word}
+@media(min-width:700px){header .sub2{font-size:1em}}
+@media print{header .sub2{color:#333}}
