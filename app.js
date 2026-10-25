@@ -4,6 +4,7 @@
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+  let lastEst = new Set(); // actifs au cours estimé (≈) ou absent, mis à jour par renderResults
   let txs = load(LS.tx, []), cache = load(LS.cache, {}), manual = load(LS.manual, {});
   // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
   for (const k in cache) if (typeof cache[k] !== 'number' || !/\|h\d+$|\|none$/.test(k)) delete cache[k];
@@ -201,7 +202,7 @@
   function autoRun() {
     const old = txs.filter(t => t._in), fresh = txs.filter(t => !t._in); fresh.forEach(t => t._in = 1);
     const m = KP.mergeImport(old, fresh); txs = m.txs; E.detectSwaps(txs);
-    save(); dirty = true; window.__kxDone = false; $('#results').innerHTML = ''; renderTx();
+    cancelAuto(); save(); dirty = true; window.__kxDone = false; $('#results').innerHTML = ''; renderTx();
   }
   function renderFiles() {
     const L = KP.fileList(txs), box = $('#flist'); if (!box) return;
@@ -214,7 +215,7 @@
     box.innerHTML = L.map(f => `<li${H.bad.includes(f.name) ? ' class="badf"' : ''}><span>${H.bad.includes(f.name) ? '⚠️ ' : ''}${esc(f.name)}</span> <button class="small ghost" data-rmf="${esc(f.name)}" aria-label="Retirer ${esc(f.name)}">✕</button></li>`).join('');
     box.hidden = !L.length; $('#validate').disabled = !txs.length || !dirty || H.status === 'conflict';
   }
-  $('#flist').addEventListener('click', e => { const n = e.target.dataset && e.target.dataset.rmf; if (n == null) return; txs = txs.filter(t => (t.source || 'Saisie manuelle') !== n); E.detectSwaps(txs); save(); dirty = !!txs.length; window.__kxDone = false; $('#results').innerHTML = ''; renderTx(); });
+  $('#flist').addEventListener('click', e => { const n = e.target.dataset && e.target.dataset.rmf; if (n == null) return; txs = txs.filter(t => (t.source || 'Saisie manuelle') !== n); E.detectSwaps(txs); cancelAuto(); save(); dirty = !!txs.length; window.__kxDone = false; $('#results').innerHTML = ''; renderTx(); });
   $('#validate').onclick = () => { if (!txs.length || KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') return; holdInfo = ''; dirty = false; renderFiles(); $('#run').click(); };
   function renderTx() {
     renderSwaps(); renderFiles();
@@ -264,14 +265,14 @@
     if (k === 'type') E.detectSwaps(txs);
     save(); if (k === 'type' || k === 'qty') renderTx();
   });
-  $('#txtable').addEventListener('click', e => { if (!e.target.hasAttribute('data-del')) return; txs = txs.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); renderTx(); });
+  $('#txtable').addEventListener('click', e => { if (!e.target.hasAttribute('data-del')) return; cancelAuto(); txs = txs.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); renderTx(); });
   $('#clearman').onclick = () => { if (confirm('Effacer les cours et montants saisis à la main ?')) { manual = {}; livePrice = null; save(); renderTx(); renderResults(); } };
   $('#reset').onclick = () => {
-    if (!confirm('Tout réinitialiser ? Fichiers importés, transactions, saisies manuelles, résultats et cache de prix de ce navigateur seront effacés.')) return;
+    if (!confirm('Tout réinitialiser ? Fichiers importés, transactions, saisies manuelles, résultats et cache de prix de ce navigateur seront effacés.')) return; cancelAuto();
     Object.keys(localStorage).filter(k => k.startsWith('kryptax.')).forEach(k => localStorage.removeItem(k));
     location.reload(); // la page revient à son état initial
   };
-  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { txs = []; manual = {}; fiatText = ''; pdfBal = null; localStorage.removeItem('kryptax.fiat'); localStorage.removeItem('kryptax.balances'); save(); renderTx(); $('#results').innerHTML = ''; } };
+  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { cancelAuto(); txs = []; manual = {}; fiatText = ''; pdfBal = null; localStorage.removeItem('kryptax.fiat'); localStorage.removeItem('kryptax.balances'); save(); renderTx(); $('#results').innerHTML = ''; } };
 
   /* ---------- Cours historiques ---------- */
   const HOUR = 3600e3;
@@ -289,14 +290,33 @@
       (src.assetDiag && Object.keys(src.assetDiag).length ? `<p class="hint">${Object.entries(src.assetDiag).map(([a, l]) => { const ok = l.find(x => / : OK$/.test(x)); return `<b>${esc(a)}</b> : ${ok ? esc(ok.replace(/ : OK$/, '')) : '≈ relevés'}`; }).join(' · ')}</p>` : '') + '</details>';
   }
   let runCtl = null;
+  /* Relance automatique tant qu'un cours n'est qu'estimé (≈) ou absent : 1 s après la fin du calcul, plafond AUTO_MAX, backoff léger après la 5e. */
+  const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;
+  let autoTry = 0, autoTimer = null, autoTick = null, autoFire = false;
+  const retryDelay = k => k <= 5 ? RETRY_DELAY_MS : RETRY_DELAY_MS * Math.min(2 ** (k - 5), 10);
+  function cancelAuto() { clearTimeout(autoTimer); clearInterval(autoTick); autoTimer = autoTick = null; autoTry = 0; const p = $('#progress'); if (p && /dans \d+ s…$/.test(p.textContent)) p.textContent = ''; }
+  function scheduleAuto(failed) {
+    clearTimeout(autoTimer); clearInterval(autoTick); autoTimer = autoTick = null;
+    const p = $('#progress'), est = [...lastEst].filter(x => x !== '*');
+    if (failed || !lastEst.size) { if (!failed && autoTry) { p.textContent = 'Tous les cours ont été trouvés.'; p.className = 'hint'; } autoTry = 0; return; }
+    const names = est.length ? ' pour ' + est.map(esc).join(', ') : '';
+    if (autoTry >= AUTO_MAX) { p.textContent = `Cours toujours estimé (≈)${names} après ${AUTO_MAX} tentatives automatiques : saisissez le cours ou touchez « Relancer » plus tard.`; p.className = 'warn'; autoTry = 0; return; }
+    autoTry++; const k = autoTry, at = Date.now() + retryDelay(k);
+    est.forEach(a => { delete cache[a + '|none']; }); // « aucune source » : on redemande
+    const tick = () => { p.textContent = `Nouvelle tentative ${k}/${AUTO_MAX} dans ${Math.max(1, Math.ceil((at - Date.now()) / 1000))} s…`; p.className = 'hint'; };
+    tick(); autoTick = setInterval(tick, 250);
+    autoTimer = setTimeout(() => { clearInterval(autoTick); autoTimer = autoTick = null; if (runCtl) return; autoFire = true; $('#run').click(); }, retryDelay(k));
+  }
   $('#run').onclick = async () => {
+    if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent)) { $('#progress').textContent = 'Calcul en cours…'; $('#progress').className = ''; } };
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = autoTry ? `Nouvelle tentative ${autoTry}/${AUTO_MAX} en cours…` : 'Calcul en cours…'; $('#progress').className = ''; } };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
-      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual,
+      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
+       
         onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
       livePrice.txs = txs; renderDiag(src, livePrice);
       persist(); save(); renderTx();
@@ -308,9 +328,9 @@
       failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
     if (!failed) $('#progress').textContent = '';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults(); scheduleAuto(failed);
   };
-  $('#cancel').onclick = () => runCtl && runCtl.abort();
+  $('#cancel').onclick = () => { cancelAuto(); if (runCtl) runCtl.abort(); };
 
   /* ---------- Résultats 2086 ---------- */
   const ROWS = [
@@ -387,6 +407,7 @@
       else if (est.size) errs.push('Cours estimé (≈) pour ' + [...est].map(esc).join(', ') + ' : vérifiez le montant ou relancez plus tard.');
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const warns = sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : [];
+      lastEst = new Set(est); if (t.incomplete) lastEst.add('*');
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
@@ -428,7 +449,7 @@
   }
   /* ---------- Pub de démonstration avant le PDF (fictive) ---------- */
   const AD_DELAY_S = 6; // durée de la pub avant le PDF, en secondes
-  let adDone = false, adTimer = null;
+  let adDone = false, adTimer = null, adSeen = false; // adSeen : pub vue jusqu’au bout (mémoire seulement, jusqu’au rechargement)
   function openAdGate() {
     const b = currentBlockers(); pdfState();
     if (b.length) { pdfRefused(b); return; }
@@ -442,7 +463,7 @@
       left = Math.max(0, AD_DELAY_S - Math.floor((Date.now() - t0) / 1000));
       cnt.textContent = left > 0 ? `Votre PDF sera prêt dans ${left} s` : 'Votre PDF est prêt';
       bar.value = Math.min(AD_DELAY_S, (Date.now() - t0) / 1000);
-      if (left <= 0) { clearInterval(adTimer); adDone = true; go.disabled = false; go.setAttribute('aria-disabled', 'false'); go.focus(); }
+      if (left <= 0) { clearInterval(adTimer); adDone = true; adSeen = true; go.disabled = false; go.setAttribute('aria-disabled', 'false'); go.focus(); }
     };
     bar.max = AD_DELAY_S; tick(); adTimer = setInterval(tick, 200);
     if (d.showModal) d.showModal(); else d.setAttribute('open', '');
@@ -508,7 +529,7 @@
     return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening);
   }
   $('#results').addEventListener('change', e => {
-    if (e.target.id === 'fyear') { fyear = +e.target.value; renderResults(); return; }
+    if (e.target.id === 'fyear') { cancelAuto(); fyear = +e.target.value; renderResults(); return; }
     if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
     const k = e.target.dataset.cmp; if (k) { const v = E.parseNum(e.target.value); if (isFinite(v)) manual[k] = v; else delete manual[k]; save(); renderResults(); return; }
     const m = e.target.dataset.man, o = e.target.dataset.o212, v = E.parseNum(e.target.value);
@@ -520,7 +541,7 @@
     if (e.target.id === 'print') window.print();
     if (e.target.id === 'rerun') $('#run').click();
     if (e.target.closest && e.target.closest('#peek')) showPeek();
-    if (e.target.id === 'pdfx') openAdGate();
+    if (e.target.id === 'pdfx') { if (adSeen) { adDone = true; downloadPdf(); adDone = false; } else openAdGate(); }
   });
 
   /* ---------- Exemple fictif ---------- */
