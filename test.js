@@ -228,7 +228,12 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq((A.match(/makePdf\(/g) || []).length, 1, 'PDF : un seul point de génération');
     const d = A.slice(A.indexOf('function downloadPdf'), A.indexOf('makePdf('));
     eq(/currentBlockers\(\)[\s\S]*if \(b\.length\) \{ pdfRefused\(b\); return false; \}[\s\S]*if \(pdfBusy\) return false/.test(d) ? 1 : 0, 1, 'PDF : blocage imposé dans la génération (erreur, double clic)');
-    eq(/if \(e\.target\.id === 'pdfx'\) downloadPdf\(\);/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton passe par downloadPdf, message non bloquant');
+    eq(/if \(e\.target\.id === 'pdfx'\) openAdGate\(\);/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton ouvre la pub, message non bloquant');
+    eq((A.match(/const AD_DELAY_S = (\d+);/) || [])[1], '6', 'Pub export : durée unique AD_DELAY_S = 6');
+    eq(/if \(!adDone\) return false;/.test(d) && /adDone = true; go\.disabled = false/.test(A) ? 1 : 0, 1, 'Pub export : PDF seulement après le décompte (bouton activé à la fin)');
+    const ag = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="adgate"[\s\S]*?<\/dialog>/) || [''])[0];
+    eq(/aria-labelledby="adgatecount"/.test(ag) && /role="status"/.test(ag) && /Publicité/.test(ag) && /id="adgatego"[^>]*disabled/.test(ag) && !/style=|<script|revolut|csv/i.test(ag) ? 1 : 0, 1, 'Pub export : dialogue accessible, sans style inline');
+    eq(/window\.KryptaxAd = \{ img: IMG \}/.test(require('fs').readFileSync(__dirname + '/ad.js', 'utf8')) ? 1 : 0, 1, 'Pub export : image réutilisée depuis ad.js');
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
     eq(/footer \.footline\{display:flex;flex-wrap:wrap;justify-content:space-between/.test(C) ? 1 : 0, 1, 'Pied de page : Fiscalité Française à droite, retour à la ligne propre'); }
