@@ -38,12 +38,12 @@ chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
   const lastTab = pg.map((p, i) => /^\s*GLOBAL/m.test(p) ? i : -1).filter(i => i >= 0); chk(lastTab.length === 1 && !pg.slice(lastTab[0] + 1).some(p => /^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : GLOBAL après la dernière cession'); }
 /* Logo : image embarquée (jamais noire), et repli texte coloré lettre par lettre ; analyse des pixels de la zone du logo (pdftoppm) */
 { const cp = require('child_process'), zone = buf => { require('fs').writeFileSync('/tmp/kx-logo.pdf', buf); cp.execSync('pdftoppm -r 72 -f 1 -l 1 -x 0 -y 0 -W 170 -H 50 -singlefile /tmp/kx-logo.pdf /tmp/kx-logo'); const ppm = require('fs').readFileSync('/tmp/kx-logo.ppm'); let i = 0, nl = 0; while (nl < 3) if (ppm[i++] === 10) nl++;
-    let col = 0, dark = 0, blue = 0, orange = 0, green = 0; for (; i + 2 < ppm.length; i += 3) { const r = ppm[i], g = ppm[i + 1], b = ppm[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn > 80) { col++; if (b > r && b > g) blue++; else if (r > 200 && g > 70 && b < 80) (g > 130 ? orange++ : orange++); if (g > r && g > b) green++; } else if (mx < 90) dark++; } return { col, dark, blue, orange, green }; };
+    let col = 0, dark = 0, blue = 0, orange = 0, green = 0, cyan = 0; for (; i + 2 < ppm.length; i += 3) { const r = ppm[i], g = ppm[i + 1], b = ppm[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn > 80) { col++; if (b > r && b > g) blue++; else if (r > 200 && g > 70 && b < 80) orange++; if (g > 150 && b > 150 && r < 120) cyan++; if (g > r && g > b) green++; } else if (mx < 90) dark++; } return { col, dark, blue, orange, green, cyan }; };
   const pv = Buffer.from(X.makePdf(jsPDF, x, X.title(2026)).output('arraybuffer')), zv = zone(pv);
   chk(!/\/Subtype \/Image/.test(pv.toString('latin1')), 'Logo vectoriel : aucune image dans le PDF (pas de canvas)');
   chk(zv.col > 300, 'Logo : zone colorée (' + zv.col + ' px couleur)');
   chk(zv.dark < 20, 'Logo : aucun pixel sombre (' + zv.dark + ' px sombres) — échoue si le logo sort noir');
-  chk(zv.blue > 50 && zv.orange > 20 && zv.green > 20, 'Logo : bleu, orange et vert présents (' + [zv.blue, zv.orange, zv.green].join('/') + ')');
+  chk(zv.blue > 50 && zv.cyan > 20 && zv.green > 20 && zv.orange === 0, 'Logo : bleu, cyan et vert, sans orange (' + [zv.blue, zv.cyan, zv.green, zv.orange].join('/') + ')');
 }
 // Opérations particulières (jeu FICTIF) : détection par type/libellé, exclues des cessions, note courte en bas de la page paysage unique
 { const D = (m, d) => Date.UTC(2026, m, d, 10), T2 = [{ id: 's1', date: D(0, 2), type: 'BUY', asset: 'AAA', qty: 10, eur: 100, fee: 0, rawType: 'Achat' },
