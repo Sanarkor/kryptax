@@ -4,18 +4,31 @@
   const KOFI_URL = ''; // lien Ko-fi de Damien (vide = bouton « Offrir un café » et mention masqués)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
+  /* Encre réelle d'un glyphe (px, depuis l'origine) : rendu canvas puis balayage des pixels (robuste au gras synthétique, au zoom, aux polices de remplacement) */
+  function inkX(ch, font, px) {
+    const c = (inkX.c = inkX.c || document.createElement('canvas')), W = Math.ceil(px * 3), H = Math.ceil(px * 2); c.width = W; c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.font = font; g.textBaseline = 'alphabetic'; g.fillStyle = '#000'; const o = Math.round(px);
+    g.fillText(ch, o, Math.round(px * 1.4)); const d = g.getImageData(0, 0, W, H).data; let L = W, R = -1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 96) { if (x < L) L = x; if (x > R) R = x; }
+    if (R < 0) { const m = g.measureText(ch); return [0, m.width]; } return [L - o, R + 1 - o]; }
   function fitSig() { const p = document.querySelector('.ptax'), s = document.querySelector('.hsig'), h = p && p.closest('h1'); if (!p || !s || !h) return;
     const tn = p.firstChild; if (!tn || tn.nodeType !== 3 || tn.data !== 'ptax') return;
-    const cs = getComputedStyle(h), ctx = (fitSig.c = fitSig.c || document.createElement('canvas')).getContext('2d'); ctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-    const rg = (a, b) => { const r = document.createRange(); r.setStart(tn, a); r.setEnd(tn, b); return r.getBoundingClientRect(); };
-    const base = p.getBoundingClientRect().left, mp = ctx.measureText('p'), mx = ctx.measureText('x');
-    const L = rg(0, 1).left - mp.actualBoundingBoxLeft - base, R = rg(3, 4).left + mx.actualBoundingBoxRight - base; /* hampe du p → bord droit du x (encre réelle) */
+    const cs = getComputedStyle(h), px = parseFloat(cs.fontSize), font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    const rg = k => { const r = document.createRange(); r.setStart(tn, k); r.setEnd(tn, k + 1); const q = r.getClientRects(); return q.length ? q[0] : r.getBoundingClientRect(); };
+    const base = p.getBoundingClientRect().left, ip = inkX('p', font, px), ix = inkX('x', font, px);
+    const L = rg(0).left + ip[0] - base, R = rg(3).left + ix[1] - base; /* hampe du p → bord droit du x */
     if (!(R > L)) return;
-    s.style.left = '0px'; s.style.fontSize = '20px'; const sc = s.getBoundingClientRect(), ctx2 = ctx; const ss = getComputedStyle(s); ctx2.font = ss.fontWeight + ' 20px ' + ss.fontFamily;
-    const t = s.textContent, mt = ctx2.measureText(t), inkW = mt.actualBoundingBoxLeft + mt.actualBoundingBoxRight, lead = -mt.actualBoundingBoxLeft; /* encre du texte, sans approche */
-    const ls = s.scrollWidth - mt.width; /* part due à l'espacement des lettres */
-    const k = (R - L) / (inkW + ls); s.style.fontSize = (20 * k).toFixed(3) + 'px'; s.style.left = (L - lead * k).toFixed(2) + 'px'; }
-  fitSig(); window.addEventListener('resize', fitSig); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSig);
+    const ss = getComputedStyle(s), sf = ss.fontStyle + ' ' + ss.fontWeight + ' 40px ' + ss.fontFamily, t = s.textContent;
+    s.style.fontSize = '40px'; s.style.left = '0px'; const r0 = document.createRange(); r0.selectNodeContents(s); const domW = r0.getBoundingClientRect().width;
+    const g = inkX.c.getContext('2d'); g.font = sf; const advW = g.measureText(t).width, ls = domW - advW; /* espacement des lettres en DOM */
+    const a0 = inkX(t.charAt(0), sf, 40), aN = inkX(t.charAt(t.length - 1), sf, 40), lastAdv = g.measureText(t.charAt(t.length - 1)).width;
+    const inkW = domW - a0[0] - (lastAdv - aN[1]) - ls / t.length; /* encre du texte complet à 40 px */
+    const k = (R - L) / inkW; s.style.fontSize = (40 * k).toFixed(3) + 'px'; s.style.left = (L - a0[0] * k).toFixed(2) + 'px'; }
+  { let q = 0; const run = () => { if (q) return; q = requestAnimationFrame(() => { q = 0; fitSig(); }); };
+    fitSig(); window.addEventListener('resize', run); window.addEventListener('load', run);
+    if (document.fonts) { if (document.fonts.ready) document.fonts.ready.then(run); if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', run); }
+    if (window.ResizeObserver) { const h = document.querySelector('header h1'); if (h) new ResizeObserver(run).observe(h); }
+    if (window.matchMedia) { try { matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)').addEventListener('change', run); } catch (e) {} } }
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   let lastIgn = []; // récompenses sans cours (valeur non incluse à la 212)
