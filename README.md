@@ -75,4 +75,4 @@ node test.js && node testformats.js && node testexport.js
 Ouvrez une issue ou une pull request sur https://github.com/Sanarkor/kryptax. N'ajoutez **jamais de données réelles** (relevés, noms, montants) : uniquement des jeux fictifs. Lancez les tests avant de proposer une modification.
 
 ## Licence
-Aucune licence n'est définie pour le moment. Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
+Code sous licence MIT (voir [LICENSE](LICENSE)). Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
