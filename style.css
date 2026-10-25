@@ -218,11 +218,12 @@ section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;to
 .disclaim{display:block;text-align:center;margin:10px auto 0;max-width:640px;padding:0 12px;font-size:.9em;font-weight:700;line-height:1.45;color:#fbbf24;overflow-wrap:break-word}
 .disclaimp{font-weight:700;color:#fbbf24;font-size:1.02em;line-height:1.45}
 
-.signature{text-align:center;margin:-6px auto 18px;padding:0 12px;font-size:.68em;color:var(--muted);opacity:.6;letter-spacing:.02em;overflow-wrap:break-word}
 
 /* Signature sous « ptax » : du jambage du p jusqu'au x, en gras, dégradé du logo ; taille ajustée en JS (fitSig) pour tout afficher */
 header h1{padding-bottom:.24em}
 .ptax{position:relative;display:inline-block}
-.hsig{position:absolute;left:2%;top:calc(100% - .16em);display:block;white-space:nowrap;overflow:visible;
+.hsig{position:absolute;left:0;top:calc(100% - .12em);display:block;white-space:nowrap;overflow:visible;
   font-size:.11em;font-weight:800;letter-spacing:.03em;line-height:1.25;font-family:inherit;
   background:linear-gradient(90deg,#3b82f6,#22d3ee,#10b981);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;pointer-events:none;animation:none}
+.kofi{display:inline-block;margin-top:6px;text-decoration:none;white-space:nowrap;max-width:100%}
+.kofi[hidden]{display:none}

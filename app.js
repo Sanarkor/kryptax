@@ -1,11 +1,20 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
+  const KOFI_URL = ''; // lien Ko-fi de Damien (vide = bouton « Offrir un café » et mention masqués)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
-  function fitSig() { const p = document.querySelector('.ptax'), s = document.querySelector('.hsig'); if (!p || !s) return;
-    s.style.fontSize = '20px'; const w = s.scrollWidth, target = p.getBoundingClientRect().width * 0.98; if (!w || !target) return;
-    s.style.fontSize = Math.max(6, Math.min(16, 20 * target / w)).toFixed(2) + 'px'; }
+  function fitSig() { const p = document.querySelector('.ptax'), s = document.querySelector('.hsig'), h = p && p.closest('h1'); if (!p || !s || !h) return;
+    const tn = p.firstChild; if (!tn || tn.nodeType !== 3 || tn.data !== 'ptax') return;
+    const cs = getComputedStyle(h), ctx = (fitSig.c = fitSig.c || document.createElement('canvas')).getContext('2d'); ctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    const rg = (a, b) => { const r = document.createRange(); r.setStart(tn, a); r.setEnd(tn, b); return r.getBoundingClientRect(); };
+    const base = p.getBoundingClientRect().left, mp = ctx.measureText('p'), mx = ctx.measureText('x');
+    const L = rg(0, 1).left - mp.actualBoundingBoxLeft - base, R = rg(3, 4).left + mx.actualBoundingBoxRight - base; /* hampe du p → bord droit du x (encre réelle) */
+    if (!(R > L)) return;
+    s.style.left = '0px'; s.style.fontSize = '20px'; const sc = s.getBoundingClientRect(), ctx2 = ctx; const ss = getComputedStyle(s); ctx2.font = ss.fontWeight + ' 20px ' + ss.fontFamily;
+    const t = s.textContent, mt = ctx2.measureText(t), inkW = mt.actualBoundingBoxLeft + mt.actualBoundingBoxRight, lead = -mt.actualBoundingBoxLeft; /* encre du texte, sans approche */
+    const ls = s.scrollWidth - mt.width; /* part due à l'espacement des lettres */
+    const k = (R - L) / (inkW + ls); s.style.fontSize = (20 * k).toFixed(3) + 'px'; s.style.left = (L - lead * k).toFixed(2) + 'px'; }
   fitSig(); window.addEventListener('resize', fitSig); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSig);
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
@@ -615,7 +624,11 @@
     } catch (e) { box.innerHTML = '<p class="hint">Aperçu indisponible sur cet appareil : utilisez « Ouvrir dans le navigateur » ou « Enregistrer le PDF ».</p>'; }
     box.setAttribute('aria-busy', 'false');
   }
-  function savePdf() {
+  /* Bouton de don Ko-fi : affiché seulement si KOFI_URL est renseignée (adresse de la page Ko-fi) */
+  const kofiOk = (() => { try { const u = new URL(KOFI_URL); return u.protocol === 'https:' && u.hostname === 'ko-fi.com' && u.pathname.length > 1; } catch (e) { return false; } })();
+  { const k = $('#kofi'), n = $('#kofinote'); if (k && kofiOk) k.href = KOFI_URL; if (n) n.hidden = !kofiOk; }
+  const showKofi = () => { const k = $('#kofi'); if (k && kofiOk) k.hidden = false; };
+  function savePdf() { showKofi();
     if (!pvBlob) return;
     const f = typeof File === 'function' ? new File([pvBlob], pvName, { type: 'application/pdf' }) : null;
     if (f && navigator.canShare && navigator.canShare({ files: [f] }) && /iPhone|iPad|iPod/.test(navigator.userAgent)) { navigator.share({ files: [f], title: pvName }).catch(() => {}); return; } // iOS : « Enregistrer dans Fichiers »
