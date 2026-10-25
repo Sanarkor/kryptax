@@ -2,7 +2,7 @@
 
 Kryptax aide à remplir le **formulaire 2086** (plus-values de cession d'actifs numériques) pour la **fiscalité française uniquement** : art. 150 VH bis du CGI, imposition forfaitaire de **12,8 %** (art. 200 C du CGI), BOI-RPPM-PVBMC-30.
 
-Gratuit, open-source, sans compte. Vos données restent sur votre appareil.
+Gratuit, open-source et anonyme : gardez le contrôle total de vos données.
 
 En ligne : https://sanarkor.github.io/kryptax/
 
@@ -33,7 +33,7 @@ Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
 
 ## Export PDF
 - Export **uniquement en PDF** : une synthèse, un tableau des cessions avec les colonnes 211 à 224 et une ligne GLOBAL, et le report sur la 2042-C.
-- Après le calcul : « Voir mon formulaire », puis une **publicité vidéo fictive** de 15 s (ignorable après 5 s ; aucune régie réelle, aucun pistage), puis un **aperçu plein écran** et le bouton « Enregistrer le PDF ».
+- Après le calcul : « Voir mon formulaire », puis directement un **aperçu plein écran** et le bouton « Enregistrer le PDF ».
 - Nom du fichier : `kryptax-formulaire-2086-<année>-sur-<année de déclaration>-<JJ>-<MM>-<AAAA>-<HH>-<MM>.pdf` (heure de Paris).
 
 ## Confidentialité et stockage local
@@ -64,7 +64,6 @@ Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'
 | `pipeline.js` | Récupération des cours (cascade de fournisseurs, cache) |
 | `engine.js` | Calcul 2086 (lignes 211 à 224, seuil, totaux) |
 | `export.js` | Génération du PDF |
-| `ad.js` | Pub vidéo fictive avant le PDF (visuels neutres, sans photo) |
 | `testdata/` | Jeux de données **fictifs** |
 
 ## Tests
