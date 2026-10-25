@@ -124,10 +124,13 @@
   const EPS = 1e-8; // poussière (résidus d'arrondi)
 
   /* Liste des cours nécessaires : pour chaque cession, chaque actif détenu (hors actif cédé). */
+  /* Cession : vente, paiement, ou retrait qualifié « Paiement ou vente oubliée » (valorisé au cours du moment du retrait) */
+  const sendSale = t => t.type === 'SEND' && t.sendChoice === 'sale', isCess = t => t.type === 'SELL' || t.type === 'PAY' || sendSale(t);
   function neededPrices(txs) {
     const need = []; const h = {};
     for (const t of sortTx(txs)) {
-      if (t.type === 'SELL' || t.type === 'PAY') {
+      if (isCess(t)) {
+        if (sendSale(t) && !FIATS.includes(t.asset)) need.push({ asset: t.asset, ts: t.date, txId: t.id });
         if (!(t.override212 > 0)) for (const a in h) if (h[a] > EPS && a !== t.asset && !FIATS.includes(a)) need.push({ asset: a, ts: t.date, txId: t.id });
       }
       apply(h, t);
@@ -149,7 +152,8 @@
     const add = (x, n) => { h[x] = (h[x] || 0) + n; };
     switch (t.type) {
       case 'BUY': case 'EXCH_IN': case 'STAKING': case 'AIRDROP': case 'INTEREST': case 'RECEIVE': add(a, q); break;
-      case 'SELL': case 'PAY': case 'EXCH_OUT': case 'SEND': case 'FEE': add(a, -q); break;
+      case 'SEND': if (t.sendChoice === 'ignore') return; if (t.sendChoice !== 'own') add(a, -q); break; /* vers mon portefeuille non importé : reste dans le patrimoine (212), seuls les frais sortent */
+      case 'SELL': case 'PAY': case 'EXCH_OUT': case 'FEE': add(a, -q); break;
     }
     if (t.feeQty > 0 && t.type !== 'FEE') add(a, -t.feeQty); // frais prélevés en crypto
   }
@@ -184,18 +188,20 @@
     for (const t of sortTx(txs)) {
       if (t.date <= o) continue;
       if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
-      if (t.type === 'RECEIVE' || t.type === 'SEND') warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
+      if ((t.type === 'RECEIVE' || t.type === 'SEND') && !t.xferWith && !t.sendChoice) warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
       if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // Revolut : la valeur payée inclut déjà les frais
-      if (t.type === 'SELL' || t.type === 'PAY') {
-        const p213 = Math.abs(t.eur || 0), p214 = t.feeInKind ? 0 : Math.abs(t.fee || 0), p216 = t.soulte || 0;
+      if (isCess(t)) {
+        const ss = sendSale(t), pm = ss ? (t.asset in FIAT ? FIAT[t.asset] : priceFn(t.asset, t.date)) : null;
+        const p213 = ss ? (pm != null && isFinite(pm) ? pm * Math.abs(t.qty || 0) : 0) : Math.abs(t.eur || 0), p214 = t.feeInKind ? 0 : Math.abs(t.fee || 0), p216 = t.soulte || 0;
         const held = Object.assign({}, h);
-        const lines = []; let v212 = 0, missing = [];
+        const lines = []; let v212 = 0, missing = ss && (pm == null || !isFinite(pm)) ? [t.asset] : [];
         if (t.override212 > 0) { v212 = t.override212; lines.push({ asset: '(saisie manuelle)', value: v212 }); }
         else {
           for (const a in held) {
             if (held[a] <= EPS || FIATS.includes(a)) continue;
             let p;
             if (a in FIAT) p = FIAT[a];
+            else if (a === t.asset && ss) { if (pm == null || !isFinite(pm)) continue; p = pm; }
             else if (a === t.asset && Math.abs(t.qty) > 0) p = p213 / Math.abs(t.qty);
             else p = priceFn(a, t.date);
             if (p == null || !isFinite(p)) { missing.push(a); continue; }
@@ -205,6 +211,7 @@
         const p215 = p213 - p214, p217 = p213 - p216, p218 = p213 - p214 - p216;
         const p223 = total220 - frac221 - soultes222;
         const c = { tx: t, date: t.date, asset: t.asset, qty: Math.abs(t.qty), l211: t.date, l212: v212, l213: p213, l214: p214, l215: p215, l216: p216, l217: p217, l218: p218, l220: total220, l221: frac221, l222: soultes222, l223: p223, detail212: lines, missing, status: missing.length ? 'à renseigner' : 'ok' };
+        if (ss) { c.fromSend = true; c.price213 = pm; warnings.push({ t, msg: 'Retrait qualifié « Paiement ou vente oubliée » : cession imposable valorisée au cours du marché au moment du retrait (source du cours dans le détail de la ligne 212).' }); }
         c.blocked = blocked;
         if (blocked) c.status = 'à renseigner';
         if (!missing.length && v212 > 0 && !blocked) {
@@ -295,8 +302,31 @@
       c.s.swapWith = c.b.id; c.b.swapWith = c.s.id; c.b.seq = (c.s.seq || 0) + 0.5;
       pairs.push({ out: c.s, in: c.b, dt: c.dt, gap: c.e });
     }
+    pairs.transfers = detectTransfers(txs);
     return pairs;
   }
+  /* Transferts entre mes comptes : un retrait (SEND) et un dépôt (RECEIVE) de la même crypto, reçu = envoyé − frais de réseau
+     (tolérance 3 % + frais connus), dépôt dans les 48 h (10 min d'avance tolérées), sont appariés : ni cession ni sortie du patrimoine (hors frais).
+     Un retrait sans dépôt correspondant doit être qualifié par l'utilisateur (sendChoice : own / gift / ignore) avant l'export PDF. */
+  const XFER_WIN = 48 * 3600e3, XFER_EARLY = 600e3, XFER_TOL = 0.03;
+  function detectTransfers(txs, o) {
+    o = o || {}; const win = o.win != null ? o.win : XFER_WIN;
+    for (const t of txs) if (t.xferWith) delete t.xferWith;
+    const sends = txs.filter(t => t.type === 'SEND' && !FIATS.includes(t.asset)), recs = txs.filter(t => t.type === 'RECEIVE' && !FIATS.includes(t.asset)), cand = [];
+    for (const s of sends) for (const r of recs) {
+      if (r.asset !== s.asset || (s.source && r.source && s.source === r.source)) continue;
+      const dt = r.date - s.date; if (dt < -XFER_EARLY || dt > win) continue;
+      const qs = Math.abs(s.qty || 0), qr = Math.abs(r.qty || 0), fq = Math.abs(s.feeQty || 0); if (!(qs > 0 && qr > 0)) continue;
+      const gap = (qs - qr) / qs; if (qr > qs * (1 + 1e-6) + 1e-12 || qs - qr > fq + qs * XFER_TOL + 1e-12) continue;
+      cand.push({ s, r, dt: Math.abs(dt), gap: Math.abs(gap) });
+    }
+    cand.sort((x, y) => x.gap - y.gap || x.dt - y.dt);
+    const used = new Set(), pairs = [];
+    for (const c of cand) { if (used.has(c.s) || used.has(c.r)) continue; used.add(c.s); used.add(c.r); c.s.xferWith = c.r.id; c.r.xferWith = c.s.id; if (c.s.sendChoice) delete c.s.sendChoice; pairs.push({ out: c.s, in: c.r, dt: c.dt }); }
+    return pairs;
+  }
+  /* Retraits sans dépôt correspondant (à qualifier) ; avec done = true, aussi ceux déjà qualifiés */
+  function openSends(txs, done) { return sortTx(txs).filter(t => t.type === 'SEND' && !FIATS.includes(t.asset) && Math.abs(t.qty || 0) > 0 && !t.xferWith && (done || !t.sendChoice)); }
   /* Contre-vérification avec un relevé en euros (texte collé ou CSV) : lignes « Vente de <ACTIF> » + date.
      Une vente avec une ligne correspondante (même actif, ±2 s ; même jour si l'heure manque) est confirmée imposable. */
   function parseFiatSales(text) {
@@ -343,6 +373,6 @@
     }
     return out;
   }
-  const api = { parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
