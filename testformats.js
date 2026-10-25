@@ -84,4 +84,10 @@ const run = (f, id) => { const rows = rd(f), d = F.detect(rows); chk(d && d.id =
   const A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   chk(/colonnes décalées/.test(A) && /feuilles lisibles, seule la première/.test(A) && /o\.strict = true/.test(A) && /res\.fatal/.test(A), 'Appli : colonnes décalées refusées, feuille utile choisie, refus clair'); }
 chk(!fs.readdirSync(__dirname + '/testdata/formats').some(f => /revolut/i.test(fs.readFileSync(__dirname + '/testdata/formats/' + f, 'utf8'))), 'Fichiers de test fictifs, sans Revolut');
+{ const f1 = { name: 'a.csv' }, f2 = { name: 'b.pdf' };
+  const dt = { types: ['Files', 'text/plain'], items: [{ kind: 'file', getAsFile: () => f1 }, { kind: 'string', getAsFile: () => null }, { kind: 'file', getAsFile: () => f2 }] };
+  const d = P.droppedFiles(dt);
+  chk(P.hasFileDrag(dt) && !P.hasFileDrag({ types: ['text/plain'] }) && !P.hasFileDrag(null) && d.length === 2 && d[0] === f1 && d[1] === f2 && P.droppedFiles({ files: [f1] })[0] === f1 && P.droppedFiles(null).length === 0, 'Glisser-déposer : seuls les fichiers sont gardés');
+  const A = fs.readFileSync(__dirname + '/app.js', 'utf8');
+  chk(/async function handleFiles/.test(A) && /handleFiles\(Array\.from\(e\.target\.files\)\)/.test(A) && /handleFiles\(f\)/.test(A) && /\['dragover', 'drop'\]\.forEach\(t => window\.addEventListener/.test(A), 'Glisser-déposer : même chemin que « Choisir des fichiers », page protégée'); }
 process.exit(ok ? 0 : 1);
