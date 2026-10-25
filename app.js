@@ -408,7 +408,7 @@
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const warns = sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : [];
       lastEst = new Set(est); if (t.incomplete) lastEst.add('*');
-      const PP = precOf(yc), precH = PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}<br>${yc.map((c, i) => PP.L[i] ? `C${i + 1} (${dt(c.date)}) : ${esc(PP.L[i])}` : '').filter(Boolean).join(' · ')}</p>` : '';
+      const PP = precOf(yc), precH = PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '';
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
