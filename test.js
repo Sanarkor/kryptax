@@ -188,6 +188,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(r && r.src === 'Binance USDT' && !r.suspect ? 1 : 0, 1, 'Écart < 30 % : Binance gardé, pas d’alerte');
   f = mock(100, 300); S = P.makeSources(f, { gap: 0 }); r = await S.series('XMR', t0, t0);
   eq(r && r.src === 'DefiLlama' && r.suspect ? 1 : 0, 1, 'Écart > 30 % : DefiLlama retenu et actif « à vérifier »');
+  f = mock(100, 105); S = P.makeSources(f, { gap: 0 }); r = await S.series('XMR', t0 - 48 * H, t0);
+  eq(r && r.partial && S.assetDiag.XMR.some(x => /partiel, complété/.test(x)) && r.s[Math.floor(t0 / H)] > 0 ? 1 : 0, 1, 'Série partielle (paire listée tard) : complétée par les sources suivantes, pas acceptée telle quelle');
   f = mock(2000, 2000); S = P.makeSources(f, { gap: 0 }); r = await S.series('ETH2.S', t0, t0);
   eq(r && f.calls.some(u => /symbol=ETHUSDT/.test(u)) ? 1 : 0, 1, 'Alias Kraken ETH2.S → ETH');
   f = mock(0, 0.5); S = P.makeSources(f, { gap: 0 }); r = await S.series('MATIC', t0, t0);
@@ -228,11 +230,15 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq((A.match(/makePdf\(/g) || []).length, 1, 'PDF : un seul point de génération');
     const d = A.slice(A.indexOf('function downloadPdf'), A.indexOf('makePdf('));
     eq(/currentBlockers\(\)[\s\S]*if \(b\.length\) \{ pdfRefused\(b\); return false; \}[\s\S]*if \(pdfBusy\) return false/.test(d) ? 1 : 0, 1, 'PDF : blocage imposé dans la génération (erreur, double clic)');
-    eq(/if \(e\.target\.id === 'pdfx'\) openAdGate\(\);/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton ouvre la pub, message non bloquant');
+    eq(/if \(e\.target\.id === 'pdfx'\) \{ if \(adSeen\) \{ adDone = true; downloadPdf\(\); adDone = false; \} else openAdGate\(\); \}/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton ouvre la pub, message non bloquant');
     eq((A.match(/const AD_DELAY_S = (\d+);/) || [])[1], '6', 'Pub export : durée unique AD_DELAY_S = 6');
-    eq(/if \(!adDone\) return false;/.test(d) && /adDone = true; go\.disabled = false/.test(A) ? 1 : 0, 1, 'Pub export : PDF seulement après le décompte (bouton activé à la fin)');
+    eq(/if \(!adDone\) return false;/.test(d) && /adDone = true; adSeen = true; go\.disabled = false/.test(A) ? 1 : 0, 1, 'Pub export : PDF seulement après le décompte (bouton activé à la fin)');
     const ag = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="adgate"[\s\S]*?<\/dialog>/) || [''])[0];
     eq(/aria-labelledby="adgatecount"/.test(ag) && /role="status"/.test(ag) && /Publicité/.test(ag) && /id="adgatego"[^>]*disabled/.test(ag) && !/style=|<script|revolut|csv/i.test(ag) ? 1 : 0, 1, 'Pub export : dialogue accessible, sans style inline');
+    eq(/let adDone = false, adTimer = null, adSeen = false;/.test(A) && !/localStorage[^\n]*adSeen|adSeen[^\n]*localStorage/.test(A) && (A.match(/adSeen = true/g) || []).length === 1 ? 1 : 0, 1, 'Pub export : pub vue jusqu’au bout mémorisée en mémoire seulement (fermer avant la fin = pub revue)');
+    eq(/const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;/.test(A) && /k <= 5 \? RETRY_DELAY_MS : RETRY_DELAY_MS \* Math\.min\(2 \*\* \(k - 5\), 10\)/.test(A) && /Nouvelle tentative \$\{k\}\/\$\{AUTO_MAX\} dans/.test(A) && /après \$\{AUTO_MAX\} tentatives automatiques/.test(A) ? 1 : 0, 1, 'Relance auto : 1 s, plafond 10, backoff après la 5e, message final');
+    eq(['fyear = +e.target.value', 'dirty = true; window.__kxDone', "data-del')) return; cancelAuto()", 'cancelAuto(); txs = []', 'cancelAuto(); save(); dirty = !!txs.length', 'seront effacés.\')) return; cancelAuto();'].filter(x => { const i = A.indexOf(x); return i > 0 && A.slice(Math.max(0, i - 60), i + x.length + 20).includes('cancelAuto()'); }).length, 6, 'Relance auto annulée : année, import, retrait de fichier, effacement, réinitialisation');
+    eq(/renderResults\(\); scheduleAuto\(failed\);/.test(A) && /lastEst = new Set\(est\)/.test(A) ? 1 : 0, 1, 'Relance auto : déclenchée après chaque calcul tant qu’un cours est estimé');
     eq(/window\.KryptaxAd = \{ img: IMG \}/.test(require('fs').readFileSync(__dirname + '/ad.js', 'utf8')) ? 1 : 0, 1, 'Pub export : image réutilisée depuis ad.js');
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');

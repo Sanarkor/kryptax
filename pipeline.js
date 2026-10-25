@@ -178,7 +178,7 @@
     /* Kraken : 720 dernières bougies 1 h seulement (≈ 30 jours) — utile pour les cessions récentes. */
     async function krakenSeries(pair) {
       const r = await get('Kraken', `https://api.kraken.com/0/public/OHLC?pair=${pair}&interval=60`);
-      if (r.err) return undefined; if (!r.j || (r.j.error || []).some(e => /Unknown asset pair/i.test(e))) return null;
+      if (r.err) return undefined; if (!r.j || [].concat(r.j.error || []).some(e => /Unknown asset pair/i.test(e))) return null;
       const k = r.j.result && Object.keys(r.j.result).find(x => x !== 'last'); if (!k) return undefined;
       const out = {}; for (const c of r.j.result[k]) out[Math.floor(c[0] * 1000 / HOUR)] = +c[1]; return out;
     }
@@ -269,7 +269,7 @@
         ['GeckoTerminal', () => opt.gecko === false ? null : gtSeries(a, from, to), true]];
       if (opt.rotate) { const r = opt.rotate % tries.length; tries = tries.slice(r).concat(tries.slice(0, r)); }
       if (known) { const L = tries.find(t => t[0] === 'DefiLlama'); tries = tries.filter(t => t !== L); tries.splice(2, 0, L); } // id connu : DefiLlama avant Gate.io / OKX / Bitget
-      let llama = null;
+      let llama = null, merged = null, mSrc = '';
       for (const [name, fn, usd] of tries) {
         let s = await fn();
         if (s && Object.keys(s).length) {
@@ -281,10 +281,16 @@
             const g = llama ? gap(s, llama) : null;
             if (g && (g > 1.3 || g < 1 / 1.3)) { log.push('Écart ' + Math.round((g - 1) * 100) + ' % avec DefiLlama : cours DefiLlama retenu, à vérifier'); return { s: llama, src: 'DefiLlama', suspect: true }; }
           }
-          return { s, src: name };
+          // série partielle (paire listée après le début de la plage, ou trou) : on garde et on complète avec les sources suivantes
+          const h0 = Math.floor(from / HOUR), h1 = Math.floor(Math.min(to, Date.now() - HOUR) / HOUR);
+          merged = Object.assign({}, s, merged || {}); if (!mSrc) mSrc = name;
+          const mk = Object.keys(merged).map(Number), mlo = Math.min(...mk), mhi = Math.max(...mk);
+          if (mlo <= h0 + 2 && mhi >= h1 - 2) return { s: merged, src: mSrc === name ? name : mSrc + ' + ' + name };
+          log.push(name + ' : partiel, complété par la source suivante'); continue;
         }
         if (s === undefined) { net = true; log.push(name + ' : ' + (lastErr[name] || 'erreur réseau')); } else log.push(name + ' : paire absente');
       }
+      if (merged) return { s: merged, src: mSrc, partial: true };
       return net ? undefined : null;
     }
     return { fxRange, series, diag, stats, assetDiag };
