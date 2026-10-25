@@ -140,3 +140,15 @@ footer .law{display:block;margin-top:4px;font-size:.9em;overflow-wrap:anywhere}
 .pdfmsg button{margin-top:6px}
 footer .footline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;text-align:left}
 footer .fiscfr{margin-left:auto}
+/* Encart publicitaire (remplaçable par une régie : seul le contenu de .adslot change) */
+.adslot{margin:18px 0 6px;padding:8px 12px 10px;border:1px solid var(--line);border-radius:12px;background:#0b1220;max-width:100%;box-sizing:border-box;overflow:hidden;min-height:100px}
+.adlabel{margin:0 0 6px;font-size:.7em;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.adcreative{display:flex;gap:12px;align-items:center}
+.advis{flex:0 0 56px;width:56px;height:56px}
+.adtext{min-width:0}
+.adbrand{margin:0;font-weight:700}
+.adpitch{margin:2px 0 4px;font-size:.85em;color:var(--muted);overflow-wrap:anywhere}
+.admore summary{display:inline-block;cursor:pointer;font-size:.8em;padding:3px 10px;border:1px solid var(--acc);border-radius:999px;color:var(--acc);list-style:none}
+.admore summary::-webkit-details-marker{display:none}
+.admore p{margin:6px 0 0;font-size:.8em;color:var(--warn)}
+.adnote{margin:8px 0 0;font-size:.72em;color:var(--muted);text-align:center}
