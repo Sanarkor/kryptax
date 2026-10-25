@@ -4,6 +4,8 @@
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+  let lastIgn = []; // récompenses sans cours (valeur non incluse à la 212)
+  const rewardOnly = a => { const L = txs.filter(t => t.asset === a); return L.length > 0 && L.every(t => ['INTEREST', 'STAKING', 'AIRDROP'].includes(t.type)); };
   let lastEst = new Set(); // actifs au cours estimé (≈) ou absent, mis à jour par renderResults
   let txs = load(LS.tx, []), cache = load(LS.cache, {}), manual = load(LS.manual, {});
   // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
@@ -317,7 +319,7 @@
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + (tot ? (step === 'Cours à la minute' ? 'Cours à la minute' : step === 'Cours' ? 'Récupération des cours' : step) + ` : ${n}/${tot}` : 'Calcul en cours…'); $('#progress').className = ''; } };
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + (tot ? (/^Cours/.test(step) ? `Cours récupérés : ${n} sur ${tot}` + (step === 'Cours à la minute' ? ' (à la minute)' : ' (horaires)') : step + ` : ${n} sur ${tot}`) : 'Calcul en cours…'); $('#progress').className = ''; } };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
@@ -395,7 +397,7 @@
       h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : '<span class="' + (y.total224 >= 0 ? 'pos' : 'neg') + '">' + (y.total224 >= 0 ? '+' : '') + eur(y.total224) + '</span>'}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : flat tax = 12,8 % d’impôt + prélèvements sociaux (≈ 30 % au total ; taux des prélèvements sociaux à vérifier pour votre année) → environ ${eur(Math.max(0, y.total224) * 0.30)}. Option barème progressif : case 3CN.</div>`;
     }
-    const unv = livePrice && livePrice.unvalued ? [...livePrice.unvalued].filter(x => manual[x] == null) : [];
+    const unv = livePrice && livePrice.unvalued ? [...livePrice.unvalued].filter(x => manual[x] == null && !rewardOnly(x)) : [];
     if (unv.length) h += `<div class="note warn">Aucun cours trouvé pour ${unv.map(esc).join(', ')} : compté 0 € dans la ligne 212 (≈, à vérifier). Cours unitaire en € si vous le connaissez : ${unv.map(x => `<label>${esc(x)} <input size="8" data-man="${esc(x)}"></label>`).join(' ')} — ou relancez le calcul plus tard.</div>`;
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
@@ -407,15 +409,15 @@
       const now = new Date().getFullYear(), yrs = X.yearOptions(Y, now); if (!X.selectable(fyear, now)) fyear = X.defaultYear(Y, now);
       const t = X.exportData(Y, {}, () => [], [], fyear).totals[0], yc = (Y[fyear] || { cessions: [] }).cessions;
       const est = new Set(); yc.forEach(c => (c.detail212 || []).forEach(d => { if (livePrice && livePrice.approx && livePrice.approx.has(d.asset + '|' + c.date)) est.add(d.asset); }));
-      (livePrice && livePrice.unvalued ? [...livePrice.unvalued] : []).filter(x => manual[x] == null && yc.some(c => (c.detail212 || []).some(d => d.asset === x))).forEach(x => est.add(x)); // seulement les cryptos utiles aux cessions de l'année
+      const AA = KP.alertAssets(txs, yc, livePrice, cache, manual); est.clear(); AA.est.forEach(x => est.add(x)); lastIgn = AA.ign; // récompense sans cours : ignorée à la 212, sans alerte ni relance
       const unk = (livePrice && livePrice.unknown || []).filter(x => manual[x] == null && yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const errs = [];
       if (t.incomplete) errs.push('Certains cours sont introuvables : le résultat est incomplet. Relancez le calcul plus tard.');
       else if (est.size) errs.push('Cours estimé (≈) pour ' + [...est].map(esc).join(', ') + ' : vérifiez le montant ou relancez plus tard.');
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const warns = (unk.length ? ['Symbole non identifié, aucun cours demandé : ' + unk.map(esc).join(', ') + '. Saisissez son cours si besoin.'] : []).concat(sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : []);
-      lastEst = new Set([...est].filter(x => !unk.includes(x))); if (t.incomplete) lastEst.add('*'); // symbole non identifié : pas de relance
-      const PP = precOf(yc), precH = PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '';
+      lastEst = new Set(AA.retry.filter(x => !unk.includes(x))); /* seulement les échecs transitoires des cryptos qui comptent */ if (t.incomplete) lastEst.add('*'); // symbole non identifié : pas de relance
+      const PP = precOf(yc), precH = (PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '') + (lastIgn.length ? `<p class="hint" id="ignsum">Cours introuvable pour ${lastIgn.map(esc).join(', ')} (récompenses, valeur ignorée à la ligne 212).</p>` : '');
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
@@ -425,7 +427,7 @@
   }
   function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); n += p.n; m += p.nMin; return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
   const precText = P => `Cours pris à la minute pour ${P.m} opération${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
-  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = P.n ? precText(P) : ''; return x; }
+  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
