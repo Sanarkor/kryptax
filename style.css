@@ -168,11 +168,12 @@ header .sub{font-size:1.04em;font-weight:700;line-height:1.3;letter-spacing:.02e
 /* Bandeaux verticaux : PC seulement */
 .adrail{display:none}
 @media (min-width:1024px){
-html{font-size:125%}
-body{font-size:19px}
-header,main{max-width:min(960px,calc(100vw - 2*clamp(180px,14vw,220px) - 64px));box-sizing:border-box}
+html{font-size:100%}
+body{font-size:15.2px}
+header,main{max-width:min(768px,calc(100vw - 2*clamp(180px,14vw,220px) - 64px));box-sizing:border-box}
 header h1{font-size:5.4rem}
 header .sub{font-size:1.7em}
+.adrail{font-size:19px}
 #reset,#helpbtn{font-size:.85rem;padding:.35em .8em}
 .adslot{display:none}
 .adrail{display:block;position:fixed;top:24px;width:clamp(180px,14vw,220px);padding:6px 8px 8px;border:1px solid var(--line);border-radius:12px;background:#0b1220;box-sizing:border-box;z-index:1}
@@ -181,3 +182,6 @@ header .sub{font-size:1.7em}
 .adrimg{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:8px;object-fit:cover}
 }
 @media print{.adrail{display:none!important}}
+
+/* Logo : place pour les jambages (y, p) au-dessus du sous-titre */
+header h1{line-height:1.22;padding-bottom:.06em}
