@@ -19,8 +19,10 @@
   const FIAT = { EUR: 1 }; const FIATS = ['EUR', 'USD', 'GBP', 'CHF'];
   const STABLE_NOTE = ['USDT', 'USDC', 'DAI', 'EURC'];
 
-  function guessType(raw, desc) {
+  function guessType(raw, desc, strict) {
     const s = fixText(String(raw || '') + ' ' + String(desc || '')).toLowerCase();
+    if (strict && /recevoir|reçu|recu\b|entrant|incoming/.test(s)) return 'RECEIVE';
+    if (strict && /envoy|sortant|outgoing/.test(s)) return 'SEND';
     if (/récompense|recompense|apprendre/.test(s)) return 'INTEREST';
     if (/vendre/.test(s)) return 'SELL';
     if (/achet/.test(s)) return 'BUY';
@@ -34,6 +36,7 @@
     if (/receiv|réception|deposit|dépôt|transfer in|topup/.test(s)) return 'RECEIVE';
     if (/send|envoi|withdraw|retrait|transfer out/.test(s)) return 'SEND';
     if (/fee|frais/.test(s)) return 'FEE';
+    if (strict) return /autre|other|fiat/.test(s) ? 'IGNORE' : null; /* CSV/Excel : type inconnu = ligne refusée, jamais « réception » par défaut */
     return 'RECEIVE';
   }
 

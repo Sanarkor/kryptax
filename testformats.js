@@ -56,5 +56,32 @@ const run = (f, id) => { const rows = rd(f), d = F.detect(rows); chk(d && d.id =
 // 4) Les cas particuliers (point 6) sont alimentés par ces formats
 { const r = run('binance_transactions_fictif.csv', 'binance'), sp = X.special(r.txs, 2026), k = Object.fromEntries(sp.cats.map(c => [c.key, c.n]));
   chk(k.staking === 2 && k.airdrop === 1 && k.frais >= 1 && k.transferts === 1, 'Binance → cas particuliers : ' + JSON.stringify(k)); }
+// 5) Audit CSV/Excel génériques : fichiers FICTIFS variés, lus correctement ou refusés avec un message clair
+{ const imp = (text, o) => { let rows = typeof text === 'string' ? F.parseCSV(text) : text; const hi = F.headerRow(rows); rows = rows.slice(hi); const m = F.guessMap(rows[0].map(String));
+    return P.importRows(rows.slice(1), m, Object.assign({ strict: true, tz: 'UTC', cur: m.cur, head: rows[0] }, o || {}), uid); };
+  const iso = t => new Date(t).toISOString().slice(0, 16);
+  let r = imp('\ufeffDate;Type;Crypto;Quantité;Montant (€);Frais\n05/03/2025 10:00;Achat;BTC;0,015;1 234,50;1,20\n06/03/2025;Vente;BTC;0,005;450,00;0,50\n');
+  chk(r.txs.length === 2 && r.txs[0].qty === 0.015 && r.txs[0].eur === 1234.5 && r.txs[0].fee === 1.2 && iso(r.txs[0].date) === '2025-03-05T10:00' && r.txs[1].type === 'SELL', 'CSV français (; , BOM, milliers espacés, JJ/MM)');
+  r = imp('Date,Type,Asset,Quantity,Total\n"03/05/2025 10:00",Buy,ETH,1.5,"1,234.56"\n"03/15/2025 09:00",Sell,ETH,0.5,"1,000.00"\n');
+  chk(r.txs.length === 2 && r.txs[0].eur === 1234.56 && iso(r.txs[0].date) === '2025-03-05T10:00' && iso(r.txs[1].date) === '2025-03-15T09:00', 'CSV américain : MM/JJ déduit de la colonne entière (03/05 = 5 mars), milliers 1,234.56');
+  r = imp('Date\tType\tCrypto\tQuantité\tMontant\n2025-01-02 08:30:15\tAchat\tSOL\t3\t300\n2025-01-03T09:00:00\tVendre\tSOL\t1\t120\n');
+  chk(r.txs.length === 2 && iso(r.txs[0].date) === '2025-01-02T08:30', 'TSV, dates ISO avec/sans T');
+  r = imp('Date;Type;Crypto;Quantité;Montant\n13/02/2025;Achat;BTC;1;100\n02/13/2025;Vente;BTC;1;200\n');
+  chk(r.fatal && /jour\/mois/.test(r.fatal) && !r.txs.length, 'Refus : dates JJ/MM et MM/JJ mélangées');
+  r = imp('Date;Type;Crypto;Quantité;Montant\n01/02/2025;Achat;BTC;0,5;1.234,50\n02/02/2025;Vente;BTC;0.25;1,234.50\n');
+  chk(r.fatal && /deux façons/.test(r.fatal), 'Refus : nombres écrits de deux façons dans une colonne');
+  r = imp('Date;Crypto;Quantité;Montant\n01/02/2025;BTC;0,5;100\n02/02/2025;BTC;0,2;50\n');
+  chk(r.fatal && /Type/.test(r.fatal), 'Refus : colonne Type absente et quantités sans signe');
+  r = imp('Date;Crypto;Quantité;Montant\n01/02/2025;BTC;0,5;100\n02/02/2025;BTC;-0,2;50\n');
+  chk(!r.fatal && r.txs[0].type === 'BUY' && r.txs[1].type === 'SELL', 'Sans colonne Type : signe de la quantité (+ achat, − vente)');
+  r = imp('Date;Type;Crypto;Quantité;Montant\n01/02/2025;Achat;BTC;0,5;100\n02/02/2025;Truc bizarre;BTC;0,2;50\n03/02/2025;Envoyer;BTC;0,1;0\n;Total;;0,8;150\n\n');
+  chk(r.txs.length === 2 && r.txs[1].type === 'SEND' && r.bad.length === 1 && /type inconnu « Truc bizarre »/.test(P.badSummary(r)) && /ligne 3/.test(P.badSummary(r)), 'Type inconnu refusé (ligne citée), « Envoyer » = envoi, ligne Total et ligne vide ignorées : ' + P.badSummary(r));
+  r = imp('Date;Type;Crypto;Quantité;Montant\n01/02/2025;Vente;BTC;0,5;\n');
+  chk(r.bad.length === 1 && /montant en €/.test(P.badSummary(r)), 'Vente sans montant : ligne refusée, pas de vente à 0 €');
+  r = imp([['Relevé fictif', '', '', '', ''], ['Généré le 01/01/2026', '', '', '', ''], ['Date', 'Type', 'Crypto', 'Quantité', 'Montant'], [45658.5, 'Achat', 'BTC', 0.01, 900], [new Date(2025, 0, 3, 14, 5, 7), 'Vente', 'BTC', 0.005, 480], ['', '', '', '', ''], ['Total', '', '', 0.015, 1380]]);
+  chk(r.txs.length === 2 && !r.bad.length && iso(r.txs[0].date) === '2025-01-01T12:00' && new Date(r.txs[1].date).toISOString() === '2025-01-03T14:05:07.000Z', 'Excel : titres avant l’en-tête, date en n° de série, date typée (heure de la cellule), ligne Total ignorée');
+  chk(P.numMode(['1,234', '12']) === '' && P.numMode(['0,5']) === 'FR' && P.numMode(['1,234.5']) === 'EN' && P.dateMode(['01/02/2025']) === '', 'Formats indécidables laissés au choix manuel / par défaut');
+  const A = fs.readFileSync(__dirname + '/app.js', 'utf8');
+  chk(/colonnes décalées/.test(A) && /feuilles lisibles, seule la première/.test(A) && /o\.strict = true/.test(A) && /res\.fatal/.test(A), 'Appli : colonnes décalées refusées, feuille utile choisie, refus clair'); }
 chk(!fs.readdirSync(__dirname + '/testdata/formats').some(f => /revolut/i.test(fs.readFileSync(__dirname + '/testdata/formats/' + f, 'utf8'))), 'Fichiers de test fictifs, sans Revolut');
 process.exit(ok ? 0 : 1);
