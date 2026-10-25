@@ -70,6 +70,15 @@
   const guessMap = KF.guessMap;
   let holders = JSON.parse(localStorage.getItem('kryptax.holders') || '{}'), holdInfo = '';
   const saveHolders = () => localStorage.setItem('kryptax.holders', JSON.stringify(holders));
+  /* « Pourquoi Kryptax ? » : <dialog> modal natif (Échap, focus gardé dans la fenêtre), fermeture par la croix ou un clic hors du cadre */
+  { const d = $('#why'), o = $('#whyopen'), x = $('#whyclose');
+    if (d && o && x) {
+      const close = () => { if (d.close) d.close(); else d.removeAttribute('open'); };
+      o.addEventListener('click', () => { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); x.focus(); });
+      x.addEventListener('click', close); d.addEventListener('close', () => o.focus());
+      d.addEventListener('click', e => { if (e.target !== d) return; const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close(); });
+      d.addEventListener('keydown', e => { if (e.key !== 'Tab') return; const f = [...d.querySelectorAll('button,a[href]')]; if (!f.length) return; const a = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); } });
+    } }
   /* Mentions légales et vie privée : <dialog> natif (Échap, focus, clic hors du cadre) */
   { const d = $('#privacy'), o = $('#privopen');
     if (d && o) {
