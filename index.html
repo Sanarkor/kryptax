@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — Formulaire 2086 pour la fiscalité française</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.binance.com https://data-api.binance.vision https://api.gateio.ws https://www.okx.com https://coins.llama.fi https://api.bitget.com https://www.bitstamp.net https://api.crypto.com https://api.exchange.coinbase.com https://api.kraken.com https://api.coingecko.com https://api.frankfurter.dev https://min-api.cryptocompare.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
-<meta name="theme-color" content="#070b14"><link rel="icon" href="favicon.svg?v=20261025w" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest?v=20261025w"><link rel="stylesheet" href="style.css?v=20261025w"></head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.binance.com https://data-api.binance.vision https://api.gateio.ws https://www.okx.com https://coins.llama.fi https://api.bitget.com https://www.bitstamp.net https://api.crypto.com https://api.exchange.coinbase.com https://api.kraken.com https://api.coingecko.com https://api.geckoterminal.com https://api.frankfurter.dev https://min-api.cryptocompare.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta name="theme-color" content="#070b14"><link rel="icon" href="favicon.svg?v=20261025y" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest?v=20261025y"><link rel="stylesheet" href="style.css?v=20261025y"></head>
 <body>
 <header><div class="topbar"><h1>Kryptax</h1></div><p class="sub">Formulaire 2086 pour la fiscalité française</p></header>
 <main>
 <details class="help"><summary>Mode d'emploi et aide</summary>
  <ol>
   <li><b>Exportez votre relevé</b> : dans l'application de votre plateforme, rubrique crypto → relevés / documents → <i>relevé de compte</i>, période « depuis le début », format <b>PDF</b> (le plus fiable), CSV ou Excel. Faites de même pour chaque plateforme ou portefeuille.</li>
-  <li><b>Importez</b> le ou les fichiers ci-dessous : le calcul démarre tout seul (cours historiques récupérés automatiquement, sans clé).</li>
+  <li><b>Importez</b> un ou plusieurs fichiers ci-dessous, puis touchez <b>« Valider mes imports »</b> : le calcul se lance (cours historiques récupérés automatiquement, sans clé).</li>
   <li><b>Lisez le résultat</b> : plus-value nette, case <b>3AN</b> (gain) ou <b>3BN</b> (perte) de la 2042-C, exonération si le total des cessions ne dépasse pas 305 €.</li>
-  <li><b>Téléchargez le PDF</b> (ou xlsx/CSV) : un tableau avec une ligne par cession imposable et les lignes 211 à 224 à recopier sur la 2086.</li>
+  <li><b>Téléchargez le PDF</b> : un tableau avec une ligne par cession imposable et les lignes 211 à 224 à recopier sur la 2086.</li>
  </ol>
  <p class="hint">Un cours introuvable est remplacé par le plus proche de vos relevés (marqué ≈). Vos fichiers restent dans ce navigateur : rien n'est envoyé. Pensez au formulaire 3916-bis pour chaque compte à l'étranger.</p>
 </details>
@@ -19,6 +19,8 @@
  <p class="hint">Importez <b>tout l'historique depuis votre premier achat</b>, avec les relevés de <b>tous vos comptes crypto</b>.</p>
  <label class="btn">Choisir des fichiers (PDF, CSV ou Excel .xlsx)<input type="file" id="files" accept=".pdf,.csv,.xlsx,text/csv,application/pdf" multiple hidden></label>
 
+ <ul id="flist" class="flist" hidden></ul>
+ <button id="validate" class="btn validate" disabled>Valider mes imports</button>
  <p id="err" class="note warn" hidden></p>
  <div id="mapping"></div>
  <div id="swaps" hidden></div>
@@ -49,6 +51,6 @@
 </section>
 <section id="results"></section>
 </main>
-<footer>Kryptax — code ouvert, sans serveur. Méthode : art. 150 VH bis du CGI, notice 2086.</footer>
-<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025w"></script><script src="pipeline.js?v=20261025w"></script><script src="jspdf.umd.min.js"></script><script src="jspdf.plugin.autotable.min.js"></script><script src="export.js?v=20261025w"></script><script src="app.js?v=20261025w"></script>
+<footer>Kryptax — Formulaire 2086</footer>
+<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025y"></script><script src="ids.js?v=20261025y"></script><script src="pipeline.js?v=20261025y"></script><script src="jspdf.umd.min.js"></script><script src="jspdf.plugin.autotable.min.js"></script><script src="export.js?v=20261025y"></script><script src="app.js?v=20261025y"></script>
 </body></html>

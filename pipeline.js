@@ -36,6 +36,13 @@
   /* Sources publiques de cours, toutes avec CORS ouvert (testé) : on demande une SÉRIE horaire par actif sur toute la période
      (quelques appels par actif au lieu d'un appel par cession × actif). Une erreur réseau n'est jamais mise en cache comme
      « pas de cours » : seul un « paire inexistante » sur toutes les sources l'est. diag : état par source (panneau « Sources de prix »). */
+  const IDS = (typeof module !== 'undefined' && typeof require === 'function') ? require('./ids.js') : (root.KryptaxIds || { ids: {}, ct: {} });
+  /* Renommages / homonymes : identifiants CoinGecko explicites (plusieurs = essais successifs). */
+  const FIX = { MATIC: ['matic-network', 'polygon-ecosystem-token'], POL: ['polygon-ecosystem-token', 'matic-network'], EOS: ['eos', 'vaulta'], A: ['vaulta', 'eos'], MKR: ['maker', 'sky'], FXS: 'frax-share', REP: 'augur', ONE: 'harmony', XAI: 'xai-blockchain', RLB: 'rollbit-coin', GAL: 'project-galaxy',
+    XMR: 'monero', WBT: 'whitebit', RLUSD: 'ripple-usd', FRAX: 'frax', AUSD: 'agora-dollar', KNTQ: 'kinetiq', GENIUS: 'genius-3', OPG: 'opengradient', TGBP: 'tokenised-gbp', AI16Z: 'ai16z', EUROP: 'schuman-europ', MXC: 'mxc', RIZE: 'rize', SAMO: 'samoyedcoin', SPC: 'spacechain-erc-20', UNFI: 'unifi-protocol-dao', USDQ: 'quantoz-usdq', XSGD: 'xsgd', ACN: 'solidus-aitech', RWS: 'real-world-services', U: 'united-stables' };
+  /* Alias de tickers (anciens noms, suffixes Kraken .S/.M/.F/.P). */
+  const ALIAS = { ETH2: 'ETH', XBT: 'BTC', XDG: 'DOGE' };
+  function baseSym(a) { a = String(a).toUpperCase().replace(/\.(S|M|F|P)$/, ''); return ALIAS[a] || a; }
   function makeSources(fetchFn, opt) {
     opt = opt || {};
     const TIMEOUT = opt.timeout || 8000, signal = opt.signal, diag = {};
@@ -110,17 +117,12 @@
       }
       return out;
     }
-    const geckoIds = Object.assign({ VVV: 'venice-token', ATH: 'aethir', XDC: 'xdce-crowd-sale', GIGA: 'gigachad-2', GRASS: 'grass', MON: 'monad', MEW: 'cat-in-a-dogs-world', ZKJ: 'polyhedra-network', FLR: 'flare-networks', MATH: 'math', TON: 'the-open-network', HYPE: 'hyperliquid', STG: 'stargate-finance', DOGS: 'dogs-2', USDC: 'usd-coin', VET: 'vechain', PROVE: 'succinct', ADA: 'cardano', ZRO: 'layerzero', BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', XRP: 'ripple', DOGE: 'dogecoin', PEPE: 'pepe' }, opt.geckoIds || {});
+    const geckoIds = Object.assign({ VVV: 'venice-token', ATH: 'aethir', XDC: 'xdce-crowd-sale', GIGA: 'gigachad-2', GRASS: 'grass', MON: 'monad', MEW: 'cat-in-a-dogs-world', ZKJ: 'polyhedra-network', FLR: 'flare-networks', MATH: 'math', TON: 'the-open-network', HYPE: 'hyperliquid', STG: 'stargate-finance', DOGS: 'dogs-2', USDC: 'usd-coin', VET: 'vechain', PROVE: 'succinct', ADA: 'cardano', ZRO: 'layerzero', BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', XRP: 'ripple', DOGE: 'dogecoin', PEPE: 'pepe' }, FIX, opt.geckoIds || {});
+    for (const k in IDS.ids) if (!(k in geckoIds)) geckoIds[k] = IDS.ids[k];
     let gq = Promise.resolve();
     function gget(url) { const r = gq.then(async () => { let x; for (let i = 0; i < 3; i++) { if (dead.has('gecko')) return { err: 'injoignable' }; x = await get('CoinGecko', url, 1); const lim = x.err === 'HTTP 429' || (x.j && x.j.status && x.j.status.error_code === 429); if (!x.err && !lim) break; if (!lim) { dead.add('gecko'); break; } await sleep(4000 * (i + 1)); } await sleep(opt.geckoGap != null ? opt.geckoGap : 2200); return x; }); gq = r.catch(() => {}); return r; }
     async function geckoSeries(a, from, to) { // ≤ 90 jours par appel -> points horaires
-      if (!(a in geckoIds)) {
-        const r = await gget(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(a)}`);
-        if (r.err || !r.j || !r.j.coins) return undefined;
-        const c = r.j.coins.filter(x => String(x.symbol).toUpperCase() === a).sort((x, y) => (x.market_cap_rank || 1e9) - (y.market_cap_rank || 1e9))[0];
-        geckoIds[a] = c ? c.id : null;
-      }
-      const id = geckoIds[a]; if (!id) return null;
+      const id = [].concat(geckoIds[a] || [])[0]; if (!id) return null; // table embarquée, aucune recherche
       const out = {}; let s = from - 2 * HOUR;
       while (s <= to) {
         const e = Math.min(s + 89 * DAY, to + 2 * HOUR);
@@ -182,7 +184,12 @@
     }
     /* DefiLlama : cours $ à l'heure, 500 points par appel, via l'identifiant CoinGecko (sans clé). */
     async function llamaSeries(a, from, to) {
-      const id = geckoIds[a]; if (!id) return null; const out = {}; let s = Math.floor(from / 1000) - 3600;
+      const ids = [].concat(geckoIds[a] || []); if (!ids.length) return null;
+      for (const id of ids) { const r = await llamaOne(id, from, to); if (r === undefined) return undefined; if (r && Object.keys(r).length) return r; }
+      return null;
+    }
+    async function llamaOne(id, from, to) {
+      const out = {}; let s = Math.floor(from / 1000) - 3600;
       while (s <= to / 1000 + 3600) {
         const r = await get('DefiLlama', `https://coins.llama.fi/chart/coingecko:${id}?start=${s}&span=500&period=1h&searchWidth=1h`);
         if (r.err) return undefined; const c = r.j && r.j.coins && r.j.coins['coingecko:' + id]; if (!c) return Object.keys(out).length ? out : null;
@@ -226,9 +233,27 @@
     }
     const assetDiag = {};
     /* Chaîne de sources : Binance € → Binance USDT → Gate.io → OKX → DefiLlama → Bitget → Bitstamp € → Crypto.com → Coinbase €/$ → Kraken → CoinGecko (id explicite). Chaque essai est noté par actif. */
-    async function series(a, from, to) {
-      const log = assetDiag[a] = []; let net = false;
-      const tries = [
+    /* GeckoTerminal (DEX) : dernier recours si le contrat est connu. */
+    async function gtSeries(a, from, to) {
+      const id = [].concat(geckoIds[a] || [])[0], c = id && IDS.ct[id]; if (!c) return null;
+      const [net, addr] = c.split(':');
+      const pr = await get('GeckoTerminal', `https://api.geckoterminal.com/api/v2/networks/${net}/tokens/${addr}/pools?page=1`);
+      if (pr.err) return undefined; const pool = pr.j && pr.j.data && pr.j.data[0]; if (!pool) return null;
+      const pa = pool.attributes.address, out = {}; let before = Math.floor(to / 1000) + 7200;
+      for (let i = 0; i < 20 && before > from / 1000 - 7200; i++) {
+        const r = await get('GeckoTerminal', `https://api.geckoterminal.com/api/v2/networks/${net}/pools/${pa}/ohlcv/hour?aggregate=1&limit=1000&currency=usd&token=${addr}&before_timestamp=${before}`);
+        if (r.err) return undefined; const l = r.j && r.j.data && r.j.data.attributes && r.j.data.attributes.ohlcv_list; if (!l || !l.length) break;
+        for (const k of l) out[Math.floor(k[0] * 1000 / HOUR)] = +k[4];
+        before = Math.min(...l.map(k => k[0])) - 1;
+      }
+      return Object.keys(out).length ? out : null;
+    }
+    /* Écart médian entre deux séries (ratio), sur les heures communes. */
+    function gap(x, y) { const r = Object.keys(x).filter(h => y[h] > 0 && x[h] > 0).map(h => x[h] / y[h]).sort((u, v) => u - v); return r.length ? r[r.length >> 1] : null; }
+    async function series(a0, from, to) {
+      const a = baseSym(a0), log = assetDiag[a0] = []; let net = false;
+      const known = geckoIds[a] != null && geckoIds[a] !== '';
+      let tries = [
         ['Binance €', () => binanceSeries(a + 'EUR', from, to), false],
         ['Binance USDT', () => binanceSeries(a + 'USDT', from, to), true],
         ['Gate.io', () => gateSeries(a, from, to), true],
@@ -240,12 +265,22 @@
         ['Coinbase', () => coinbaseSeries(a + '-EUR', from, to), false],
         ['Coinbase $', () => coinbaseSeries(a + '-USD', from, to), true],
         ['Kraken', () => krakenSeries(a + 'EUR'), false],
-        ['CoinGecko', () => opt.gecko === false ? null : geckoSeries(a, from, to), false]];
+        ['CoinGecko', () => opt.gecko === false ? null : geckoSeries(a, from, to), false],
+        ['GeckoTerminal', () => opt.gecko === false ? null : gtSeries(a, from, to), true]];
+      if (known) { const L = tries.find(t => t[0] === 'DefiLlama'); tries = tries.filter(t => t !== L); tries.splice(2, 0, L); } // id connu : DefiLlama avant Gate.io / OKX / Bitget
+      let llama = null;
       for (const [name, fn, usd] of tries) {
         let s = await fn();
         if (s && Object.keys(s).length) {
+          if (name === 'DefiLlama') llama = false;
           if (usd) { s = await toEur(s, from, to); if (!s || !Object.keys(s).length) { log.push(name + ' : conversion $→€ impossible'); net = true; continue; } }
-          log.push(name + ' : OK'); return { s, src: name };
+          log.push(name + ' : OK');
+          if (known && name !== 'DefiLlama' && opt.check !== false) { // contrôle croisé avec DefiLlama
+            if (llama === null) { const l = await llamaSeries(a, from, to); llama = l && Object.keys(l).length ? await toEur(l, from, to) : false; }
+            const g = llama ? gap(s, llama) : null;
+            if (g && (g > 1.3 || g < 1 / 1.3)) { log.push('Écart ' + Math.round((g - 1) * 100) + ' % avec DefiLlama : cours DefiLlama retenu, à vérifier'); return { s: llama, src: 'DefiLlama', suspect: true }; }
+          }
+          return { s, src: name };
         }
         if (s === undefined) { net = true; log.push(name + ' : ' + (lastErr[name] || 'erreur réseau')); } else log.push(name + ' : paire absente');
       }
@@ -320,7 +355,7 @@
       const ts = by[a], r = await src.series(a, Math.min(...ts), Math.max(...ts));
       if (r === null) cache[a + '|none'] = 1; // aucune source ne connaît ce jeton
       else if (r === undefined) failed.push(a); // erreur réseau : rien n'est mis en cache, on réessaiera
-      else for (const t of ts) { const h = Math.floor(t / HOUR); for (const d of [0, -1, 1, -2, 2]) if (r.s[h + d] != null) { cache[a + '|h' + h] = r.s[h + d]; break; } }
+      else { if (r.suspect) cache[a + '|suspect'] = 1; else delete cache[a + '|suspect']; for (const t of ts) { const h = Math.floor(t / HOUR); for (const d of [0, -1, 1, -2, 2]) if (r.s[h + d] != null) { cache[a + '|h' + h] = r.s[h + d]; break; } } }
       log('Cours', ++done, assets.length); save();
     }, signal);
     // 3. quantités tronquées (xlsx)
@@ -332,7 +367,7 @@
       else t.qtyStatus = 'à vérifier (aucun cours)';
     }
     save();
-    fn.failed = failed; fn.fxMissing = txs.filter(t => t.fxPending).length; fn.missing = failed.length; return fn;
+    fn.failed = failed; fn.fxMissing = txs.filter(t => t.fxPending).length; fn.missing = failed.length; fn.suspect = [...new Set(txs.map(t => t.asset))].filter(x => cache[x + '|suspect']); return fn;
   }
   /* Relevé PDF Revolut : lignes de texte -> lignes à 7 colonnes (Symbole, Type, Quantité, Prix, Valeur, Frais, Date)
      + lignes des relevés en devises (« Vente de X » / « Achat de X ») pour la contre-vérification. */
@@ -369,6 +404,17 @@
     by.sort((a, b) => b.y - a.y);
     return by.map(L => L.parts.sort((a, b) => a.x - b.x).map(p => p.s.trim()).join(' '));
   }
-  const api = { priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
+  /* Multi-import : ajoute les transactions d'un fichier sans écraser les précédentes.
+     Même nom de fichier ré-importé -> remplace l'ancien (pas de doublon) ; transactions identiques déjà présentes
+     depuis un AUTRE fichier (relevés qui se chevauchent) -> ignorées. Clé : type, actif, date (minute), quantité, montant €. */
+  const txKey = t => [t.type, t.asset, Math.round(+t.date / 60000), (+t.qty || 0).toPrecision(9), Math.round((+t.eur || 0) * 100)].join('|');
+  function mergeImport(old, fresh) {
+    const names = new Set(fresh.map(t => t.source).filter(Boolean)), kept = old.filter(t => !names.has(t.source)), replaced = old.length - kept.length;
+    const seen = new Set(kept.map(txKey)), add = [], dup = [];
+    for (const t of fresh) (seen.has(txKey(t)) ? dup : add).push(t);
+    return { txs: kept.concat(add), added: add.length, dup: dup.length, replaced };
+  }
+  const fileList = txs => { const m = new Map(); txs.forEach(t => { const k = t.source || 'Saisie manuelle'; m.set(k, (m.get(k) || 0) + 1); }); return [...m].map(([name, n]) => ({ name, n })); };
+  const api = { mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);

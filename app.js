@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
-  const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices', manual: 'kryptax.manual' };
+  const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   let txs = load(LS.tx, []), cache = load(LS.cache, {}), manual = load(LS.manual, {});
   // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
@@ -98,7 +98,7 @@
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
       o.xlsx = isXlsx; o.source = name;
       const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
-    if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); } save(); box.remove(); renderTx(); autoRun();
+      save(); box.remove(); renderTx(); autoRun();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
       if (res.bad.length) showErr(res.bad.length + ' lignes de ' + name + ' n\'ont pas pu être lues.'); return;
       let n = 0, bad = 0;
@@ -209,9 +209,22 @@
     else return;
     E.detectSwaps(txs); save(); renderTx();
   });
-  function autoRun() { const b = $('#run'); if (b && !b.disabled && txs.length) setTimeout(() => b.click(), 50); }
+  // Import : on cumule les fichiers, le calcul ne part qu'avec « Valider mes imports »
+  let dirty = false;
+  function autoRun() {
+    const old = txs.filter(t => t._in), fresh = txs.filter(t => !t._in); fresh.forEach(t => t._in = 1);
+    const m = KP.mergeImport(old, fresh); txs = m.txs; E.detectSwaps(txs);
+    save(); dirty = true; window.__kxDone = false; $('#results').innerHTML = ''; renderTx();
+  }
+  function renderFiles() {
+    const L = KP.fileList(txs), box = $('#flist'); if (!box) return;
+    box.innerHTML = L.map(f => `<li><span>${esc(f.name)}</span> <button class="small ghost" data-rmf="${esc(f.name)}" aria-label="Retirer ${esc(f.name)}">✕</button></li>`).join('');
+    box.hidden = !L.length; $('#validate').disabled = !txs.length || !dirty;
+  }
+  $('#flist').addEventListener('click', e => { const n = e.target.dataset && e.target.dataset.rmf; if (n == null) return; txs = txs.filter(t => (t.source || 'Saisie manuelle') !== n); E.detectSwaps(txs); save(); dirty = !!txs.length; window.__kxDone = false; $('#results').innerHTML = ''; renderTx(); });
+  $('#validate').onclick = () => { if (!txs.length) return; dirty = false; renderFiles(); $('#run').click(); };
   function renderTx() {
-    renderSwaps();
+    renderSwaps(); renderFiles();
     const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
     $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
     $('#calc').hidden = !all.length; $('#txnote2').textContent = '';
@@ -273,7 +286,7 @@
   function priceFn(a, ts, txId) {
     if (manual[a + '@' + txId] != null) return manual[a + '@' + txId];
     if (manual[a] != null) return manual[a];
-    if (!livePrice || livePrice.txs !== txs) { livePrice = KP.priceLookup(txs, cache, manual, { zeroIfUnknown: true }); livePrice.txs = txs; } // même sans relancer : cache + cours observés ≈
+    if (!livePrice || livePrice.txs !== txs) { livePrice = KP.priceLookup(txs, cache, manual, { zeroIfUnknown: true }); livePrice.txs = txs; livePrice.suspect = [...new Set(txs.map(t => t.asset))].filter(x => cache[x + '|suspect']); } // même sans relancer : cache + cours observés ≈
     return livePrice(a, ts);
   }
   function renderDiag(src, fnr) {
@@ -289,7 +302,7 @@
     const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = 'Calcul en cours…'; $('#progress').className = ''; };
     let src;
     try {
-      src = KP.makeSources((u, o) => fetch(u, o), { signal: runCtl.signal, geckoIds: load('kryptax.gecko', {}) });
+      src = KP.makeSources((u, o) => fetch(u, o), { signal: runCtl.signal, });
       const persist = () => saveCache();
       livePrice = await KP.prepare(txs, src, cache, show, { signal: runCtl.signal, concurrency: 4, onSave: persist, manual });
       livePrice.txs = txs; renderDiag(src, livePrice);
@@ -370,7 +383,7 @@
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
-    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p>';
+    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p>';
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
     const X = window.KryptaxExport;
     if (X) {
@@ -381,12 +394,15 @@
       const errs = [];
       if (t.incomplete) errs.push('Certains cours sont introuvables : le résultat est incomplet. Relancez le calcul plus tard.');
       else if (est.size) errs.push('Cours estimé (≈) pour ' + [...est].map(esc).join(', ') + ' : vérifiez le montant ou relancez plus tard.');
+      const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
+      if (sus.length) errs.push('Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.');
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
       h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + tot + h;
     }
     $('#results').innerHTML = h; lastOut = out; lastY = Y;
   }
+  { const hb = document.querySelector('details.help'); if (hb) hb.addEventListener('click', e => { if (!hb.open || e.target.closest('a, summary, input, button, select, label')) return; hb.open = false; }); }
   let lastOut = null, lastY = null, fyear = null;
   // Aperçu à l'écran du PDF : seules la date et la crypto sont en clair ; les montants sont des valeurs factices floutées (le vrai texte n'est pas dans le DOM)
   function showPeek() {
@@ -443,5 +459,5 @@
   });
 
   /* ---------- Exemple fictif ---------- */
-  renderTx(); if (txs.length) renderResults();
+  txs.forEach(t => t._in = 1); dirty = txs.length > 0; renderTx();
 })();
