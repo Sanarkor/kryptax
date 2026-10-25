@@ -133,7 +133,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 // Page : plus de bandeau « conseil fiscal », pas d'icône ℹ️, pas d'icône œil
 { const fs = require('fs'), H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="helpbtn" class="small ghost" aria-expanded="false" aria-controls="helppanel">Mode d’emploi<\/button><button id="reset" class="small ghost"/.test(H) && !/Mode d'emploi et aide|details class="help"/.test(H) ? 1 : 0, 1, 'Mode d’emploi : bouton à gauche de Réinitialiser, même style');
-  eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes('id="helppanel" class="help" hidden') ? 1 : 0, 1, 'Mode d’emploi conservé (replié)');
+  eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '').replace(/<span class="disclaim">[^<]*<\/span>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes('id="helppanel" class="help" hidden') ? 1 : 0, 1, 'Mode d’emploi conservé (replié)');
   eq(/peek|showPeek|👁/.test(A + fs.readFileSync(__dirname + '/style.css', 'utf8') + H) ? 1 : 0, 0, 'Icône œil (aperçu flouté) supprimée avec sa logique'); }
 // Multi-import (fictif) : cumul, remplacement du même fichier, dédoublonnage des relevés qui se chevauchent
 { const KP = require('./pipeline.js'), D = (m, d) => Date.UTC(2026, m, d, 10);
@@ -161,7 +161,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), D = (H.match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0], A = fs.readFileSync(__dirname + '/app.js', 'utf8'), P = fs.readFileSync(__dirname + '/pipeline.js', 'utf8');
     eq(D ? 1 : 0, 1, 'Panneau vie privée présent');
     eq(H.includes('<footer><span class="law">Art. 150 VH bis CGI') && !/footline|Fiscalité Française<\/span>/.test(H) ? 1 : 0, 1, 'Pied de page sans répétition du titre');
-    eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page');
+    eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page'); eq((H.match(/seul responsable de sa déclaration auprès de l'administration fiscale/g) || []).length, 2, 'Avertissement de non-responsabilité : pied de page + mentions légales');
     eq(/revolut|code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni Revolut ni « code ouvert »');
     eq(/style="/.test(H + A) ? 1 : 0, 0, 'Aucun style inline (CSP)');
     eq(/goatcounter|gtag|plausible|analytics|document\.cookie|cryptocompare|cckey/i.test(H + A + P) ? 1 : 0, 0, 'Pas de mesure d’audience, cookie ni clé API');
@@ -330,7 +330,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(m && Buffer.from(m[1], 'base64').slice(0, 3).toString('hex') === 'ffd8ff' && m[1].length * 3 / 4 < 80000 && AJ.length < 200000 ? 1 : 0, 1, 'Pub : visuels JPEG intégrés (< 200 Ko au total) dans ad.js');
     eq(ad.includes('width="640" height="278"') && /aspect-ratio:640\/278/.test(C) && ih.includes('Exemple de pub fictive : ce jeu n’existe pas, l’encart ne mène nulle part.') ? 1 : 0, 1, 'Pub : bandeau 2,3:1 (≈ 146 px à 360 px) + message au tap');
     eq(ad.includes('alt="Exemple de publicité fictive pour un jeu vidéo médiéval fantastique"') && /<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && !/https?:\/\//.test(AJ) ? 1 : 0, 1, 'Pub : alt, script local, aucun lien externe'); }
-  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span>(<span class="disclaim">[^<]*<\/span>)?<\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   { // Fuseaux (données fictives) : relevés en UTC, affichage et année fiscale en heure de Paris
     const u = (s, tz) => E.parseDate(s, 'DMY', tz);
     eq(E.fmtParis(u('27 sept. 2026, 00:13:00', 'UTC')) === '27/09/2026 02:13' ? 1 : 0, 1, 'Relevé UTC 27/09 00:13 → 02:13 heure de Paris (été, UTC+2)');
