@@ -22,9 +22,7 @@ chk(!bad.length, 'Tableau 2086 : chaque ligne porte les 12 valeurs 212-224' + (b
 chk(/GLOBAL.*\d/.test(tab) && !/Cession 1 \(/.test(txt), 'Tableau 2086 : ligne GLOBAL en bas, pas de fiche par cession');
 chk(!/RENSEIGNER/.test(txt), 'Aucune ligne « À RENSEIGNER » (jeu fictif complet)');
 chk(!/Soldes|Revenus/.test(txt) && /exclus\s+4 \(non imposables\)/.test(txt), 'Pas de liste d’échanges, soldes ni revenus (simple compteur)');
-const csv = X.makeCsv(x);
-chk(/GLOBAL/.test(csv) && /TOTAL GLOBAL/.test(csv), 'CSV : ligne GLOBAL et total global');
-chk(!/revolut/i.test(txt + csv), 'PDF/CSV : aucune mention de la plateforme');
+chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
 // Année choisie : titre et année vide (fictif)
 { const xy = X.exportData(Y, S, () => [], T, 2026), ty = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xy, X.title(2026)).output('arraybuffer')) }).toString();
   chk(/Annee 2026 - declaration 2027|Année 2026 - déclaration 2027/.test(ty), 'PDF : titre « Année 2026 — déclaration 2027 »');
@@ -46,5 +44,31 @@ chk(!/revolut/i.test(txt + csv), 'PDF/CSV : aucune mention de la plateforme');
   chk(zv.col > 300, 'Logo : zone colorée (' + zv.col + ' px couleur)');
   chk(zv.dark < 20, 'Logo : aucun pixel sombre (' + zv.dark + ' px sombres) — échoue si le logo sort noir');
   chk(zv.blue > 50 && zv.orange > 20 && zv.green > 20, 'Logo : bleu, orange et vert présents (' + [zv.blue, zv.orange, zv.green].join('/') + ')');
+}
+// Opérations particulières (jeu FICTIF) : détection par type/libellé, exclues des cessions, note courte en bas de la page paysage unique
+{ const D = (m, d) => Date.UTC(2026, m, d, 10), T2 = [{ id: 's1', date: D(0, 2), type: 'BUY', asset: 'AAA', qty: 10, eur: 100, fee: 0, rawType: 'Achat' },
+    { id: 's2', date: D(5, 1), type: 'SELL', asset: 'AAA', qty: 2, eur: 40, fee: 0, rawType: 'Vente' },
+    ...[1, 2, 3].map(k => ({ id: 'st' + k, date: D(2, k), type: 'STAKING', asset: 'AAA', qty: .1, eur: 0, fee: 0, rawType: 'Staking reward' })),
+    { id: 'a1', date: D(3, 1), type: 'AIRDROP', asset: 'BBB', qty: 5, eur: 0, fee: 0, rawType: 'Airdrop' },
+    { id: 'm1', date: D(3, 2), type: 'INTEREST', asset: 'AAA', qty: .01, eur: 0, fee: 0, rawType: 'Mining reward' },
+    { id: 'g1', date: D(3, 3), type: 'RECEIVE', asset: 'AAA', qty: 1, eur: 0, fee: 0, rawType: 'Gift' },
+    { id: 'f1', date: D(3, 4), type: 'FEE', asset: 'AAA', qty: .01, eur: 0, fee: 0, rawType: 'Network fee' },
+    { id: 'w1', date: D(3, 5), type: 'SEND', asset: 'AAA', qty: 1, eur: 0, fee: 0, rawType: 'Withdrawal' },
+    { id: 'd1', date: D(3, 6), type: 'RECEIVE', asset: 'AAA', qty: 1, eur: 0, fee: 0, rawType: 'Deposit' },
+    { id: 'p1', date: D(6, 1), type: 'PAY', asset: 'AAA', qty: 1, eur: 20, fee: 0, rawType: 'Card payment' },
+    { id: 'x1', date: D(3, 7), type: 'FEE', asset: 'AAA', qty: .5, eur: 0, fee: 0, adjust: true },
+    { id: 'o1', date: Date.UTC(2025, 3, 1), type: 'STAKING', asset: 'AAA', qty: 1, eur: 0, fee: 0, rawType: 'Staking' }];
+  const sp = X.special(T2, 2026), by = Object.fromEntries(sp.cats.map(c => [c.key, c.n]));
+  chk(by.staking === 3 && by.airdrop === 1 && by.minage === 1 && by.cadeaux === 1 && by.frais === 1 && by.transferts === 2 && by.paiements === 1, 'Particulières : catégories ' + JSON.stringify(by));
+  chk(sp.n === 9 && sp.pay === 1, 'Particulières : 9 hors cessions + 1 paiement à vérifier (ajustement de solde et autre année ignorés)');
+  chk(X.special(T2, 2025).n === 1 && X.special([], 2026).n === 0, 'Particulières : filtrées par année');
+  const P2 = a => ({ AAA: 20, BBB: 1 })[a], r2 = E.compute(T2, P2), Y2 = E.byYear(r2), x2 = X.exportData(Y2, {}, () => [], T2, 2026);
+  chk(x2.cessions.length === 2, 'Particulières exclues des cessions (restent : 1 vente + 1 paiement) : ' + x2.cessions.length);
+  const tp = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, x2, X.title(2026)).output('arraybuffer')) }).toString(), one = tp.replace(/\s+/g, ' ');
+  chk(tp.split('\f').filter(s => s.trim()).length === 1, 'PDF avec note particulières : une seule page paysage');
+  chk(/non traitees comme des cessions : staking 3 ; airdrops 1 ; minage 1 ; cadeaux et dons 1 ; frais payes en crypto 1 ; depots et retraits entre comptes 2|non traitées comme des cessions : staking 3 ; airdrops 1 ; minage 1 ; cadeaux et dons 1 ; frais payés en crypto 1 ; dépôts et retraits entre comptes 2/.test(one), 'PDF : liste des catégories et nombres');
+  chk(/n'est pas calcul. par Kryptax/.test(one) && /. v.rifier : 1 paiement en crypto/.test(one), 'PDF : régime propre non calculé + paiement à vérifier');
+  require('fs').writeFileSync('/tmp/kx-sp.pdf', Buffer.from(X.makePdf(jsPDF, x2, X.title(2026)).output('arraybuffer')));
+  chk(!/revolut|conseil fiscal personnalis/i.test(tp), 'PDF : ni plateforme ni conseil');
 }
 process.exit(ok ? 0 : 1);

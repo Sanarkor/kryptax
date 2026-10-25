@@ -95,10 +95,10 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const X = require('./export.js'), T = require('./testdata/fake_many.js')(), P = (a, ts) => ({ AAA: 6, BBB: 7, CCC: 8, DDD: 9, EEE: 10 })[a];
   const r = E.compute(T, P), Y = E.byYear(r), S = {}; for (const y in Y) S[y] = E.summary(T, r, P, +y);
   const rows = s => [['Plus-values', 'Gains', '', s.gains], ['Frais', 'Frais totaux', '', s.fees.total], ['Revenus (income)', 'Total', '', s.incomeTotal], ['Sorties (outcome)', 'Ventes', '', s.outcome.SELL.eur], ['Soldes', 'Total', '', s.closingTotal]];
-  const x = X.exportData(Y, S, rows, T), csv = X.makeCsv(x).split('\n');
+  const x = X.exportData(Y, S, rows, T);
   eq(r.cessions.length, 18, 'Export : 18 cessions calculées'); eq(x.cessions.length, 18, 'Export : 18 lignes de cession exportées');
-  eq(x.swapCount, 4, 'Export : 4 échanges exclus comptés (non listés)'); eq(csv.some(l => /Soldes|Revenus/.test(l)) ? 1 : 0, 0, 'Export : pas de soldes ni de revenus');
-  const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 19, 'CSV : 18 lignes sous CESSIONS + 1 ligne GLOBAL'); eq(csv[i0 + 2 + 18].split(';')[1] === 'GLOBAL' ? 1 : 0, 1, 'CSV : ligne GLOBAL en fin de tableau');
+  eq(x.swapCount, 4, 'Export : 4 échanges exclus comptés (non listés)'); eq(Object.keys(x).join(',') === 'cessions,totals,year,swapCount,special' ? 1 : 0, 1, 'Export : pas de soldes ni de revenus (cessions, totaux, compteurs)');
+  eq(x.totals[0].n, 18, 'Export : GLOBAL = 18 cessions'); eq(typeof X.makeCsv + typeof X.makeXlsx === 'undefinedundefined' ? 1 : 0, 1, 'Export CSV/xlsx retiré (PDF seul)');
   eq(X.FORM.map(f => f[0]).join(',') === '211,212,213,214,215,216,217,218,220,221,222,223,224' ? 1 : 0, 1, 'Export : lignes 211 à 224 de la 2086 dans l’ordre');
 }
 // Année fiscale (données fictives sur plusieurs années) : calcul cumulatif, export de la seule année choisie
@@ -121,9 +121,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const c26 = all.cessions.filter(c => c.year === 2026); eq(x26.cessions[0].l221, c26[0].l221, 'Cumulatif : l. 221 de 2026 tient compte de la cession 2025');
   eq(x26.cessions[0].l221 > 0 ? 1 : 0, 1, 'Cumulatif : l. 221 > 0 grâce à 2025'); eq(x26.cessions[0].l220, 500, 'Cumulatif : prix total d’acquisition depuis le premier achat');
   eq(x26.totals[0].l213, 300, 'GLOBAL 2026 : 213 = 300'); eq(x26.totals[0].l224, +(x26.cessions[0].l224 + x26.cessions[1].l224).toFixed(2), 'GLOBAL 2026 = somme des 224 de 2026');
-  eq(X.makeCsv(x26).includes('Année 2026 — déclaration 2027') ? 1 : 0, 1, 'CSV : titre « Année 2026 — déclaration 2027 »');
+  eq(X.title(2026) === 'Année 2026 — déclaration 2027' ? 1 : 0, 1, 'Titre « Année 2026 — déclaration 2027 »');
   const x27 = X.exportData(Y, {}, () => [], T, 2027); eq(x27.cessions.length, 0, 'Année sans cession : aucune ligne'); eq(x27.totals[0].n, 0, 'Année sans cession : GLOBAL à 0 cession'); eq(x27.totals[0].l224, 0, 'Année sans cession : total 0');
-  eq(X.makeCsv(x27).includes('Année 2027 — déclaration 2028') ? 1 : 0, 1, 'CSV année vide : titre cohérent');
 }
 // Messages après calcul : « ✅ Aucune erreur » ou erreur courte, pas de compteur ni « Calcul terminé »
 { const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
@@ -160,6 +159,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(used.filter(h => !names[h] || !D.includes(names[h])).length, 0, 'Chaque source appelée est citée');
     eq(Object.keys(names).filter(h => !used.includes(h)).length, 0, 'Aucune source citée non appelée');
     eq(D.includes('Réinitialiser') && D.includes('pas un conseil fiscal') ? 1 : 0, 1, 'Réinitialiser + aide au calcul cités'); }
+  { const A2 = fs.readFileSync(__dirname + '/app.js', 'utf8'); eq(/Aucune erreur<\/div>'\)[^\n]*\.join\(''\) \+ specialNote\(X\.special\(txs, fyear\)\) \+ tot/.test(A2) && /<details class="note spec" id="special">/.test(A2) && A2.includes('Voir le PDF') ? 1 : 0, 1, 'Message replié « opérations particulières » sous « Aucune erreur »'); }
   const miss = hosts.filter(h => !csp.split(/\s+/).includes(h)); eq(miss.length, 0, 'CSP connect-src couvre tous les hôtes appelés' + (miss.length ? ' (manque ' + miss.join(', ') + ')' : ''));
 }
 
