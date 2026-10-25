@@ -236,7 +236,10 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq((ih.match(/class="adslot"/g) || []).length, 1, 'Pub : un seul encart <aside class="adslot">');
     eq(ad.includes('<p class="adlabel">Publicité</p>') && ad.includes('Exemple de pub fictive — emplacement réservé') ? 1 : 0, 1, 'Pub : étiquette « Publicité » + mention fictive');
     eq(!/style=|<script|href=|https?:/.test(ad) && /<\/aside>\s*<\/main>\s*<footer>/.test(ih) ? 1 : 0, 1, 'Pub : sans style inline, script ni lien, juste avant le pied de page');
-    eq(/\.adslot\{[^}]*max-width:100%[^}]*overflow:hidden/.test(C) ? 1 : 0, 1, 'Pub : CSS dans style.css, jamais plus large que l’écran'); }
+    eq(/\.adslot\{[^}]*max-width:100%[^}]*overflow:hidden/.test(C) ? 1 : 0, 1, 'Pub : CSS dans style.css, jamais plus large que l’écran');
+    const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'), m = AJ.match(/data:image\/jpeg;base64,([A-Za-z0-9+/=]+)/);
+    eq(m && Buffer.from(m[1], 'base64').slice(0, 3).toString('hex') === 'ffd8ff' && m[1].length * 3 / 4 < 80000 ? 1 : 0, 1, 'Pub : visuel JPEG intégré (< 80 Ko) dans ad.js');
+    eq(ad.includes('alt="Exemple de publicité fictive pour un jeu vidéo"') && /<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && !/https?:\/\//.test(AJ) ? 1 : 0, 1, 'Pub : alt, script local, aucun lien externe'); }
   { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><div class="footline"><span>Kryptax — Formulaire 2086<\/span><span class="fiscfr">Fiscalité Française<\/span><\/div><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
