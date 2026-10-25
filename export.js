@@ -7,7 +7,7 @@
   const e2 = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (+v).toFixed(2);
   /* Lignes et libellés de la déclaration n° 2086 (cadre 2, déclarant 1) */
   const FORM = [
-    ['211', 'Date de la cession'],
+    ['211', 'Date de la cession (heure de Paris)'],
     ['212', 'Valeur globale du portefeuille au moment de la cession'],
     ['213', 'Prix de cession'],
     ['214', 'Frais de cession'],
@@ -40,7 +40,7 @@
   }
   function special(txs, year) {
     const c = {};
-    (txs || []).forEach(t => { if (year && new Date(t.date).getFullYear() !== year) return; const k = specialKind(t); if (k) c[k] = (c[k] || 0) + 1; });
+    (txs || []).forEach(t => { if (year && +new Intl.DateTimeFormat('en', { timeZone: 'Europe/Paris', year: 'numeric' }).format(t.date) !== year) return; const k = specialKind(t); if (k) c[k] = (c[k] || 0) + 1; });
     const cats = SPECIAL.filter(([k]) => c[k]).map(([k, label]) => ({ key: k, label, n: c[k] }));
     const pay = c.paiements || 0;
     return { cats, pay, n: cats.reduce((a, x) => a + x.n, 0) - pay };
@@ -69,7 +69,7 @@
   }
   const globalText = t => `${t.year} : total des cessions (213) ${t.l213.toFixed(2)} € ; frais (214) ${t.l214.toFixed(2)} € ; prix nets (218) ${t.l218.toFixed(2)} € ; plus-value nette globale (224) ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}. ` +
     (t.exonere ? `Total des cessions ≤ 305 € : exonéré, rien à reporter.` : `Total des cessions > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €.`);
-  const SHORT = ['211 Date de la cession', '212 Valeur globale du portefeuille', '213 Prix de cession', '214 Frais de cession', '215 Prix net des frais (213-214)', '216 Soulte', '217 Prix net des soultes (213-216)', '218 Prix net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions de capital initial', '222 Soultes antérieures', '223 Prix total d\'acquisition net (220-221-222)', '224 Plus ou moins-value'];
+  const SHORT = ['211 Date de la cession (heure de Paris)', '212 Valeur globale du portefeuille', '213 Prix de cession', '214 Frais de cession', '215 Prix net des frais (213-214)', '216 Soulte', '217 Prix net des soultes (213-216)', '218 Prix net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions de capital initial', '222 Soultes antérieures', '223 Prix total d\'acquisition net (220-221-222)', '224 Plus ou moins-value'];
   // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
   const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);

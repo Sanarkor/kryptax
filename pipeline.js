@@ -21,7 +21,7 @@
     const out = [], bad = [];
     rows.forEach((r, i) => {
       const g = f => mp[f] == null ? '' : r[mp[f]];
-      const date = E.parseDate(g('date'), o.dmode);
+      const date = E.parseDate(g('date'), o.dmode, o.tz);
       const asset = String(E.fixText(g('asset')) || '').trim().toUpperCase();
       if (!isFinite(date) || !asset) { bad.push(i); return; }
       const rawQ = g('qty'), vRaw = g('eur'), pRaw = g('price'), fRaw = g('fee');
@@ -509,7 +509,7 @@
         rows.push([m[1], m[2], m[3], am[0] || '', am[1] || '', am[2] || '', m[5]]);
       } else skipped.push(l);
     }
-    const to = period ? E.parseDate(period.to + ', 23:59:59', 'DMY') : NaN;
+    const to = period ? E.parseDate(period.to + ', 23:59:59', 'DMY', 'Paris') : NaN;
     return { rows, fiat, skipped, balances: Object.keys(closing).length ? { closing, opening, period, to } : null };
   }
   /* Regroupe les fragments de texte pdf.js en lignes (même ordonnée). */

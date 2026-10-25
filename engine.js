@@ -56,15 +56,28 @@
     return neg ? -n : n;
   }
 
-  // Dates : ISO, JJ/MM/AAAA hh:mm(:ss), MM/JJ/AAAA, "Jan 13, 2024, 3:45:12 PM"
-  function parseDate(v, mode) {
+  /* Fuseaux : les instants sont en UTC (ms) ; l'affichage et l'année fiscale suivent l'heure de Paris (Intl, Europe/Paris : été/hiver et jours de bascule gérés). */
+  let PF = null;
+  function parisParts(ts) {
+    PF = PF || new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const o = {}; for (const p of PF.formatToParts(new Date(ts))) o[p.type] = +p.value; return o;
+  }
+  const parisOff = ts => { const p = parisParts(ts); return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ts / 1000) * 1000; };
+  /* Heure murale de Paris -> instant UTC (deux passes : décalage de l'instant obtenu, correct aux bascules). */
+  function fromParis(y, mo, d, h, mi, s) { const g = Date.UTC(y, mo, d, h || 0, mi || 0, s || 0); let t = g - parisOff(g); t = g - parisOff(t); return t; }
+  const parisYear = ts => parisParts(ts).year;
+  const p2 = n => String(n).padStart(2, '0');
+  const fmtParis = (ts, sec) => { const p = parisParts(ts); return `${p2(p.day)}/${p2(p.month)}/${p.year} ${p2(p.hour)}:${p2(p.minute)}${sec ? ':' + p2(p.second) : ''}`; };
+  // Dates : ISO, JJ/MM/AAAA hh:mm(:ss), MM/JJ/AAAA, "Jan 13, 2024, 3:45:12 PM". tz : 'UTC' (relevés et exports crypto) ou 'Paris' (heure murale de Paris) ; défaut Paris.
+  function parseDate(v, mode, tz) {
+    const mk = (y, mo, d, h, mi, se) => tz === 'UTC' ? Date.UTC(y, mo, d, h, mi, se) : fromParis(y, mo, d, h, mi, se);
     if (v == null || v === '') return NaN;
     if (typeof v === 'number') return v;
     if (v instanceof Date) return v.getTime();
     const s = fixText(String(v)).trim();
     const MOIS = { janv: 0, jan: 0, 'févr': 1, fevr: 1, 'fév': 1, feb: 1, mars: 2, mar: 2, avr: 3, apr: 3, mai: 4, may: 4, juin: 5, jun: 5, juil: 6, jul: 6, 'août': 7, aout: 7, aug: 7, sept: 8, sep: 8, oct: 9, nov: 10, 'déc': 11, dec: 11 };
     let f = s.match(/^(\d{1,2})\s+([a-zéû]+)\.?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/i);
-    if (f && MOIS[f[2].toLowerCase()] != null) return new Date(+f[3], MOIS[f[2].toLowerCase()], +f[1], +(f[4] || 0), +(f[5] || 0), +(f[6] || 0)).getTime();
+    if (f && MOIS[f[2].toLowerCase()] != null) return mk(+f[3], MOIS[f[2].toLowerCase()], +f[1], +(f[4] || 0), +(f[5] || 0), +(f[6] || 0));
     let m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
     if (m && !/^\d{4}/.test(s)) {
       let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
@@ -72,8 +85,10 @@
       if (mode === 'MDY' || (mode !== 'DMY' && b > 12)) { mon = a; day = b; } else { day = a; mon = b; }
       let h = +(m[4] || 0); const mi = +(m[5] || 0), se = +(m[6] || 0);
       if (m[7]) { if (/pm/i.test(m[7]) && h < 12) h += 12; if (/am/i.test(m[7]) && h === 12) h = 0; }
-      return new Date(y, mon - 1, day, h, mi, se).getTime();
+      return mk(y, mon - 1, day, h, mi, se);
     }
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?$/); // ISO sans fuseau
+    if (iso) return mk(+iso[1], iso[2] - 1, +iso[3], +(iso[4] || 0), +(iso[5] || 0), +(iso[6] || 0));
     const t = Date.parse(s.replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T'));
     return t;
   }
@@ -144,7 +159,7 @@
   /* Calcul 2086. priceFn(asset, ts) -> prix € ou null. */
   /* État reporté (JSON « état au 31/12/AAAA ») : { kryptax: 'etat', version: 1, date: 'AAAA-12-31', holdings: {actif: qté}, l220, l221, l222 }.
      Les opérations antérieures ou égales à cette date sont ignorées ; le calcul part des soldes et cumuls reportés. */
-  function stateTs(st) { return Date.UTC(+st.date.slice(0, 4), +st.date.slice(5, 7) - 1, +st.date.slice(8, 10), 23, 59, 59, 999) - 3600e3; } // fin de journée (heure de Paris, approx. UTC+1)
+  function stateTs(st) { return fromParis(+st.date.slice(0, 4), +st.date.slice(5, 7) - 1, +st.date.slice(8, 10), 23, 59, 59) + 999; } // fin de journée, heure de Paris
   function validateState(o) {
     if (!o || typeof o !== 'object' || o.kryptax !== 'etat') throw new Error('Ce fichier n’est pas un état Kryptax.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date || '')) throw new Error('Date manquante ou invalide.');
@@ -205,7 +220,7 @@
      priceFn(asset, ts) -> cours € ; approx(asset, ts) -> true si cours estimé. Les valeurs inconnues sont signalées, jamais inventées. */
   function summary(txs, res, priceFn, year, opening, approx) {
     approx = approx || (() => false);
-    const y0 = Date.UTC(year, 0, 1) - 3600e3, y1 = Date.UTC(year + 1, 0, 1) - 3600e3; // année civile (heure de Paris ≈ UTC+1)
+    const y0 = fromParis(year, 0, 1), y1 = fromParis(year + 1, 0, 1); // année civile, heure de Paris
     const inY = t => t.date >= y0 && t.date < y1 && !(opening && t.date <= stateTs(opening));
     const C = res.cessions.filter(c => c.date >= y0 && c.date < y1), done = C.filter(c => c.l224 != null);
     const S = { year, nCessions: C.length, incomplete: C.length !== done.length, produit: 0, total218: 0, acquisition: 0, gains: 0, losses: 0, net: 0,
@@ -243,7 +258,7 @@
   }
   function byYear(res) {
     const y = {};
-    for (const c of res.cessions) { const k = new Date(c.date).getFullYear(); (y[k] = y[k] || { year: k, cessions: [] }).cessions.push(c); }
+    for (const c of res.cessions) { const k = parisYear(c.date); /* année fiscale : date de cession en heure de Paris */ (y[k] = y[k] || { year: k, cessions: [] }).cessions.push(c); }
     for (const k in y) {
       const Y = y[k]; Y.total218 = Y.cessions.reduce((s, c) => s + c.l218, 0);
       Y.incomplete = Y.cessions.some(c => c.l224 == null);
@@ -287,7 +302,7 @@
     for (const line of String(text || '').split(/\r?\n/)) {
       const m = /vente de\s+([A-Za-z0-9]+)/i.exec(line); if (!m) continue;
       const d = reD.exec(line); if (!d) continue;
-      const date = parseDate(d[1].replace(/,(?=\s+\d{1,2}:)/, ','), 'DMY'); if (!isFinite(date)) continue;
+      const date = parseDate(d[1].replace(/,(?=\s+\d{1,2}:)/, ','), 'DMY', 'UTC'); if (!isFinite(date)) continue;
       out.push({ asset: m[1].toUpperCase(), date, hasTime: /:/.test(d[1]), line: line.trim() });
     }
     return out;
@@ -325,6 +340,6 @@
     }
     return out;
   }
-  const api = { summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
