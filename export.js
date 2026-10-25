@@ -1,6 +1,7 @@
 /* Export du formulaire 2086 (PDF via jsPDF embarqué) : uniquement les cessions imposables,
    un tableau avec une ligne par cession et les colonnes 211 à 224 de la déclaration 2086, synthèse courte et ligne GLOBAL.
    exportData() est pur (testé dans test.js) ; makePdf utilise jsPDF embarqué. */
+var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.";
 (function (root) {
   const d = t => new Date(t).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'medium' });
   const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/—/g, '-').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
@@ -125,8 +126,11 @@
       didParseCell: h => { if (h.row.index === (n ? 0 : 1)) { h.cell.styles.fontSize = 11; h.cell.styles.fontStyle = 'bold'; } } });
     // 3) Libellés officiels en note de bas de page, seulement s'il reste de la place
     doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 110);
-    const note = doc.splitTextToSize(ascii('L\'utilisateur reste seul responsable de sa déclaration auprès de l\'administration fiscale. Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
+    const note = doc.splitTextToSize(ascii('Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
     let yn = doc.lastAutoTable.finalY + 3;
+    { doc.setFontSize(8.2); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 58, 138); // bleu marine #1e3a8a (charte du PDF)
+      const dl = doc.splitTextToSize(ascii(KX_DISCLAIMER), W - 2 * M); if (yn + dl.length * 3.4 + 2 > H - 8) { doc.addPage(); yn = 14; }
+      doc.text(dl, M, yn + 2); yn += dl.length * 3.4 + 1.5; doc.setFont('helvetica', 'normal'); doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }
     // 3) Opérations particulières : courte note, prioritaire sur les libellés officiels (reste sur la même page)
     const st = specialText(x.special, x.year);
     if (st) { doc.setFontSize(7.4); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 70, 90); const sl = doc.splitTextToSize(ascii(st), W - 2 * M);

@@ -4,7 +4,9 @@ Kryptax aide à remplir le **formulaire 2086** (plus-values de cession d'actifs 
 
 En ligne : https://sanarkor.github.io/kryptax/
 
-> ⚠️ Outil d'aide au calcul, **pas un conseil fiscal**. Vérifiez chaque ligne avec la notice officielle 2086 (impots.gouv.fr) avant de déclarer.
+> ⚠️ **Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
+
+Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
 
 ## Fonctionnement 100 % dans le navigateur
 - Page statique hébergée sur GitHub Pages : **aucun compte, aucune clé API, aucun serveur Kryptax**.
@@ -73,4 +75,4 @@ node test.js && node testformats.js && node testexport.js
 Ouvrez une issue ou une pull request sur https://github.com/Sanarkor/kryptax. N'ajoutez **jamais de données réelles** (relevés, noms, montants) : uniquement des jeux fictifs. Lancez les tests avant de proposer une modification.
 
 ## Licence
-Aucune licence n'est définie pour le moment. Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
+Code sous licence MIT (voir [LICENSE](LICENSE)). Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
