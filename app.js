@@ -325,14 +325,15 @@
   }
   /* Barre = progression réelle pondérée : taux de change 0–5 %, cours à la minute 5–70 %, cours horaires 70–90 %, calcul et affichage 90–100 %.
      Une relance (étape déjà passée) répartit le reste entre la valeur atteinte et 90 % : jamais de recul, jamais d'avance sur le réel. */
-  const PHASES = [['Taux de change', 0, 5], ['Cours à la minute', 5, 70], ['Cours', 70, 90]];
+  const PHASES = [['Taux de change', 0, 25], ['Cours à la minute', 25, 50], ['Cours', 50, 60]];
+  const PLABEL = v => v < 25 ? 'Lecture de vos fichiers…' : v < 60 ? 'Récupération des cours…' : 'Génération du formulaire 2086…';
   function progBar() {
-    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, last = -1, lo = 0, hi = 90;
-    const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); };
+    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, last = -1, lo = 0, hi = 60, lab = '';
+    const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if ((t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
     const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
-    const map = (p, r) => lo + (hi - lo) * (PHASES[p][1] + (PHASES[p][2] - PHASES[p][1]) * r) / 90;
+    const map = (p, r) => lo + (hi - lo) * (PHASES[p][1] + (PHASES[p][2] - PHASES[p][1]) * r) / 60;
     return {
-      start() { val = 0; last = -1; lo = 0; hi = 90; w.classList.remove('done'); w.hidden = false; paint(); },
+      start() { val = 0; last = -1; lo = 0; hi = 60; lab = ''; w.classList.remove('done'); w.hidden = false; paint(); },
       step(name, n, tot) {
         const p = PHASES.findIndex(x => name === x[0] || name.indexOf(x[0] + ' ') === 0); if (p < 0 || !tot) return;
         if (p < last) { lo = val; last = -1; } /* relance : nouvelle passe sur la part restante */
@@ -347,15 +348,15 @@
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
     const bar = progBar(), t0 = Date.now(); bar.start();
-    const show = (step, n, tot) => { bar.step(step, n, tot); if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + 'Calcul de vos plus-values en cours…'; $('#progress').className = ''; } };
+    const show = (step, n, tot) => { if (/^Nouvelle/.test($('#progress').textContent)) $('#progress').textContent = ''; bar.step(step, n, tot); };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
       livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
-      bar.at(90); livePrice.txs = txs; renderDiag(src, livePrice);
-      persist(); save(); renderTx(); bar.at(95);
+      bar.at(60); livePrice.txs = txs; renderDiag(src, livePrice);
+      persist(); save(); bar.at(80); renderTx(); bar.at(92);
       const st = src.stats;
       $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
     } catch (e) {
