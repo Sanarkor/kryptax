@@ -182,6 +182,36 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(f.calls.some(u => /coingecko:matic-network/.test(u)) ? 1 : 0, 1, 'MATIC → id matic-network (renommé POL)');
   f = mock(0, 0.5); S = P.makeSources(f, { gap: 0 }); await S.series('ONE', t0, t0); await S.series('MKR', t0, t0); await S.series('FXS', t0, t0);
   eq(['coingecko:harmony', 'coingecko:maker', 'coingecko:frax-share'].every(x => f.calls.some(u => u.includes(x))) ? 1 : 0, 1, 'Homonymes corrigés : ONE→harmony, MKR→maker, FXS→frax-share');
+  /* Titulaire des relevés (noms fictifs) */
+  const hA = P.holderFromLines(['Relevé de compte crypto', 'Nom du compte Alice Martin', 'Période 1 mai 2026']);
+  const hB = P.holderFromRows([['Date', 'Crypto', 'Titulaire'], ['2026-01-01', 'AAA', 'MARTIN  Alicé']]);
+  const hC = P.holderFromRows([['Date', 'Crypto', 'Account name'], ['2026-01-01', 'AAA', 'Bruno Petit']]);
+  const hN = P.holderFromLines(['Relevé crypto (FICTIF)', 'Symbole Type Quantité']);
+  eq(hA === 'Alice Martin' ? 1 : 0, 1, 'Titulaire lu dans l’en-tête PDF');
+  eq(P.normName(hA) === P.normName(hB) ? 1 : 0, 1, 'Mêmes noms (casse, accents, ordre prénom/nom inversé) : identiques');
+  eq(hN, '', 'Relevé sans nom : aucun titulaire');
+  let HH = P.checkHolders({ 'a.pdf': hA, 'b.csv': hB, 'n.pdf': hN }, ['a.pdf', 'b.csv', 'n.pdf']);
+  eq(HH.status === 'ok' && HH.n === 2 ? 1 : 0, 1, 'Même titulaire sur 2 fichiers (le relevé sans nom ne bloque rien)');
+  HH = P.checkHolders({ 'a.pdf': hA, 'b.csv': hB, 'c.csv': hC }, ['a.pdf', 'b.csv', 'c.csv']);
+  eq(HH.status === 'conflict' && HH.bad.join() === 'c.csv' && HH.a === 'A. M.' && HH.b === 'B. P.' ? 1 : 0, 1, 'Noms différents : conflit, fichier fautif repéré, noms masqués');
+  eq(P.checkHolders({ 'x.pdf': '', 'y.pdf': '' }).status === 'none' ? 1 : 0, 1, 'Aucun nom : pas de message');
+  eq(P.checkHolders({ 'a.pdf': 'Alice Martin', 'c.pdf': 'Anna Moreau' }).a.includes('…') ? 1 : 0, 1, 'Mêmes initiales : masque plus long pour distinguer');
+  const appS = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+  eq(/Fichier déjà ajouté, ignoré/.test(appS) && /H.status === 'conflict'/.test(appS) ? 1 : 0, 1, 'Doublon de fichier ignoré, Valider bloqué en cas de conflit');
+  /* Reprise automatique : sources en échec intermittent (simulées) */
+  {
+    const T = Date.UTC(2026, 1, 3, 10), txr = [{ id: 'r1', date: T - 86400e3, type: 'BUY', asset: 'AAA', qty: 2, eur: 20, fee: 0 }, { id: 'r2', date: T, type: 'SELL', asset: 'AAA', qty: 1, eur: 0, fee: 0 }, { id: 'r3', date: T, type: 'SELL', asset: 'ZZZ', qty: 1, eur: 0, fee: 0 }, { id: 'r0', date: T - 2 * 86400e3, type: 'BUY', asset: 'ZZZ', qty: 1, eur: 5, fee: 0 }];
+    let calls = 0; const rot = [], waits = [];
+    const mk = k => { rot.push(k); return { series: async (a, f, t) => { if (a === 'ZZZ') return null; calls++; if (calls < 3) return undefined; const s = {}; for (let h = Math.floor(f / 3600e3) - 3; h <= Math.floor(t / 3600e3) + 3; h++) s[h] = 12; return { s, src: 'Test' }; }, fxRange: async () => ({}), stats: {}, assetDiag: {} }; };
+    const c = {}, r = await P.prepareRetry(txr, mk, c, () => {}, { unit: 1, onRetry: k => waits.push(k), concurrency: 1 });
+    eq(r.failed.length, 0, 'Échec réseau intermittent : reprise automatique jusqu’au succès');
+    eq(r.tries, 2, 'Deux nouvelles tentatives');
+    eq(rot.join() === '0,1,2' ? 1 : 0, 1, 'Nouvelles sources (rotation) à chaque tentative');
+    eq(c['ZZZ|none'], 1, '« Aucun cours existant » : pas de boucle sur cet actif');
+    let n2 = 0; const mkFail = () => ({ series: async () => { n2++; return undefined; }, fxRange: async () => ({}), stats: {}, assetDiag: {} });
+    const r2 = await P.prepareRetry(txr.slice(0, 2), mkFail, {}, () => {}, { unit: 1, maxTries: 4 });
+    eq(r2.tries === 4 && r2.failed.length === 1 ? 1 : 0, 1, 'Plafond de tentatives : arrêt puis cours ≈ et « Relancer »');
+  }
   const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
   eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');

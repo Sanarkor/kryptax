@@ -71,19 +71,32 @@
   const qfmt = q => String(q).replace('.', ',');
   const GRAD = [[59, 130, 246], [245, 158, 11], [34, 197, 94]];
   const gradAt = t => { const s = t * (GRAD.length - 1), i = Math.min(GRAD.length - 2, Math.floor(s)), f = s - i; return GRAD[i].map((c, k) => Math.round(c + (GRAD[i + 1][k] - c) * f)); };
-  // Logo « Kryptax » : lettres grasses colorées le long du dégradé bleu → orange → vert, halo bleu léger
-  function logo(doc, x0, y0, size) {
+  // Logo « Kryptax » : image PNG (canvas 3x, dégradé bleu → orange → vert) ; repli : lettres colorées une à une (jamais noir)
+  function logoPng(document_) {
+    try {
+      const d = document_ || (typeof document !== 'undefined' ? document : null); if (!d) return null;
+      const c = d.createElement('canvas'), g = c.getContext('2d'), px = 96, font = `800 ${px}px Helvetica, Arial, sans-serif`; if (!g) return null;
+      g.font = font; const w = Math.ceil(g.measureText('Kryptax').width) + 12; c.width = w; c.height = Math.round(px * 1.25);
+      const gr = g.createLinearGradient(0, 0, w, 0); GRAD.forEach((k, i) => gr.addColorStop(i / (GRAD.length - 1), `rgb(${k.join(',')})`));
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height); // fond blanc opaque (visionneuses qui ignorent la transparence)
+      g.font = font; g.textBaseline = 'alphabetic'; g.fillStyle = gr; g.fillText('Kryptax', 6, Math.round(px * 0.95));
+      return { data: c.toDataURL('image/jpeg', 0.95), fmt: 'JPEG', ratio: c.width / c.height };
+    } catch (e) { return null; }
+  }
+  function logo(doc, x0, y0, size, img) {
+    if (img && img.data) {
+      try { const h = size * 0.3528 * 1.25, w = h * img.ratio; doc.addImage(img.data, img.fmt || 'PNG', x0 - 0.6, y0 - h * 0.76, w, h); return w; } catch (e) { /* repli texte */ }
+    }
     const word = 'Kryptax'; doc.setFont('helvetica', 'bold'); doc.setFontSize(size);
     const w = doc.getTextWidth(word); let x = x0;
-    doc.setTextColor(200, 220, 255); for (const [dx, dy] of [[-.25, 0], [.25, 0], [0, -.25], [0, .25]]) doc.text(word, x0 + dx, y0 + dy);
     [...word].forEach(ch => { const c = gradAt((x - x0 + doc.getTextWidth(ch) / 2) / w); doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0); x += doc.getTextWidth(ch); });
-    doc.setTextColor(0, 0, 0); return w;
+    doc.setTextColor(20, 40, 70); return w;
   }
-  function makePdf(jsPDF, x, title) {
+  function makePdf(jsPDF, x, title, img) {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }), A = r => r.map(v => ascii(v)), W = 297, H = 210, M = 8;
     const n = x.cessions.length, multi = x.totals.length > 1, fs = n <= 10 ? 8.4 : n <= 16 ? 7.6 : 7;
     // En-tête : logo à gauche, sous-titre et année
-    logo(doc, M, 15, 24);
+    logo(doc, M, 15, 24, img);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60, 70, 90);
     doc.text(ascii('Formulaire 2086 pour la fiscalité française'), M, 21);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(20, 40, 70);
@@ -130,6 +143,6 @@
   const selectable = (y, now) => y >= now - PAST && y <= now;
   function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => selectable(y.year, now) && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : now; }
   const title = y => `Année ${y} — déclaration ${y + 1}`;
-  const api = { fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
+  const api = { logoPng, fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);
