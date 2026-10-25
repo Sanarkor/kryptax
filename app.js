@@ -525,7 +525,7 @@
     try { showPdf(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
     catch (err) { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } return false; }
   }
-  { const hb = document.querySelector('details.help'); if (hb) hb.addEventListener('click', e => { if (!hb.open || e.target.closest('a, summary, input, button, select, label')) return; hb.open = false; }); }
+  { const hb = $('#helpbtn'), hp = $('#helppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
   // Opérations particulières (staking, airdrop…) : un seul message replié, discret, jamais bloquant
   function specialNote(sp) {
     if (!sp || (!sp.n && !sp.pay)) return '';
