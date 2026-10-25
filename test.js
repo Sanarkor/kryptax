@@ -355,5 +355,33 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/scheduleAuto\(failed\); if \(!failed\) showDone\(\);/.test(app) && /end\(ok\) \{ clearInterval\(timer\); if \(!ok\) \{ live = false;/.test(app) && /const fin = \(\) => \{ live = false;/.test(app) && /if \(live && /.test(app) ? 1 : 0, 1, 'Fin de calcul : cadre de chargement retiré, popup seulement si réussi'); }
   eq(!/Nouvelle tentative \$\{k\}/.test(app) && /const quiet = autoTry > 0;/.test(app) && /if \(!quiet\) w\.hidden = false/.test(app) && /autoInd\(true\)/.test(require('fs').readFileSync(__dirname + '/app.js', 'utf8')) && /id="autoind"[^>]*aria-live="polite"[^>]*hidden>/.test(require('fs').readFileSync(__dirname + '/index.html', 'utf8')) ? 1 : 0, 1, 'Relance auto discrète : ni barre ni compte à rebours, petit indicateur');
   eq(/if \(btn && !b\.length && !runCtl\) \{ btn\.click\(\); return; \}/.test(app) && /if \(btn && b\.length\) pdfRefused\(b\);/.test(app) ? 1 : 0, 1, 'Popup : « Voir mon formulaire » = parcours Voir le PDF (pub puis aperçu), sinon explique pourquoi');
+  // Transferts entre mes comptes (données FICTIVES) : jamais une cession, PRU et 212 corrects
+  { const D = (m, d) => Date.UTC(2025, m, d, 10), P = a => a === 'BTC' ? 40000 : null, H = 3600e3;
+    const base = () => [{ id: 'b1', date: D(0, 5), type: 'BUY', asset: 'BTC', qty: 1, eur: 30000, fee: 100 }], sell = () => ({ id: 's9', date: D(5, 1), type: 'SELL', asset: 'BTC', qty: 0.1, eur: 4000, fee: 0 });
+    const ref = E.compute([...base(), sell()], P).cessions[0];
+    let T = [...base(), { id: 'w1', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 0.9995, feeQty: 0.0005, eur: 0, source: 'A.csv' }, { id: 'd1', date: D(1, 1) + 10 * 60e3, type: 'RECEIVE', asset: 'BTC', qty: 0.9995, eur: 0, source: 'B.csv' }, sell()];
+    E.detectSwaps(T); let r = E.compute(T, P);
+    eq(T[1].xferWith === 'd1' && T[2].xferWith === 'w1' && !E.openSends(T).length ? 1 : 0, 1, 'Transfert : retrait A + dépôt B appariés');
+    eq(r.cessions.length, 1, 'Transfert : seule la vente est une cession'); eq(r.cessions[0].l212, 0.9995 * 40000, 'Transfert : 212 = solde réel (frais réseau déduits)');
+    eq(r.cessions[0].l220, 30100, 'Transfert : 220 inchangé'); eq(r.cessions[0].l221, 0, 'Transfert : 221'); eq(r.cessions[0].l224, 4000 - 30100 * 4000 / (0.9995 * 40000), 'Transfert : 224');
+    T = [...base(), { id: 'w2', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 1, eur: 0 }, { id: 'f2', date: D(1, 1), type: 'FEE', asset: 'BTC', qty: 0.0005, eur: 0 }, { id: 'd2', date: D(1, 1) + 2 * H, type: 'RECEIVE', asset: 'BTC', qty: 0.9995, eur: 0 }, sell()];
+    E.detectSwaps(T); r = E.compute(T, P); eq(T[1].xferWith === 'd2' && r.cessions.length === 1 ? 1 : 0, 1, 'Transfert : frais réseau en ligne séparée, apparié, non imposable');
+    T = [...base(), { id: 'w3', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 1, eur: 35000 }, { id: 'd3', date: D(1, 1) + 1, type: 'RECEIVE', asset: 'BTC', qty: 1, eur: 35000 }, sell()];
+    E.detectSwaps(T); r = E.compute(T, P); eq(r.cessions.length === 1 && r.cessions[0].l220 === 30100 ? 1 : 0, 1, 'Transfert valorisé : ni cession ni 220 gonflé');
+    T = [...base(), { id: 'w4', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 1 }, { id: 'd4', date: D(1, 1) + 49 * H, type: 'RECEIVE', asset: 'BTC', qty: 1 }, { id: 'w5', date: D(2, 1), type: 'SEND', asset: 'BTC', qty: 0.5 }, { id: 'd5', date: D(2, 1) + H, type: 'RECEIVE', asset: 'BTC', qty: 0.6 }];
+    E.detectSwaps(T); eq(E.openSends(T).length, 2, 'Transfert : dépôt après 48 h ou supérieur au retrait non apparié');
+    for (const s of ['Withdrawal', 'Deposit', 'Transfer out', 'Transfer in', 'Retrait', 'Dépôt']) eq(['SEND', 'RECEIVE'].includes(E.guessType(s, true)) ? 1 : 0, 1, 'Type transfert reconnu : ' + s);
+    // Retrait seul (portefeuille B non importé) : à qualifier ; sans choix, 212 serait sous-évalué
+    const one = c => { const L = [{ id: 'b1', date: D(0, 5), type: 'BUY', asset: 'BTC', qty: 1, eur: 30000, fee: 0 }, { id: 'w6', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 0.9, feeQty: 0.001, eur: 0 }, { id: 's6', date: D(5, 1), type: 'SELL', asset: 'BTC', qty: 0.1, eur: 4000, fee: 0 }]; if (c) L[1].sendChoice = c; E.detectSwaps(L); return { L, r: E.compute(L, () => 40000).cessions[0] }; };
+    eq(E.openSends(one().L).length, 1, 'Retrait sans dépôt : signalé, à qualifier'); eq(E.openSends(one('own').L).length, 0, 'Retrait qualifié : plus bloquant');
+    eq(one('own').r.l212, 0.999 * 40000, 'Retrait « vers mon portefeuille non importé » : reste dans 212 (hors frais)'); eq(one('own').r.l224, 4000 - 30000 * 4000 / 39960, 'Retrait « mon portefeuille » : 224 correct');
+    { const g = one('gift'), rg = E.compute(g.L, () => 40000); eq(g.r.l212, 0.099 * 40000, 'Retrait « Frais, perte ou don » : retiré du solde'); eq(rg.cessions.length === 1 && rg.cessions[0].tx.id === 's6' && rg.cessions[0].l220 === 30000 ? 1 : 0, 1, 'Retrait « Frais, perte ou don » : aucune ligne 211+, 220 inchangé'); }
+    { const sl = one('sale'), rs = E.compute(sl.L, () => 40000), c0 = rs.cessions[0], need = E.neededPrices(sl.L);
+      eq(rs.cessions.length, 2, 'Retrait « Paiement ou vente oubliée » : devient une cession (211+)'); eq(c0.tx.id === 'w6' && c0.fromSend ? 1 : 0, 1, 'Retrait « Paiement ou vente oubliée » : cession à la date du retrait');
+      eq(c0.l213, 0.9 * 40000, 'Retrait « Paiement ou vente oubliée » : 213 = quantité × cours du moment'); eq(c0.l212, 40000, 'Retrait « Paiement ou vente oubliée » : 212 = portefeuille avant la sortie');
+      eq(c0.l224, 36000 - 30000 * 36000 / 40000, 'Retrait « Paiement ou vente oubliée » : 224'); eq(need.some(n => n.asset === 'BTC' && n.txId === 'w6') ? 1 : 0, 1, 'Retrait « Paiement ou vente oubliée » : cours du moment demandé aux fournisseurs');
+      const rn = E.compute(sl.L, () => null).cessions[0]; eq(rn.l224 === null && rn.missing.includes('BTC') ? 1 : 0, 1, 'Retrait « Paiement ou vente oubliée » sans cours : à renseigner, jamais 0 €'); } eq(one('ignore').r.l212, 40000, 'Retrait « Ignorer » : aucun effet');
+    const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
+    eq(/E\.openSends\(txs\)\.length; if \(n\) b\.push\(\{ k: 'xfer'/.test(AP) && /Vers mon portefeuille non importé/.test(AP) && /Frais, perte ou don/.test(AP) && /'sale', 'Paiement ou vente oubliée'/.test(AP) && /'ignore', 'Ignorer'/.test(AP) && /id="xfers"/.test(IH) ? 1 : 0, 1, 'Retraits sans dépôt : choix obligatoire avant l’export PDF'); }
   process.exit(ok ? 0 : 1);
 })();
