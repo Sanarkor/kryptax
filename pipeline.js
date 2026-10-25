@@ -654,6 +654,13 @@
     for (const c of cessions) for (const d of (c.detail212 || [])) if (fn && fn.approx && fn.approx.has(d.asset + '|' + c.date) && manual[d.asset] == null) (rewardOnly(d.asset) ? ign : est).add(d.asset);
     return { est: [...est], ign: [...ign].filter(a => fn.unvalued && fn.unvalued.has(a)), retry: [...est].filter(a => cache[a + '|none'] == null) };
   }
-  const api = { numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
+  /* Glisser-déposer : ne garder que les fichiers (texte, liens… ignorés) */
+  function hasFileDrag(dt) { return !!dt && Array.from(dt.types || []).indexOf('Files') >= 0; }
+  function droppedFiles(dt) {
+    if (!dt) return [];
+    if (dt.items && dt.items.length) return Array.from(dt.items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+    return Array.from(dt.files || []);
+  }
+  const api = { hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);
