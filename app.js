@@ -13,7 +13,7 @@
   const saveCache = () => { try { localStorage.setItem(LS.cache, JSON.stringify(cache)); } catch (e) {} };
   const eur = n => (n == null || !isFinite(n)) ? '—' : n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
   const num = n => (n == null || !isFinite(n)) ? '' : (+n).toLocaleString('fr-FR', { maximumFractionDigits: 8 });
-  const dt = t => new Date(t).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  const dt = t => E.fmtParis(t); // heure de Paris
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const typeOpts = sel => Object.entries(E.TYPES).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
@@ -61,7 +61,7 @@
     const r = KP.parsePdfLines(lines);
     if (!r.rows.length && !r.fiat.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.');
     holders[file.name] = KP.holderFromLines(lines); saveHolders();
-    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
+    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, uid);
     txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
     if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
@@ -89,7 +89,7 @@
     const sel = f => `<label>${LABELS[f]}<select data-f="${f}"><option value="">—</option>${head.map((h, i) => `<option value="${i}"${m[f] === i ? ' selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`;
     box.innerHTML = `<b>${esc(name)}</b> — ${rows.length - 1} lignes. ${m.date == null || m.asset == null || m.qty == null ? '<span class="warn">Format non reconnu automatiquement : indiquez les colonnes ci-dessous.</span>' : 'Vérifiez les colonnes :'}
       <div class="grid">${Object.keys(FIELDS).map(sel).join('')}
-      <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label>
+      <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label><label>Fuseau des heures <select data-o="tz"><option value="UTC">UTC (exports crypto)</option><option value="Paris">Heure de Paris</option></select></label>
       <label>Format des nombres<select data-o="nmode"><option value="">Auto</option><option value="FR">1 234,56</option><option value="EN">1,234.56</option></select></label>
       <label>Plateforme<input data-o="platform" value="Relevé"></label></div>
       ${isXlsx ? '<p class="warn">⚠️ Fichier .xlsx : la colonne Quantité est souvent tronquée (virgule perdue). Kryptax la reconstruit avec Valeur / Prix ou un cours historique, et marque les lignes douteuses. Privilégiez l’export CSV si possible.</p>' : ''}
@@ -121,7 +121,7 @@
     const box = document.createElement('div'); box.className = 'note';
     box.innerHTML = `<b>${esc(name)}</b> — format « Envoyé / Reçu » (export Coinly) — ${rows.length - 1} lignes. Vérifiez les colonnes :
       <div class="grid">${Object.keys(F2).map(f => `<label>${L2[f]}<select data-f="${f}"><option value="">—</option>${head.map((x, i) => `<option value="${i}"${m[f] === i ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`).join('')}
-      <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label>
+      <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label><label>Fuseau des heures <select data-o="tz"><option value="UTC">UTC (exports crypto)</option><option value="Paris">Heure de Paris</option></select></label>
       <label>Format des nombres<select data-o="nmode"><option value="">Auto</option><option value="FR">1 234,56</option><option value="EN">1,234.56</option></select></label>
       <label>Plateforme<input data-o="platform" value="Coinly"></label>
       <label><span><input type="checkbox" data-o="prices" checked> Réutiliser les valeurs comme cours</span></label></div>
@@ -138,7 +138,7 @@
       let n = 0, bad = 0, np = 0;
       rows.slice(1).forEach((r, i) => {
         const g = f => mp[f] == null ? '' : String(r[mp[f]] || '').trim();
-        const date = E.parseDate(g('date'), o.dmode); if (!isFinite(date)) { bad++; return; }
+        const date = E.parseDate(g('date'), o.dmode, o.tz); if (!isFinite(date)) { bad++; return; }
         const sa = Math.abs(E.parseNum(g('sa'), o.nmode)) || 0, sc = g('sc').toUpperCase(), ra = Math.abs(E.parseNum(g('ra'), o.nmode)) || 0, rc = g('rc').toUpperCase();
         let fee = Math.abs(E.parseNum(g('fa'), o.nmode)) || 0; const fc = g('fc').toUpperCase();
         const nwc = (g('nc') || 'EUR').toUpperCase(); let nw = Math.abs(E.parseNum(g('nw'), o.nmode)); if (nwc !== 'EUR') nw = NaN;
@@ -244,7 +244,7 @@
   }
   /* ---------- État reporté au 31/12 ---------- */
   function renderOpening() {
-    const el = $('#opening'), yrs = [...new Set(txs.map(t => new Date(t.date).getFullYear()))].sort();
+    const el = $('#opening'), yrs = [...new Set(txs.map(t => E.parisYear(t.date)))].sort();
     el.innerHTML = `<details><summary>📅 Report d’une année sur l’autre (état au 31/12)</summary>
       ${opening ? `<p class="ok">État chargé au <b>${opening.date.split('-').reverse().join('/')}</b> : ${Object.keys(opening.holdings).length} actifs, ligne 220 = ${eur(opening.l220)}, ligne 221 = ${eur(opening.l221)}${opening.incomplete ? ' <span class="neg">(calcul de l’année précédente incomplet)</span>' : ''}. Les opérations jusqu’à cette date sont ignorées. <button id="opdel" class="small ghost">Retirer</button></p>`
         : '<p class="hint">Sans état reporté, il faut importer <b>tout l’historique</b> depuis votre premier achat de crypto : les lignes 220 et 221 cumulent toutes les années. Exportez l’état au 31/12 chaque année et réimportez-le l’année suivante.</p>'}
@@ -292,7 +292,7 @@
   let runCtl = null, scopedYear = null;
   /* Périmètre des cours : cessions jusqu'à la fin de l'année choisie (ou de la dernière année avec cessions) ; une année plus récente relance le calcul. */
   function scopeUntil() {
-    const now = new Date().getFullYear(), ys = txs.filter(t => t.type === 'SELL' || t.type === 'PAY').map(t => new Date(t.date).getFullYear()).filter(y => y <= now);
+    const now = new Date().getFullYear(), ys = txs.filter(t => t.type === 'SELL' || t.type === 'PAY').map(t => E.parisYear(t.date)).filter(y => y <= now);
     scopedYear = fyear || (ys.length ? Math.max(...ys) : now); return new Date(scopedYear + 1, 0, 1).getTime();
   }
   function binSymsCached() { try { const o = JSON.parse(localStorage.getItem('kryptax.binsyms') || 'null'); return o && Date.now() - o.t < 864e5 && o.L.length > 50 ? new Set(o.L) : null; } catch (e) { return null; } } // liste publique des paires Binance (non sensible), 24 h
@@ -340,7 +340,7 @@
 
   /* ---------- Résultats 2086 ---------- */
   const ROWS = [
-    ['211', 'Date de la cession', c => dt(c.l211), ''],
+    ['211', 'Date de la cession (heure de Paris)', c => dt(c.l211), ''],
     ['212', 'Valeur globale du portefeuille au moment de la cession', c => eur(c.l212), 'Σ quantités détenues × cours, tous portefeuilles'],
     ['213', 'Prix de cession', c => eur(c.l213), ''], ['214', 'Frais de cession', c => eur(c.l214), ''],
     ['215', 'Prix de cession net des frais', c => eur(c.l215), '213 − 214'], ['216', 'Soulte reçue ou versée', c => eur(c.l216), ''],
@@ -512,7 +512,7 @@
   // Aperçu à l'écran du PDF : seules la date et la crypto sont en clair ; les montants sont des valeurs factices floutées (le vrai texte n'est pas dans le DOM)
   function showPeek() {
     const X = window.KryptaxExport; if (!X || !lastY) return;
-    const x = X.exportData(lastY, lastS, summaryRows, txs, fyear), F = '<span class="m">0 000,00</span>', heads = ['N°', 'Actif', 'Quantité', '211 Date', '212 Valeur portefeuille', '213 Prix de cession', '214 Frais', '215 Net frais', '216 Soulte', '217 Net soultes', '218 Net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions capital initial', '222 Soultes antérieures', '223 Acquisition net', '224 Plus ou moins-value'];
+    const x = X.exportData(lastY, lastS, summaryRows, txs, fyear), F = '<span class="m">0 000,00</span>', heads = ['N°', 'Actif', 'Quantité', '211 Date (Paris)', '212 Valeur portefeuille', '213 Prix de cession', '214 Frais', '215 Net frais', '216 Soulte', '217 Net soultes', '218 Net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions capital initial', '222 Soultes antérieures', '223 Acquisition net', '224 Plus ou moins-value'];
     const rows = x.cessions.map(c => `<tr><td class="c"><span class="m">00</span></td><td class="c b">${esc(c.asset)}</td><td class="c"><span class="m">0,00</span></td><td class="c">${esc(c.date.slice(0, 16))}</td>${'<td>' + F + '</td>'.repeat(1)}${Array(11).fill('<td>' + F + '</td>').join('')}</tr>`).join('');
     const glob = `<tr class="g"><td class="c">GLOBAL</td><td></td><td class="c"><span class="m">00 cessions</span></td><td></td>${Array(12).fill('<td>' + F + '</td>').join('')}</tr>`;
     const box = document.createElement('div'); box.id = 'peekbox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
