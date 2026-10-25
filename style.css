@@ -125,9 +125,6 @@ footer .law{display:block;margin-top:4px;font-size:.9em;overflow-wrap:anywhere}
 .pdfmsg button{margin-top:6px}
 footer .footline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;text-align:left}
 footer .fiscfr{margin-left:auto}
-/* Pub de démonstration avant le PDF */
-#adgate{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;background:var(--bg);color:var(--text);box-sizing:border-box}
-#adgate::backdrop{background:#000c}
 #pdfview{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;background:var(--bg);color:var(--text);box-sizing:border-box}
 #pdfview::backdrop{background:#000c}
 .pvw-in{display:flex;flex-direction:column;height:100%;box-sizing:border-box;padding:8px}
@@ -147,7 +144,6 @@ header .sub{font-size:1.04em;font-weight:700;line-height:1.3;letter-spacing:.02e
   -webkit-text-stroke:.3px rgba(148,163,184,.55);text-shadow:0 0 1px rgba(148,163,184,.9),1px 0 0 rgba(100,116,139,.45),-1px 0 0 rgba(100,116,139,.45),0 1px 0 rgba(100,116,139,.45),0 -1px 0 rgba(100,116,139,.45)}
 @media print{header .sub{color:#000;text-shadow:none;-webkit-text-stroke:0}}
 
-/* Pub mobile : alternance en fondu */
 @media (min-width:1024px){
 html{font-size:100%}
 body{font-size:15.2px}
@@ -187,22 +183,6 @@ header h1{line-height:1.22;padding-bottom:.06em}
 /* Cadre de calcul masqué quand il n'a rien à montrer */
 #calc:not(:has(#barwrap:not([hidden]))):not(:has(#progress:not(:empty))):not(:has(#run:not([hidden]))):not(:has(#txnote2:not(:empty))):not(:has(#diag:not([hidden]))){display:none}
 
-/* Pub vidéo fictive ignorable (simulée en HTML/CSS) */
-.av-stage{position:relative;width:100%;height:100%;overflow:hidden;background:#000}
-.av-slide{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .9s ease}
-.av-slide.on{opacity:1;animation:kxburns 8s ease-out both}
-@keyframes kxburns{from{transform:scale(1)}to{transform:scale(1.08) translateY(-1.5%)}}
-.av-tag{position:absolute;top:10px;left:12px;margin:0;padding:3px 8px;border-radius:6px;background:#000a;color:#fff;font-size:.72rem;letter-spacing:.03em}
-.av-x{position:absolute;top:8px;right:10px;background:#000a}
-.av-hook{position:absolute;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);box-sizing:border-box;bottom:74px;margin:0;padding:6px 12px;border-radius:8px;background:#000c;text-align:center;color:#fff;font-weight:700;font-size:1.05rem;text-shadow:0 2px 8px #000}
-.av-count{position:absolute;right:12px;bottom:22px;margin:0;padding:8px 12px;border-radius:6px;background:#000b;color:#fff;font-size:.85rem}
-.av-count.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0}
-.av-skip{position:absolute;right:12px;bottom:18px;padding:9px 14px;border-radius:6px;border:1px solid #fff6;background:#000c;color:#fff;font-weight:650;font-size:.92rem;cursor:pointer}
-.av-skip:hover,.av-skip:focus-visible{background:#000;border-color:#22d3ee}
-.av-bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:#ffffff26}
-.av-fill{height:100%;background:linear-gradient(90deg,#22d3ee,#10b981);transform-origin:0 50%;transform:scaleX(0);transition:transform .2s linear}
-@media (prefers-reduced-motion:reduce){.av-slide.on{animation:none}.av-slide{transition:opacity .4s}.av-fill{transition:none}}
-
 /* Glisser-déposer (PC) */
 section.dropover{position:relative;border:1.5px dashed #22d3ee;box-shadow:0 0 0 3px rgba(34,211,238,.12),0 0 22px rgba(34,211,238,.22),0 8px 24px #0006}
 section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;top:6px;right:14px;font-size:.78rem;color:#67e8f9;background:#0b1220cc;padding:2px 8px;border-radius:999px;pointer-events:none}
@@ -221,8 +201,8 @@ section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;to
 
 /* Signature sous « ptax » : du jambage du p jusqu'au x, en gras, dégradé du logo ; taille ajustée en JS (fitSig) pour tout afficher */
 header h1{padding-bottom:.24em}
-.ptax{position:relative;display:inline-block}
-.hsig{position:absolute;left:0;top:calc(100% - .12em);display:block;white-space:nowrap;overflow:visible;
+header h1{position:relative}.ptax{display:inline}
+.hsig{position:absolute;left:0;top:calc(100% - .014em);display:block;white-space:nowrap;overflow:visible;
   font-size:.11em;font-weight:800;letter-spacing:.03em;line-height:1.25;font-family:inherit;
   background:linear-gradient(90deg,#3b82f6,#22d3ee,#10b981);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;pointer-events:none;animation:none}
 .kofi{display:inline-block;margin-top:6px;text-decoration:none;white-space:nowrap;max-width:100%}
