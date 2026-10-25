@@ -14,7 +14,7 @@
       const asset = String(E.fixText(g('asset')) || '').trim().toUpperCase();
       if (!isFinite(date) || !asset) { bad.push(i); return; }
       const rawQ = g('qty'), vRaw = g('eur'), pRaw = g('price'), fRaw = g('fee');
-      const cur = E.currencyOf(E.fixText(String(vRaw || pRaw || fRaw || '')));
+      const curTxt = E.fixText(String(vRaw || pRaw || fRaw || '')), cur = /[$£€]|USD|GBP|EUR/.test(curTxt) ? E.currencyOf(curTxt) : (o.cur || 'EUR');
       const val = Math.abs(E.parseNum(vRaw, o.nmode)), price = Math.abs(E.parseNum(pRaw, o.nmode)), fee = Math.abs(E.parseNum(fRaw, o.nmode)) || 0;
       let type = E.guessType(g('type'), g('desc'));
       if (E.FIATS.includes(asset)) type = 'IGNORE'; // lignes « Autre » : dépôts / change de devises

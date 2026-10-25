@@ -35,7 +35,7 @@
     if (t.type === 'PAY') return 'paiements';
     if (!['STAKING', 'AIRDROP', 'INTEREST', 'FEE', 'RECEIVE', 'SEND', 'IGNORE'].includes(t.type)) return null;
     if (/\bmin(ing|age|ed)\b|mineur|miner/.test(s)) return 'minage';
-    if (/gift|cadeau|\bdons?\b|donation|offert/.test(s)) return 'cadeaux';
+    if (/gift|crypto box|cadeau|\bdons?\b|donation|offert/.test(s)) return 'cadeaux';
     return { STAKING: 'staking', AIRDROP: 'airdrop', INTEREST: 'interets', FEE: 'frais' }[t.type] || 'transferts';
   }
   function special(txs, year) {

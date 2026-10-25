@@ -18,28 +18,10 @@
   const typeOpts = sel => Object.entries(E.TYPES).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
 
   /* ---------- CSV ---------- */
-  function parseCSV(text) {
-    text = text.replace(/^\ufeff/, '');
-    const first = text.split(/\r?\n/)[0];
-    const delim = [',', ';', '\t'].sort((a, b) => first.split(b).length - first.split(a).length)[0];
-    const rows = []; let row = [], f = '', q = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
-      else if (c === '"') q = true; else if (c === delim) { row.push(f); f = ''; }
-      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); f = ''; if (row.some(x => x !== '')) rows.push(row); row = []; }
-      else f += c;
-    }
-    row.push(f); if (row.some(x => x !== '')) rows.push(row);
-    return rows;
-  }
+  const KF = window.KryptaxFormats, parseCSV = KF.parseCSV;
   const FIELDS = { date: ['date', 'completed date', 'started date', 'time', 'horodatage'], type: ['type', 'transaction type', 'opération'], asset: ['symbol', 'currency', 'asset', 'coin', 'crypto', 'devise', 'actif'], qty: ['quantity', 'amount', 'quantité', 'montant crypto', 'qty'], price: ['price', 'prix', 'rate', 'cours'], eur: ['value', 'fiat amount (inc. fees)', 'fiat amount', 'valeur', 'total', 'montant €'], fee: ['fees', 'fee', 'frais'], desc: ['description', 'product', 'notes'] };
   const LABELS = { date: 'Date', type: 'Type', asset: 'Crypto', qty: 'Quantité', price: 'Prix unitaire €', eur: 'Valeur / montant €', fee: 'Frais €', desc: 'Description (aide au type)' };
-  function guessMap(head) {
-    const h = head.map(x => x.trim().toLowerCase()), m = {};
-    for (const f in FIELDS) { for (const cand of FIELDS[f]) { const i = h.indexOf(cand); if (i > -1 && !Object.values(m).includes(i)) { m[f] = i; break; } } if (m[f] == null) { const i = h.findIndex((x, j) => FIELDS[f].some(c => x.includes(c)) && !Object.values(m).includes(j)); if (i > -1) m[f] = i; } }
-    return m;
-  }
+  const guessMap = KF.guessMap;
   let holders = JSON.parse(localStorage.getItem('kryptax.holders') || '{}'), holdInfo = '';
   const saveHolders = () => localStorage.setItem('kryptax.holders', JSON.stringify(holders));
   /* Mentions légales et vie privée : <dialog> natif (Échap, focus, clic hors du cadre) */
@@ -90,11 +72,21 @@
   let fiatText = localStorage.getItem('kryptax.fiat') || '';
   function showMapping(name, rows, isXlsx) {
     if (rows.length < 2) return showErr(name + ' : fichier vide.');
+    const fmt = KF.detect(rows);
+    if (fmt) {
+      const res = KF.parse(rows, fmt, { source: name }, uid);
+      if (!res.txs.length) return showErr(name + ' : ' + fmt.label + ' reconnu, mais aucune opération crypto lisible.');
+      holders[name] = KP.holderFromRows(rows); saveHolders(); txs = txs.concat(res.txs); E.detectSwaps(txs);
+      save(); renderTx(); autoRun();
+      if (res.bad.length) showErr(res.bad.length + ' ligne' + (res.bad.length > 1 ? 's' : '') + ' de ' + name + ' non lue' + (res.bad.length > 1 ? 's' : '') + ' (type d’opération inconnu ou valeur manquante) : vérifiez ce fichier.');
+      return;
+    }
+    { const hi = KF.headerRow(rows); if (hi > 0) rows = rows.slice(hi); }
     if (rows[0].some(h => /sent amount|received amount|montant envoy|montant re/i.test(h))) return showMapping2(name, rows);
     rows[0] = rows[0].map(x => E.fixText(String(x)));
     const head = rows[0], m = guessMap(head), box = document.createElement('div'); box.className = 'note';
     const sel = f => `<label>${LABELS[f]}<select data-f="${f}"><option value="">—</option>${head.map((h, i) => `<option value="${i}"${m[f] === i ? ' selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`;
-    box.innerHTML = `<b>${esc(name)}</b> — ${rows.length - 1} lignes. Vérifiez les colonnes :
+    box.innerHTML = `<b>${esc(name)}</b> — ${rows.length - 1} lignes. ${m.date == null || m.asset == null || m.qty == null ? '<span class="warn">Format non reconnu automatiquement : indiquez les colonnes ci-dessous.</span>' : 'Vérifiez les colonnes :'}
       <div class="grid">${Object.keys(FIELDS).map(sel).join('')}
       <label>Format des dates<select data-o="dmode"><option value="">Auto</option><option value="DMY">JJ/MM/AAAA</option><option value="MDY">MM/JJ/AAAA</option></select></label>
       <label>Format des nombres<select data-o="nmode"><option value="">Auto</option><option value="FR">1 234,56</option><option value="EN">1,234.56</option></select></label>
@@ -107,25 +99,14 @@
     box.querySelector('.go').onclick = () => {
       const mp = {}; box.querySelectorAll('[data-f]').forEach(s => { if (s.value !== '') mp[s.dataset.f] = +s.value; });
       const o = {}; box.querySelectorAll('[data-o]').forEach(s => o[s.dataset.o] = s.value);
-      if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
+      if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Format non reconnu : choisissez au moins les colonnes Date, Crypto et Quantité.');
+      if (mp.eur == null && mp.price == null) return alert('Choisissez la colonne du montant en € (ou du prix) : sans elle, les achats et ventes seraient comptés à 0 €.');
+      o.cur = mp.eur != null ? KF.headCur(head[mp.eur]) : mp.price != null ? KF.headCur(head[mp.price]) : 'EUR';
       o.xlsx = isXlsx; o.source = name; holders[name] = KP.holderFromRows(rows); saveHolders();
       const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
       save(); box.remove(); renderTx(); autoRun();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
-      if (res.bad.length) showErr(res.bad.length + ' lignes de ' + name + ' n\'ont pas pu être lues.'); return;
-      let n = 0, bad = 0;
-      rows.slice(1).forEach((r, i) => {
-        const g = f => mp[f] == null ? '' : r[mp[f]];
-        const date = E.parseDate(g('date'), o.dmode), qty = E.parseNum(g('qty'), o.nmode);
-        if (!isFinite(date) || !isFinite(qty)) { bad++; return; }
-        let val = Math.abs(E.parseNum(g('eur'), o.nmode)); const pr = E.parseNum(g('price'), o.nmode);
-        if (!isFinite(val) && isFinite(pr)) val = Math.abs(pr * qty);
-        const fee = Math.abs(E.parseNum(g('fee'), o.nmode));
-        let type = E.guessType(g('type'), g('desc'));
-        txs.push({ id: uid(), seq: i, date, type, rawType: g('type'), asset: String(g('asset')).trim().toUpperCase(), qty: Math.abs(qty), eur: isFinite(val) ? val : 0, fee: isFinite(fee) ? fee : 0, platform: o.platform, source: name });
-        n++;
-      });
-      save(); box.remove(); renderTx(); if (bad) showErr(bad + ' lignes de ' + name + ' n\'ont pas pu être lues.'); autoRun();
+      if (res.bad.length) showErr(res.bad.length + ' lignes de ' + name + ' n\'ont pas pu être lues.');
     };
   }
 
