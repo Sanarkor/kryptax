@@ -62,7 +62,7 @@ Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'
 | `pipeline.js` | Récupération des cours (cascade de fournisseurs, cache) |
 | `engine.js` | Calcul 2086 (lignes 211 à 224, seuil, totaux) |
 | `export.js` | Génération du PDF |
-| `ad.js` | Publicité fictive |
+| `ad.js` | Pub vidéo fictive avant le PDF (visuels neutres, sans photo) |
 | `testdata/` | Jeux de données **fictifs** |
 
 ## Tests

@@ -321,7 +321,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
       eq(/id="pdfview"/.test(ih) && /id="pvsave"[^>]*>Enregistrer le PDF</.test(ih) && /Voir mon PDF/.test(A) ? 1 : 0, 1, 'Aperçu : bouton « Enregistrer le PDF » après la pub « Voir mon PDF »');
       eq(/a\.download = pvName/.test(A) && /getDocument\(/.test(A.slice(A.indexOf('async function showPdf'))) ? 1 : 0, 1, 'Aperçu rendu en images (pdf.js), enregistrement seulement sur demande'); }
     eq(/if \(e\.target\.id === 'pdfx'\) \{ if \(adSeen\) \{ adDone = true; downloadPdf\(\); adDone = false; \} else openAdGate\(\); \}/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton ouvre la pub, message non bloquant');
-    { const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'); eq(/^var AD_VIDEO_S = 15;[^\n]*\nvar AD_SKIP_S = 5;/m.test(AJ) && /videoS: AD_VIDEO_S, skipS: AD_SKIP_S, slides: \[V_BATTLE, V_CHAT\]/.test(AJ) ? 1 : 0, 1, 'Pub vidéo : 15 s, saut après 5 s, réglages en haut de ad.js'); }
+    { const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'); eq(/^var AD_VIDEO_S = 15;[^\n]*\nvar AD_SKIP_S = 5;/m.test(AJ) && /videoS: AD_VIDEO_S, skipS: AD_SKIP_S,/.test(AJ) ? 1 : 0, 1, 'Pub vidéo : 15 s, saut après 5 s, réglages en haut de ad.js'); }
     eq(/if \(!adDone\) return false;/.test(d) && /if \(el < AD_SKIP_S\)[^\n]*return; \}/.test(A) && /adDone = true; cnt\.textContent = 'Vous pouvez passer la pub\.'/.test(A) && /Vous pourrez passer la pub dans \$\{n\}…/.test(A) ? 1 : 0, 1, 'Pub vidéo : décompte 5 s puis « Passer la pub ▸ », PDF seulement ensuite');
     const ag = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="adgate"[\s\S]*?<\/dialog>/) || [''])[0];
     eq(/aria-describedby="adgatecount"/.test(ag) && /role="status" aria-live="polite"/.test(ag) && /Publicité — exemple fictif/.test(ag) && /id="adgatego"[^>]*hidden>Passer la pub ▸/.test(ag) && !/style=|<script|<video|https?:|revolut|csv/i.test(ag) ? 1 : 0, 1, 'Pub vidéo : dialogue accessible, fictive, sans vidéo externe ni inline');
@@ -332,23 +332,15 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     const XP = require('fs').readFileSync(__dirname + '/export.js', 'utf8');
     eq(/id="precsum">\$\{esc\(precText\(PP\)\)\}<\/p>/.test(A) && !/`C\$\{i \+ 1\} \(/.test(A) ? 1 : 0, 1, 'Interface : résumé de précision seul, sans liste C1…Cn');
     eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} opération/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
-    eq(/window\.KryptaxAd = \{ img: IMG,/.test(require('fs').readFileSync(__dirname + '/ad.js', 'utf8')) ? 1 : 0, 1, 'Pub export : image réutilisée depuis ad.js');
+    { const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'); eq(!/data:image\/(jpeg|png)|base64/.test(AJ) && /data:image\/svg\+xml/.test(AJ) && !/CHOC|Barthyl|Battle/.test(AJ) && AJ.length < 5000 ? 1 : 0, 1, 'Pub vidéo : visuels neutres sans photo (SVG), plus de CHOC ni Barthyl'); }
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
     }
   { const pv = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0];
-    eq(!/pas de publicité/i.test(pv) && /publicités fictives de démonstration/.test(pv) && /aucune régie publicitaire/.test(pv) && /consentement aux cookies/.test(pv) && !/revolut/i.test(pv) ? 1 : 0, 1, 'Vie privée : publicité fictive décrite honnêtement, consentement prévu'); }
-  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8'), ad = (ih.match(/<aside class="adslot" aria-label="Publicité">[\s\S]*?<\/aside>/) || [''])[0];
-    eq((ih.match(/class="adslot"/g) || []).length, 1, 'Pub : un seul encart <aside class="adslot">');
-    eq((ih.match(/class="adrail adrail-[lr]"/g) || []).length === 2 && /\.adrail\{display:none\}/.test(C) && /@media \(min-width:1024px\)\{[\s\S]*\.adslot\{display:none\}/.test(C) ? 1 : 0, 1, 'Pub PC : 2 bandeaux verticaux, encart du bas masqué ; mobile inchangé');
-    { const AJ2 = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'); eq(/ROTATE_MS = 8000/.test(AJ2) && /prefers-reduced-motion/.test(AJ2) && /CHOC/.test(AJ2) && !/ChatCoquin|Rencontre coquine/.test(AJ2) ? 1 : 0, 1, 'Pub mobile : alternance des 2 pubs fictives, mouvement réduit respecté'); }
-    eq(ad.includes('<span class="adlabel">Publicité</span>') && ad.includes('Exemple de pub fictive — emplacement réservé') ? 1 : 0, 1, 'Pub : étiquette « Publicité » + mention fictive');
-    eq(!/style=|<script|href=|https?:/.test(ad) && /<\/aside>\s*<\/main>\s*<footer>/.test(ih) ? 1 : 0, 1, 'Pub : sans style inline, script ni lien, juste avant le pied de page');
-    eq(/\.adslot\{[^}]*max-width:100%[^}]*overflow:hidden/.test(C) ? 1 : 0, 1, 'Pub : CSS dans style.css, jamais plus large que l’écran');
-    const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'), m = AJ.match(/data:image\/jpeg;base64,([A-Za-z0-9+/=]+)/);
-    eq(m && Buffer.from(m[1], 'base64').slice(0, 3).toString('hex') === 'ffd8ff' && m[1].length * 3 / 4 < 80000 && AJ.length < 200000 ? 1 : 0, 1, 'Pub : visuels JPEG intégrés (< 200 Ko au total) dans ad.js');
-    eq(ad.includes('width="640" height="278"') && /aspect-ratio:640\/278/.test(C) && ih.includes('Exemple de pub fictive : ce jeu n’existe pas, l’encart ne mène nulle part.') ? 1 : 0, 1, 'Pub : bandeau 2,3:1 (≈ 146 px à 360 px) + message au tap');
-    eq(ad.includes('alt="Exemple de publicité fictive pour un jeu vidéo médiéval fantastique"') && /<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && !/https?:\/\//.test(AJ) ? 1 : 0, 1, 'Pub : alt, script local, aucun lien externe'); }
+    eq(/Seule une courte pub vidéo fictive/.test(pv) && /n'affiche plus d'encart publicitaire/.test(pv) && !/revolut/i.test(pv) ? 1 : 0, 1, 'Vie privée : seule la pub vidéo fictive reste, décrite honnêtement'); }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8'), AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+    eq(!/adslot|adrail|adimg|adhit|admsg|adrimg|emplacement réservé/.test(ih + C) && !/CHOC|Barthyl/.test(ih + AP) ? 1 : 0, 1, 'Pub : plus aucun encart (latéraux, bas, mobile), ni CSS associé');
+    eq(/<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && /header,main\{max-width:768px;/.test(C) ? 1 : 0, 1, 'Pub : ad.js local garde la seule pub vidéo, mise en page sans marges réservées'); }
   { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span>(<span class="disclaim">[^<]*<\/span>)?<\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   { // Fuseaux (données fictives) : relevés en UTC, affichage et année fiscale en heure de Paris
     const u = (s, tz) => E.parseDate(s, 'DMY', tz);
