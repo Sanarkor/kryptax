@@ -128,6 +128,10 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 // Messages après calcul : « ✅ Aucune erreur » ou erreur courte, pas de compteur ni « Calcul terminé »
 { const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(A.includes('✅ Aucune erreur') ? 1 : 0, 1, 'Message « ✅ Aucune erreur » présent'); eq(/textContent = 'Calcul terminé|transactions importées, dont/.test(A) ? 1 : 0, 0, 'Pas de « Calcul terminé » ni de compteur de transactions'); }
+// Page : plus de bandeau « conseil fiscal », pas d'icône ℹ️, aperçu 👁 sans vraies valeurs
+{ const fs = require('fs'), H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
+  eq(/pas un conseil fiscal|class="banner/.test(H) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); eq(H.includes("<summary>Mode d'emploi et aide</summary>") ? 1 : 0, 1, 'Mode d’emploi et aide conservé (replié)');
+  const pk = A.slice(A.indexOf('function showPeek'), A.indexOf('function cmpBlock')); eq(/c\.l2\d\d|t\.l2\d\d|c\.qty|fr\(/.test(pk) ? 1 : 0, 0, 'Aperçu 👁 : aucun montant réel injecté (valeurs factices floutées)'); }
 // CSP : chaque hôte appelé par le code doit figurer dans connect-src
 {
   const fs = require('fs'), html = fs.readFileSync(__dirname + '/index.html', 'utf8'), csp = (html.match(/connect-src ([^;"]*)/) || [])[1] || '';
