@@ -290,7 +290,7 @@
   }
   let runCtl = null;
   $('#run').onclick = async () => {
-    $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); let failed = false;
+    $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
     const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent)) { $('#progress').textContent = 'Calcul en cours…'; $('#progress').className = ''; } };
     let src;
@@ -374,7 +374,7 @@
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
-    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p>';
+    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p><p id="pdfmsg" class="note warn pdfmsg" role="status" aria-live="polite" hidden></p>';
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
     const X = window.KryptaxExport;
     if (X) {
@@ -386,12 +386,55 @@
       if (t.incomplete) errs.push('Certains cours sont introuvables : le résultat est incomplet. Relancez le calcul plus tard.');
       else if (est.size) errs.push('Cours estimé (≈) pour ' + [...est].map(esc).join(', ') + ' : vérifiez le montant ou relancez plus tard.');
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
-      if (sus.length) errs.push('Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.');
+      const warns = sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : [];
+      blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
-      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + h;
+      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + warns.map(e => `<div class="note warn">${e}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + h;
     }
-    $('#results').innerHTML = h; lastOut = out; lastY = Y;
+    $('#results').innerHTML = h; lastOut = out; lastY = Y; pdfState();
+  }
+  /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
+  let blockers = [], pdfBusy = false;
+  // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
+  function pdfBlockers(t, est) {
+    const b = [];
+    if (runCtl || !window.__kxDone) b.push({ k: 'calc', msg: 'le calcul est en cours : attendez qu’il se termine.' });
+    if (dirty) b.push({ k: 'imports', msg: 'vos imports ont changé : touchez « Valider mes imports » pour recalculer.' });
+    if (KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') b.push({ k: 'holders', msg: 'vos relevés semblent appartenir à des personnes différentes : retirez le fichier concerné.' });
+    if ($('#err') && !$('#err').hidden) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
+    if (t && t.incomplete) b.push({ k: 'cours', rerun: true, msg: 'des cours sont introuvables, le résultat est incomplet : relancez le calcul.' });
+    else if (est && est.size) b.push({ k: 'estime', rerun: true, msg: 'un cours est seulement estimé (≈) : relancez le calcul ou saisissez le cours.' });
+    return b;
+  }
+  function currentBlockers() { // revérifié au moment du clic (le calcul a pu démarrer depuis l’affichage)
+    const b = blockers.filter(x => x.k !== 'calc');
+    if (runCtl || !window.__kxDone) b.unshift({ k: 'calc', msg: 'le calcul est en cours : attendez qu’il se termine.' });
+    if (!lastY) b.push({ k: 'calc', msg: 'aucun résultat calculé pour l’instant.' });
+    return b;
+  }
+  function pdfState() {
+    const btn = $('#pdfx'); if (!btn) return;
+    const off = currentBlockers().length > 0;
+    btn.classList.toggle('off', off); btn.setAttribute('aria-disabled', off ? 'true' : 'false');
+    btn.title = off ? 'Téléchargement impossible tant qu’une erreur est affichée' : '';
+    const m = $('#pdfmsg'); if (m && !off) { m.hidden = true; m.innerHTML = ''; }
+  }
+  function pdfRefused(b) {
+    const m = $('#pdfmsg'); if (!m) return;
+    const rr = b.some(x => x.rerun) && !runCtl;
+    m.innerHTML = '<b>Téléchargement impossible</b> : corrigez d’abord l’erreur ci-dessus.' + b.map(x => '<br>• ' + esc(x.msg.charAt(0).toUpperCase() + x.msg.slice(1))).join('') + (rr ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : '');
+    m.hidden = false;
+  }
+  // Seul point de génération du PDF : refuse s’il reste une erreur, et ignore un double clic
+  function downloadPdf() {
+    const b = currentBlockers(); pdfState();
+    if (b.length) { pdfRefused(b); return false; }
+    if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
+    const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs, fyear), stamp = fyear + '-decl' + (fyear + 1);
+    const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
+    try { dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
+    catch (err) { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } return false; }
   }
   { const hb = document.querySelector('details.help'); if (hb) hb.addEventListener('click', e => { if (!hb.open || e.target.closest('a, summary, input, button, select, label')) return; hb.open = false; }); }
   // Opérations particulières (staking, airdrop…) : un seul message replié, discret, jamais bloquant
@@ -447,13 +490,7 @@
     if (e.target.id === 'print') window.print();
     if (e.target.id === 'rerun') $('#run').click();
     if (e.target.closest && e.target.closest('#peek')) showPeek();
-    if (e.target.id === 'pdfx') {
-      const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs, fyear), stamp = fyear + '-decl' + (fyear + 1);
-      const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
-      try {
-        dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`);
-      } catch (err) { alert('Export impossible, réessayez.'); }
-    }
+    if (e.target.id === 'pdfx') downloadPdf();
   });
 
   /* ---------- Exemple fictif ---------- */
