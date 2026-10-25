@@ -70,4 +70,7 @@ chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
   require('fs').writeFileSync('/tmp/kx-sp.pdf', Buffer.from(X.makePdf(jsPDF, x2, X.title(2026)).output('arraybuffer')));
   chk(!/revolut|conseil fiscal personnalis/i.test(tp), 'PDF : ni plateforme ni conseil');
 }
+chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » bien visible en en-tête');
+{ const X2 = require('./export.js'); const S = (require('fs').readFileSync(__dirname + '/export.js', 'utf8').match(/const SHORT = \[([^\]]*)\]/) || [, ''])[1];
+  const n = (S.match(/\(€\)'/g) || []).length; chk(n === 12 && !/211 Date[^']*€/.test(S), 'PDF : « (€) » dans les 12 en-têtes de montants (212 à 224), pas sur la date (' + n + ')'); }
 process.exit(ok ? 0 : 1);
