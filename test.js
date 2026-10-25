@@ -26,7 +26,7 @@ eq(new Date(E.parseDate('13/01/2024 15:45')).getMonth(), 0, 'date FR'); eq(new D
 // Format relevé .xlsx (valeurs fictives)
 eq(E.parseNum('68â_x0080_¯116,39â_x0082_¬'), 68116.39, 'montant mojibake'); eq(E.currencyOf(E.fixText('20,19$')) === 'USD' ? 1 : 0, 1, 'devise USD');
 eq(E.guessType('RÃ©compenseÂ\u00a0Apprendre') === 'INTEREST' ? 1 : 0, 1, 'récompense Learn'); eq(E.guessType('Vendre - Revolut X') === 'SELL' ? 1 : 0, 1, 'Vendre (plateforme X)');
-eq(new Date(E.parseDate('15 juil. 2026, 12:30:25')).getMonth(), 6, 'date FR juil.'); eq(new Date(E.parseDate('17 mai 2026, 00:09:10')).getDate(), 17, 'date FR mai');
+eq(new Date(E.parseDate('15 juil. 2026, 12:30:25')).getMonth(), 6, 'date FR juil.'); eq(E.parisParts(E.parseDate('17 mai 2026, 00:09:10')).day, 17, 'date FR mai');
 eq(E.fixQty(81033368, 1.23, 100).qty, 81.033368, 'quantité tronquée XRP'); eq(E.fixQty(73403, 68116.39, 50).qty, 0.00073403, 'quantité tronquée BTC');
 // Détection des échanges crypto→crypto (données fictives)
 const T0 = Date.UTC(2026, 4, 21, 10, 0, 0);
@@ -298,6 +298,22 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(ad.includes('width="640" height="278"') && /aspect-ratio:640\/278/.test(C) && ih.includes('Exemple de pub fictive : ce jeu n’existe pas, l’encart ne mène nulle part.') ? 1 : 0, 1, 'Pub : bandeau 2,3:1 (≈ 146 px à 360 px) + message au tap');
     eq(ad.includes('alt="Exemple de publicité fictive pour un jeu vidéo médiéval fantastique"') && /<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && !/https?:\/\//.test(AJ) ? 1 : 0, 1, 'Pub : alt, script local, aucun lien externe'); }
   { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><div class="footline"><span>Kryptax — Formulaire 2086<\/span><span class="fiscfr">Fiscalité Française<\/span><\/div><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
+  { // Fuseaux (données fictives) : relevés en UTC, affichage et année fiscale en heure de Paris
+    const u = (s, tz) => E.parseDate(s, 'DMY', tz);
+    eq(E.fmtParis(u('27 sept. 2026, 00:13:00', 'UTC')) === '27/09/2026 02:13' ? 1 : 0, 1, 'Relevé UTC 27/09 00:13 → 02:13 heure de Paris (été, UTC+2)');
+    eq(E.fmtParis(u('03/06/2026 09:14', 'UTC')) === '03/06/2026 11:14' ? 1 : 0, 1, 'Relevé UTC 03/06 09:14 → 11:14 heure de Paris');
+    eq(E.fmtParis(u('15/01/2026 09:14', 'UTC')) === '15/01/2026 10:14' ? 1 : 0, 1, 'Hiver : UTC+1');
+    eq(u('03/06/2026 09:14', 'UTC') === Date.UTC(2026, 5, 3, 9, 14) ? 1 : 0, 1, 'Instant UTC exact pour les cours (pas 2 h trop tôt)');
+    eq(u('03/06/2026 11:14', 'Paris') === Date.UTC(2026, 5, 3, 9, 14) ? 1 : 0, 1, 'Heure de Paris saisie → même instant UTC');
+    eq(E.fmtParis(Date.UTC(2026, 2, 29, 0, 59)) === '29/03/2026 01:59' && E.fmtParis(Date.UTC(2026, 2, 29, 1, 0)) === '29/03/2026 03:00' ? 1 : 0, 1, 'Bascule été (29/03/2026) : 01:59 → 03:00');
+    eq(E.fmtParis(Date.UTC(2026, 9, 25, 0, 30)) === '25/10/2026 02:30' && E.fmtParis(Date.UTC(2026, 9, 25, 1, 30)) === '25/10/2026 02:30' ? 1 : 0, 1, 'Bascule hiver (25/10/2026) : 02:30 deux fois');
+    eq(u('25/10/2026 04:00', 'Paris') === Date.UTC(2026, 9, 25, 3) && u('24/10/2026 23:00', 'Paris') === Date.UTC(2026, 9, 24, 21) ? 1 : 0, 1, 'Jour de bascule : Paris → UTC correct de part et d’autre');
+    eq(E.fmtParis(u('05/07/2026 22:41', 'UTC')) === '06/07/2026 00:41' ? 1 : 0, 1, 'Changement de jour : 22:41 UTC → lendemain 00:41 à Paris');
+    const tY = u('31/12/2025 23:30', 'UTC');
+    eq(E.parisYear(tY) === 2026 && new Date(tY).getUTCFullYear() === 2025 ? 1 : 0, 1, 'Frontière du 31/12 : 23:30 UTC = 01/01 00:30 à Paris → année fiscale 2026');
+    const TY = [{ id: 'y1', date: Date.UTC(2025, 0, 2), type: 'BUY', asset: 'AAA', qty: 2, eur: 20, fee: 0 }, { id: 'y2', date: tY, type: 'SELL', asset: 'AAA', qty: 1, eur: 30, fee: 0 }];
+    const BY = E.byYear(E.compute(TY, () => 30)); eq(BY[2026] && !BY[2025] ? 1 : 0, 1, 'Cession 31/12 23:30 UTC rangée en 2026 (date de cession en heure de Paris)');
+  }
   const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
   eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');
