@@ -11,23 +11,35 @@
     g.fillText(ch, o, Math.round(px * 1.4)); const d = g.getImageData(0, 0, W, H).data; let L = W, R = -1;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3] > 96) { if (x < L) L = x; if (x > R) R = x; }
     if (R < 0) { const m = g.measureText(ch); return [0, m.width]; } return [L - o, R + 1 - o]; }
+  /* Police réellement utilisée : le canvas ne résout pas toujours « system-ui » comme le DOM (Windows, Firefox) ; on retient la famille dont la largeur canvas colle au DOM */
+  function canvasFont(el, txt, domAdv, sizePx) { const cs = getComputedStyle(el), pre = cs.fontStyle + ' ' + cs.fontWeight + ' ' + sizePx + 'px ';
+    const fams = [cs.fontFamily].concat(cs.fontFamily.split(',').map(f => f.trim()).filter(Boolean), ['"Segoe UI Variable Display"', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif']);
+    const c = (inkX.c = inkX.c || document.createElement('canvas')), g = c.getContext('2d', { willReadFrequently: true }); let best = pre + cs.fontFamily, bd = Infinity;
+    for (const f of fams) { g.font = pre + f; const d = Math.abs(g.measureText(txt).width - domAdv); if (d < bd - 1e-6) { bd = d; best = pre + f; } if (d < domAdv * 0.004) break; }
+    return best; }
   function fitSig() { const p = document.querySelector('.ptax'), s = document.querySelector('.hsig'), h = p && p.closest('h1'); if (!p || !s || !h) return;
     const tn = p.firstChild; if (!tn || tn.nodeType !== 3 || tn.data !== 'ptax') return;
-    const cs = getComputedStyle(h), px = parseFloat(cs.fontSize), font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    const cs = getComputedStyle(h), px = parseFloat(cs.fontSize), lsH = parseFloat(cs.letterSpacing) || 0;
     const rg = k => { const r = document.createRange(); r.setStart(tn, k); r.setEnd(tn, k + 1); const q = r.getClientRects(); return q.length ? q[0] : r.getBoundingClientRect(); };
-    const base = p.getBoundingClientRect().left, ip = inkX('p', font, px), ix = inkX('x', font, px);
-    const L = rg(0).left + ip[0] - base, R = rg(3).left + ix[1] - base; /* hampe du p → bord droit du x */
+    const zoom = h.getBoundingClientRect().width / (h.offsetWidth || 1) || 1; /* transform/zoom éventuel : coordonnées écran → CSS */
+    const adv = (rg(3).right - rg(0).left) / zoom - 4 * lsH, font = canvasFont(h, 'ptax', adv, px);
+    const hr = h.getBoundingClientRect(), base = hr.left + h.clientLeft * zoom, ip = inkX('p', font, px), ix = inkX('x', font, px);
+    const L = (rg(0).left - base) / zoom + ip[0], R = (rg(3).left - base) / zoom + ix[1]; /* hampe du p → bord droit du x */
     if (!(R > L)) return;
-    const ss = getComputedStyle(s), sf = ss.fontStyle + ' ' + ss.fontWeight + ' 40px ' + ss.fontFamily, t = s.textContent;
-    s.style.fontSize = '40px'; s.style.left = '0px'; const r0 = document.createRange(); r0.selectNodeContents(s); const domW = r0.getBoundingClientRect().width;
-    const g = inkX.c.getContext('2d'); g.font = sf; const advW = g.measureText(t).width, ls = domW - advW; /* espacement des lettres en DOM */
-    const a0 = inkX(t.charAt(0), sf, 40), aN = inkX(t.charAt(t.length - 1), sf, 40), lastAdv = g.measureText(t.charAt(t.length - 1)).width;
-    const inkW = domW - a0[0] - (lastAdv - aN[1]) - ls / t.length; /* encre du texte complet à 40 px */
+    const r0r = rg(0), lh = parseFloat(cs.lineHeight) || px * 1.2; /* bas de la ligne du logo (= ancien bloc « ptax »), indépendant du moteur */
+    const nl = Math.max(0, Math.round(((r0r.top + r0r.bottom) / 2 - hr.top) / zoom / lh - 0.5)); s.style.top = (parseFloat(cs.paddingTop) || 0) + (nl + 1) * lh - 0.014 * px + 'px';
+    const t = s.textContent; s.style.fontSize = '40px'; s.style.left = '0px';
+    const ss = getComputedStyle(s), lsS = parseFloat(ss.letterSpacing) || 0, r0 = document.createRange(); r0.selectNodeContents(s);
+    const domW = r0.getBoundingClientRect().width / zoom, sf = canvasFont(s, t, domW - t.length * lsS, 40);
+    const a0 = inkX(t.charAt(0), sf, 40), aN = inkX(t.charAt(t.length - 1), sf, 40), g = inkX.c.getContext('2d'); g.font = sf; const lastAdv = g.measureText(t.charAt(t.length - 1)).width;
+    const inkW = domW - a0[0] - (lastAdv - aN[1]) - lsS; /* encre du texte complet à 40 px */
     const k = (R - L) / inkW; s.style.fontSize = (40 * k).toFixed(3) + 'px'; s.style.left = (L - a0[0] * k).toFixed(2) + 'px'; }
   { let q = 0; const run = () => { if (q) return; q = requestAnimationFrame(() => { q = 0; fitSig(); }); };
-    fitSig(); window.addEventListener('resize', run); window.addEventListener('load', run);
+    fitSig(); requestAnimationFrame(() => requestAnimationFrame(run)); /* après le premier rendu */
+    setTimeout(run, 300); setTimeout(run, 1000); /* secours */
+    window.addEventListener('resize', run); window.addEventListener('load', run); window.addEventListener('pageshow', run);
     if (document.fonts) { if (document.fonts.ready) document.fonts.ready.then(run); if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', run); }
-    if (window.ResizeObserver) { const h = document.querySelector('header h1'); if (h) new ResizeObserver(run).observe(h); }
+    if (window.ResizeObserver) { const ro = new ResizeObserver(run), h = document.querySelector('header h1'); if (h) { ro.observe(h); if (h.parentElement) ro.observe(h.parentElement); } const hd = document.querySelector('header'); if (hd) ro.observe(hd); }
     if (window.matchMedia) { try { matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)').addEventListener('change', run); } catch (e) {} } }
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
@@ -384,13 +396,13 @@
   // Popup de fin de calcul réussi (une fois par calcul) : ✓, titre, bouton vers « 2. Résultat et export »
   let doneShown = false;
   function showDone() {
-    const d = $('#donepop'); if (!d || d.open || doneShown || ($('#adgate') && $('#adgate').open)) return;
+    const d = $('#donepop'); if (!d || d.open || doneShown) return;
     doneShown = true; d.showModal(); $('#donego').focus();
   }
   { const d = $('#donepop');
     if (d) {
       const close = () => { if (d.open) d.close(); };
-      $('#donego').addEventListener('click', () => { // même parcours que « Voir le PDF » : pub (si pas déjà vue) puis aperçu
+      $('#donego').addEventListener('click', () => { // même parcours que « Voir le PDF » : aperçu direct
         close(); const b = currentBlockers(), btn = $('#pdfx');
         if (btn && !b.length && !runCtl) { btn.click(); return; }
         if (btn && b.length) pdfRefused(b);
@@ -586,38 +598,6 @@
     m.innerHTML = '<b>PDF indisponible</b> : corrigez d’abord l’erreur ci-dessus.' + b.map(x => '<br>• ' + esc(x.msg.charAt(0).toUpperCase() + x.msg.slice(1))).join('') + (rr ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : '');
     m.hidden = false;
   }
-  /* ---------- Pub de démonstration avant le PDF (fictive) ---------- */
-  let adDone = false, adTimer = null, adSeen = false; // adSeen : pub passée ou terminée (mémoire seulement, jusqu’au rechargement)
-  function openAdGate() {
-    const b = currentBlockers(); pdfState();
-    if (b.length) { pdfRefused(b); return; }
-    const d = $('#adgate'); if (!d) return;
-    const KA = window.KryptaxAd || {}, AD_VIDEO_S = KA.videoS || 15, AD_SKIP_S = KA.skipS || 5; // réglages en haut de ad.js
-    const s1 = $('#avs1'), s2 = $('#avs2'), sl = KA.slides || [];
-    if (s1 && !s1.src && sl[0]) s1.src = sl[0]; if (s2 && !s2.src && sl[1]) s2.src = sl[1];
-    const go = $('#adgatego'), cnt = $('#adgatecount'), bar = $('#adgatebar'), hook = $('#avhook');
-    adDone = false; clearInterval(adTimer); go.hidden = true; go.textContent = 'Passer la pub ▸'; cnt.hidden = false;
-    s1.classList.add('on'); s2.classList.remove('on'); hook.textContent = 'Espace publicitaire — exemple fictif';
-    const t0 = Date.now(); let lastN = -1, half = false;
-    const tick = () => {
-      const el = (Date.now() - t0) / 1000;
-      bar.style.transform = 'scaleX(' + Math.min(1, el / AD_VIDEO_S).toFixed(4) + ')';
-      if (!half && el >= AD_VIDEO_S / 2) { half = true; s1.classList.remove('on'); s2.classList.add('on'); hook.textContent = 'Votre annonce ici — exemple fictif'; }
-      if (el < AD_SKIP_S) { const n = Math.ceil(AD_SKIP_S - el); if (n !== lastN) { lastN = n; cnt.textContent = `Vous pourrez passer la pub dans ${n}…`; } return; }
-      if (!adDone) { adDone = true; cnt.textContent = 'Vous pouvez passer la pub.'; cnt.classList.add('sr'); go.hidden = false; go.focus(); }
-      if (el >= AD_VIDEO_S) { clearInterval(adTimer); adSeen = true; go.textContent = 'Voir mon PDF'; cnt.textContent = 'Pub terminée : votre PDF est prêt.'; }
-    };
-    cnt.classList.remove('sr'); tick(); adTimer = setInterval(tick, 200);
-    if (d.showModal) d.showModal(); else d.setAttribute('open', '');
-    $('#adgateclose').focus();
-  }
-  function closeAdGate() { clearInterval(adTimer); adDone = false; const d = $('#adgate'); if (d && d.open) { if (d.close) d.close(); else d.removeAttribute('open'); } const p = $('#pdfx'); if (p) p.focus(); }
-  { const d = $('#adgate');
-    if (d) {
-      d.addEventListener('close', () => { clearInterval(adTimer); adDone = false; });
-      $('#adgateclose').onclick = closeAdGate;
-      $('#adgatego').onclick = () => { if (!adDone) return; adSeen = true; if (downloadPdf()) closeAdGate(); }; // passer ou terminer = pub vue
-    } }
   /* Aperçu : pages rendues en images (pdf.js local, fonctionne sur iOS/Android), puis « Enregistrer le PDF ». */
   let pvUrl = null, pvBlob = null, pvName = '';
   async function showPdf(blob, name) {
@@ -650,11 +630,10 @@
     const a = document.createElement('a'); a.href = pvUrl; a.download = pvName; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000); window.__kxPdfSaved = (window.__kxPdfSaved || 0) + 1;
   }
   { const d = $('#pdfview'); if (d) { $('#pvsave').onclick = savePdf; $('#pvclose').onclick = () => { if (d.close) d.close(); else d.removeAttribute('open'); const p = $('#pdfx'); if (p) p.focus(); }; } }
-  // Seul point de génération du PDF : refuse s’il reste une erreur, si la pub n’est pas finie, et ignore un double clic
+  // Seul point de génération du PDF : refuse s’il reste une erreur et ignore un double clic
   function downloadPdf() {
     const b = currentBlockers(); pdfState();
     if (b.length) { pdfRefused(b); return false; }
-    if (!adDone) return false;
     if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
     const X = window.KryptaxExport, data = withPrec(X.exportData(lastY, lastS, summaryRows, txs, fyear));
     try { showPdf(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), X.pdfName(fyear, new Date())); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
@@ -696,7 +675,7 @@
   $('#results').addEventListener('click', e => {
     if (e.target.id === 'print') window.print();
     if (e.target.id === 'rerun') $('#run').click();
-    if (e.target.id === 'pdfx') { if (adSeen) { adDone = true; downloadPdf(); adDone = false; } else openAdGate(); }
+    if (e.target.id === 'pdfx') downloadPdf();
   });
 
   /* ---------- Exemple fictif ---------- */
