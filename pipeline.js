@@ -4,6 +4,17 @@
   const E = root.KryptaxEngine || (typeof require !== 'undefined' ? require('./engine.js') : null);
   const MIN = 60e3, HOUR = 3600e3, DAY = 24 * HOUR;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  /* Le relevé donne-t-il l'heure ? (minuit pile, heure de Paris ou UTC = date seule) */
+  const hasTime = ts => { const d = new Date(ts); return !(d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) && !(d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0); };
+  const minKey = (a, ts) => a + '|m' + Math.floor(ts / 60e3);
+  /* Précision d'un cours (par opération) et libellé ; la pire précision d'une cession l'emporte. */
+  const PREC = ['seconde', 'minute', 'horaire', 'journalier', 'estimé'];
+  const precLabel = p => p ? (p.k === 'seconde' ? 'cours à la seconde' : p.k === 'minute' ? 'cours à la minute' : p.k === 'horaire' ? 'cours horaire' : p.k === 'journalier' ? 'cours journalier' : 'cours estimé') + (p.src && p.k !== 'estimé' ? ' (' + p.src + ')' : '') : '';
+  function cessionPrec(fn, c) { // -> { k, src, n, nMin } pour une cession (detail212)
+    let w = null, n = 0, nMin = 0;
+    for (const d of c.detail212 || []) { const key = d.asset + '|' + c.date, p = fn && fn.approx && fn.approx.has(key) ? { k: 'estimé', src: '' } : (fn && fn.prec && fn.prec.get(key)) || null; if (!p) continue; n++; if (p.k === 'minute' || p.k === 'seconde') nMin++; if (!w || PREC.indexOf(p.k) > PREC.indexOf(w.k)) w = p; }
+    return w ? Object.assign({ n, nMin }, w) : { k: '', src: '', n, nMin };
+  }
 
   /* rows : tableaux (valeurs brutes, nombres conservés). mp : index des colonnes. */
   function importRows(rows, mp, o, uid) {
@@ -293,7 +304,43 @@
       if (merged) return { s: merged, src: mSrc, partial: true };
       return net ? undefined : null;
     }
-    return { fxRange, series, diag, stats, assetDiag };
+    /* Cours à la minute (ou à la seconde) : Binance (aggTrades si l'heure a des secondes, sinon bougie 1 min), puis OKX et Bitget 1 min.
+       Bougie retenue seulement si elle correspond exactement à la minute demandée. -> { p (€), src, k: 'seconde'|'minute' } | null | undefined */
+    const minEur = {};
+    async function binMin(sym, m) { // bougie 1 min Binance : ouverture de la minute m (ms) ; null = paire absente / pas de bougie
+      for (const h of hosts) {
+        if (deadHost.has(h)) continue;
+        const r = await get(h.includes('vision') ? 'Binance (data-api)' : 'Binance (api)', `${h}/api/v3/klines?symbol=${sym}&interval=1m&startTime=${m}&limit=1`);
+        if (r.err) continue; if (!Array.isArray(r.j)) return null;
+        return r.j[0] && +r.j[0][0] === m ? +r.j[0][1] : null;
+      }
+      return undefined;
+    }
+    async function usdtEur(m) { // 1 USDT en € à la minute m (Binance EURUSDT), mutualisé entre actifs
+      if (minEur[m] === undefined) minEur[m] = binMin('EURUSDT', m).then(v => v ? 1 / v : null);
+      return minEur[m];
+    }
+    async function minute(a0, ts) {
+      const a = baseSym(a0), m = Math.floor(ts / MIN) * MIN, sec = ts % MIN !== 0; let net = false;
+      for (const [q, usd] of [['EUR', false], ['USDT', true]]) {
+        if (sec) { // à la seconde : première transaction Binance dans la seconde qui suit l'horodatage
+          const h = hosts.find(x => !deadHost.has(x)); if (!h) break;
+          const r = await get(h.includes('vision') ? 'Binance (data-api)' : 'Binance (api)', `${h}/api/v3/aggTrades?symbol=${a}${q}&startTime=${ts}&endTime=${ts + 999}&limit=1`);
+          if (r.err) { net = true; continue; }
+          if (!Array.isArray(r.j)) continue; // paire absente
+          if (r.j[0]) { const f = usd ? await usdtEur(m) : 1; if (f) return { p: +r.j[0].p * f, src: 'Binance', k: 'seconde' }; }
+        }
+        const p = await binMin(a + q, m);
+        if (p === undefined) { net = true; continue; }
+        if (p) { const f = usd ? await usdtEur(m) : 1; if (f) return { p: p * f, src: 'Binance', k: 'minute' }; }
+      }
+      const r1 = await get('OKX', `https://www.okx.com/api/v5/market/history-candles?instId=${a}-USDT&bar=1m&limit=1&after=${m + MIN}`);
+      if (r1.err) net = true; else { const c = r1.j && Array.isArray(r1.j.data) && r1.j.data[0]; if (c && +c[0] === m) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'OKX', k: 'minute' }; } }
+      const r2 = await get('Bitget', `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${a}USDT&granularity=1min&endTime=${m}&limit=1`);
+      if (r2.err) net = true; else { const c = r2.j && Array.isArray(r2.j.data) && r2.j.data[0]; if (c && +c[0] === m && +c[5] > 0) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'Bitget', k: 'minute' }; } }
+      return net ? undefined : null;
+    }
+    return { fxRange, series, minute, diag, stats, assetDiag };
   }
   /* Exécute des tâches avec au plus n en parallèle. */
   async function pool(items, n, fn, signal) {
@@ -314,12 +361,13 @@
   /* Prépare : conversion devises, quantités tronquées, cours nécessaires. cache[key]= prix | 'NA' */
   /* Recherche de cours : cache horaire (±2 h) puis cours observé dans les relevés (≤30 j, sinon le plus proche), marqué ≈. */
   function priceLookup(txs, cache, manual, opts) {
-    const obs = observed(txs), approx = new Set(), unvalued = new Set();
+    const obs = observed(txs), approx = new Set(), unvalued = new Set(), prec = new Map();
     const fn = (a, ts, txId) => {
       if (manual && txId != null && manual[a + '@' + txId] != null) return manual[a + '@' + txId];
       if (manual && manual[a] != null) return manual[a];
-      const h = Math.floor(ts / HOUR);
-      for (const d of [0, -1, 1, -2, 2]) { const v = cache[a + '|h' + (h + d)]; if (typeof v === 'number') return v; }
+      const h = Math.floor(ts / HOUR), mk = minKey(a, ts);
+      if (typeof cache[mk] === 'number') { const [k, s] = String(cache[mk + 's'] || 'minute|').split('|'); prec.set(a + '|' + ts, { k, src: s }); return cache[mk]; }
+      for (const d of [0, -1, 1, -2, 2]) { const v = cache[a + '|h' + (h + d)]; if (typeof v === 'number') { prec.set(a + '|' + ts, { k: hasTime(ts) ? 'horaire' : 'journalier', src: cache[a + '|src'] || '' }); return v; } }
       let o = obs(a, ts);
       if (o == null) { // cours du même actif le plus proche dans le cache (autre heure)
         let best = null, bd = Infinity; const pre = a + '|h';
@@ -331,7 +379,7 @@
       if (opts && opts.zeroIfUnknown) { unvalued.add(a); approx.add(a + '|' + ts); return 0; } // jamais de calcul bloqué : actif non valorisé, signalé
       return null;
     };
-    fn.approx = approx; fn.unvalued = unvalued; return fn;
+    fn.approx = approx; fn.unvalued = unvalued; fn.prec = prec; return fn;
   }
   /* progress(étape, fait, total) ; opt.signal pour annuler ; opt.onSave() appelé régulièrement (cache persistant). */
   async function prepare(txs, src, cache, log, opt) {
@@ -362,9 +410,20 @@
       const ts = by[a], r = await src.series(a, Math.min(...ts), Math.max(...ts));
       if (r === null) cache[a + '|none'] = 1; // aucune source ne connaît ce jeton
       else if (r === undefined) failed.push(a); // erreur réseau : rien n'est mis en cache, on réessaiera
-      else { if (r.suspect) cache[a + '|suspect'] = 1; else delete cache[a + '|suspect']; for (const t of ts) { const h = Math.floor(t / HOUR); for (const d of [0, -1, 1, -2, 2]) if (r.s[h + d] != null) { cache[a + '|h' + h] = r.s[h + d]; break; } } }
+      else { cache[a + '|src'] = r.src; if (r.suspect) cache[a + '|suspect'] = 1; else delete cache[a + '|suspect']; for (const t of ts) { const h = Math.floor(t / HOUR); for (const d of [0, -1, 1, -2, 2]) if (r.s[h + d] != null) { cache[a + '|h' + h] = r.s[h + d]; break; } } }
       log('Cours', ++done, assets.length); save();
     }, signal);
+    // 2 bis. cours à la minute pour la valeur du portefeuille (l. 212) quand le relevé donne l'heure ; repli horaire sinon
+    if (src.minute && opt.minute !== false) {
+      const seen = new Set(), todo = E.neededPrices(txs).filter(n => hasTime(n.ts)).map(n => ({ asset: n.asset, ts: n.ts, k: minKey(n.asset, n.ts) }))
+        .filter(n => typeof cache[n.k] !== 'number' && cache[n.k + 'x'] == null && !seen.has(n.k) && seen.add(n.k)).slice(0, opt.maxMinute != null ? opt.maxMinute : 400);
+      let dm = 0;
+      await pool(todo, 2, async n => {
+        const r = await src.minute(n.asset, n.ts);
+        if (r) { cache[n.k] = r.p; cache[n.k + 's'] = r.k + '|' + r.src; } else if (r === null) cache[n.k + 'x'] = 1; // undefined (réseau) : réessayé au prochain calcul
+        log('Cours à la minute', ++dm, todo.length); if (dm % 20 === 0) save();
+      }, signal);
+    }
     // 3. quantités tronquées (xlsx)
     const fn = priceLookup(txs, cache, opt.manual, { zeroIfUnknown: true }), obs0 = observed(txs);
     for (const t of rec) {
@@ -465,6 +524,6 @@
     }
     fn.tries = k; fn.src = src; return fn;
   }
-  const api = { prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
+  const api = { hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);

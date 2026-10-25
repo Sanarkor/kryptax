@@ -108,7 +108,7 @@
     doc.setTextColor(0, 0, 0);
     // 1) Tableau des cessions
     const head = [A(['N°', 'Actif', 'Quantité', ...SHORT])];
-    const body = x.cessions.map(c => A([c.n + (multi ? ' (' + c.year + ')' : ''), c.asset, qfmt(c.qty), c.date.slice(0, 16), ...NUM.map(k => fr(c[k]))]));
+    const body = x.cessions.map(c => A([c.n + (multi ? ' (' + c.year + ')' : ''), c.asset, qfmt(c.qty), c.date.slice(0, 16) + (c.prec ? '\n' + c.prec : ''), ...NUM.map(k => fr(c[k]))]));
     const gl = x.totals.map(t => A(['GLOBAL', multi ? String(t.year) : '', t.n + ' cession' + (t.n > 1 ? 's' : ''), '', '', fr(t.l213), fr(t.l214), '', '', '', fr(t.l218), '', '', '', '', frs(t.l224)]));
     const center = { halign: 'center' };
     doc.autoTable({ startY: 31, head, body: body.concat(gl), theme: 'grid', margin: { left: M, right: M, top: 12, bottom: 10 }, showHead: 'everyPage', rowPageBreak: 'avoid',
@@ -125,6 +125,7 @@
       lines.push(['Case 2042-C', t.exonere ? 'aucune (seuil de 305 € non dépassé)' : `${t.box} = ${t.report} €`]);
     }
     if (!n) lines.unshift(['Cessions', `Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`]);
+    if (x.prec) lines.push(['Précision des cours', x.prec]);
     lines.push(['Échanges crypto -> crypto exclus', `${x.swapCount} (non imposables)`]);
     let y = doc.lastAutoTable.finalY + 4; const need = lines.length * 5.2 + 4;
     if (y + need > H - 10) { doc.addPage(); y = 14; }
