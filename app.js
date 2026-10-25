@@ -430,7 +430,7 @@
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
-    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Voir le PDF</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p><p id="pdfmsg" class="note warn pdfmsg" role="status" aria-live="polite" hidden></p>';
+    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Voir le PDF</button> <button id="print" class="ghost" hidden>Imprimer</button></p><p id="pdfmsg" class="note warn pdfmsg" role="status" aria-live="polite" hidden></p>';
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
     const X = window.KryptaxExport;
     if (X) {
@@ -564,23 +564,6 @@
     return `<details class="note spec" id="special"><summary>${esc(head)}</summary><ul>${li}</ul><p>Kryptax ne calcule pas leur imposition propre (revenus, etc.).</p></details>`;
   }
   let lastOut = null, lastY = null, fyear = null;
-  // Aperçu à l'écran du PDF : seules la date et la crypto sont en clair ; les montants sont des valeurs factices floutées (le vrai texte n'est pas dans le DOM)
-  function showPeek() {
-    const X = window.KryptaxExport; if (!X || !lastY) return;
-    const x = X.exportData(lastY, lastS, summaryRows, txs, fyear), F = '<span class="m">0 000,00</span>', heads = ['N°', 'Actif', 'Quantité', '211 Date (Paris)', '212 Valeur portefeuille', '213 Prix de cession', '214 Frais', '215 Net frais', '216 Soulte', '217 Net soultes', '218 Net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions capital initial', '222 Soultes antérieures', '223 Acquisition net', '224 Plus ou moins-value'];
-    const rows = x.cessions.map(c => `<tr><td class="c"><span class="m">00</span></td><td class="c b">${esc(c.asset)}</td><td class="c"><span class="m">0,00</span></td><td class="c">${esc(c.date.slice(0, 16))}</td>${'<td>' + F + '</td>'.repeat(1)}${Array(11).fill('<td>' + F + '</td>').join('')}</tr>`).join('');
-    const glob = `<tr class="g"><td class="c">GLOBAL</td><td></td><td class="c"><span class="m">00 cessions</span></td><td></td>${Array(12).fill('<td>' + F + '</td>').join('')}</tr>`;
-    const box = document.createElement('div'); box.id = 'peekbox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
-    box.innerHTML = `<div class="pk-bar"><span>Aperçu du PDF — montants masqués</span><button class="small" id="pkclose" aria-label="Fermer">✕ Fermer</button></div><div class="pk-wrap"><div class="pk-page"><div class="pk-logo"><span class="pk-k" aria-hidden="true">K</span>${[...'Kryptax'].map((c, i) => `<span class="lc${i}">${c}</span>`).join('')}</div><div class="pk-sub">Formulaire 2086 pour la fiscalité française</div><div class="pk-year">${esc(X.title(fyear))}</div>
-      <table class="pk-t"><tr>${heads.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${rows}${glob}</table>
-      ${x.cessions.length ? '' : `<p class="pk-none">Aucune cession imposable en ${fyear}.</p>`}<p class="pk-sum"><b>Total global plus-value nette</b> ${F}</p><p class="pk-hint">Le PDF téléchargé est complet et lisible.</p></div></div>`;
-    document.body.appendChild(box);
-    const fit = () => { const pg = box.querySelector('.pk-page'), w = box.querySelector('.pk-wrap').clientWidth, s = Math.min(1, (w - 8) / 1000); pg.style.transform = `scale(${s})`; box.querySelector('.pk-wrap').style.height = (pg.offsetHeight * s + 12) + 'px'; };
-    fit(); window.addEventListener('resize', fit);
-    const close = () => { window.removeEventListener('resize', fit); box.remove(); };
-    box.querySelector('#pkclose').onclick = close; box.onclick = ev => { if (ev.target === box) close(); };
-    document.addEventListener('keydown', function k(ev) { if (ev.key === 'Escape') { close(); document.removeEventListener('keydown', k); } });
-  }
   function cmpBlock(Y) {
     const ys = Object.keys(Y).sort().reverse(); if (!ys.length) return '';
     const d = (k, v) => { const c = manual[k]; if (c == null || v == null) return ''; const x = v - c; return ` <span class="${Math.abs(x) < 1 ? '' : 'warn'}">écart ${x >= 0 ? '+' : ''}${eur(x)}</span>`; };
@@ -606,7 +589,6 @@
   $('#results').addEventListener('click', e => {
     if (e.target.id === 'print') window.print();
     if (e.target.id === 'rerun') $('#run').click();
-    if (e.target.closest && e.target.closest('#peek')) showPeek();
     if (e.target.id === 'pdfx') { if (adSeen) { adDone = true; downloadPdf(); adDone = false; } else openAdGate(); }
   });
 
