@@ -41,10 +41,14 @@
     for (const f in FIELDS) { for (const cand of FIELDS[f]) { const i = h.indexOf(cand); if (i > -1 && !Object.values(m).includes(i)) { m[f] = i; break; } } if (m[f] == null) { const i = h.findIndex((x, j) => FIELDS[f].some(c => x.includes(c)) && !Object.values(m).includes(j)); if (i > -1) m[f] = i; } }
     return m;
   }
+  let holders = JSON.parse(localStorage.getItem('kryptax.holders') || '{}'), holdInfo = '';
+  const saveHolders = () => localStorage.setItem('kryptax.holders', JSON.stringify(holders));
   const showErr = m => { const n = $('#err'); if (n) { n.textContent = m || ''; n.hidden = !m; } };
   $('#files').addEventListener('change', async e => {
     showErr('');
+    holdInfo = '';
     for (const file of e.target.files) { try {
+      if (KP.fileList(txs).some(f => f.name === file.name)) { holdInfo = 'Fichier déjà ajouté, ignoré : ' + file.name; renderFiles(); continue; }
       if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') { await importPdf(file); continue; }
       if (/\.xlsx?$/i.test(file.name)) {
         if (!window.XLSX) { showErr('Lecture Excel indisponible, rechargez la page.'); continue; }
@@ -66,6 +70,7 @@
     $('#progress').textContent = '';
     const r = KP.parsePdfLines(lines);
     if (!r.rows.length && !r.fiat.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.');
+    holders[file.name] = KP.holderFromLines(lines); saveHolders();
     const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
     txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
@@ -96,7 +101,7 @@
       const mp = {}; box.querySelectorAll('[data-f]').forEach(s => { if (s.value !== '') mp[s.dataset.f] = +s.value; });
       const o = {}; box.querySelectorAll('[data-o]').forEach(s => o[s.dataset.o] = s.value);
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Il faut au minimum Date, Crypto et Quantité.');
-      o.xlsx = isXlsx; o.source = name;
+      o.xlsx = isXlsx; o.source = name; holders[name] = KP.holderFromRows(rows); saveHolders();
       const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
       save(); box.remove(); renderTx(); autoRun();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
@@ -218,11 +223,17 @@
   }
   function renderFiles() {
     const L = KP.fileList(txs), box = $('#flist'); if (!box) return;
-    box.innerHTML = L.map(f => `<li><span>${esc(f.name)}</span> <button class="small ghost" data-rmf="${esc(f.name)}" aria-label="Retirer ${esc(f.name)}">✕</button></li>`).join('');
-    box.hidden = !L.length; $('#validate').disabled = !txs.length || !dirty;
+    for (const k in holders) if (!L.some(f => f.name === k)) { delete holders[k]; saveHolders(); }
+    const H = KP.checkHolders(holders, L.map(f => f.name)), hm = $('#holdmsg');
+    if (hm) {
+      const msg = H.status === 'conflict' ? `<div class="note warn">Ces relevés ne semblent pas appartenir à la même personne (${esc(H.a)} ≠ ${esc(H.b)}). Retirez le fichier concerné.</div>` : H.status === 'ok' ? `<div class="note ok">✅ Même titulaire sur les ${H.n} fichiers</div>` : '';
+      hm.innerHTML = msg + (holdInfo ? `<div class="note ok">${esc(holdInfo)}</div>` : ''); hm.hidden = !hm.innerHTML;
+    }
+    box.innerHTML = L.map(f => `<li${H.bad.includes(f.name) ? ' class="badf"' : ''}><span>${H.bad.includes(f.name) ? '⚠️ ' : ''}${esc(f.name)}</span> <button class="small ghost" data-rmf="${esc(f.name)}" aria-label="Retirer ${esc(f.name)}">✕</button></li>`).join('');
+    box.hidden = !L.length; $('#validate').disabled = !txs.length || !dirty || H.status === 'conflict';
   }
   $('#flist').addEventListener('click', e => { const n = e.target.dataset && e.target.dataset.rmf; if (n == null) return; txs = txs.filter(t => (t.source || 'Saisie manuelle') !== n); E.detectSwaps(txs); save(); dirty = !!txs.length; window.__kxDone = false; $('#results').innerHTML = ''; renderTx(); });
-  $('#validate').onclick = () => { if (!txs.length) return; dirty = false; renderFiles(); $('#run').click(); };
+  $('#validate').onclick = () => { if (!txs.length || KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') return; holdInfo = ''; dirty = false; renderFiles(); $('#run').click(); };
   function renderTx() {
     renderSwaps(); renderFiles();
     const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
@@ -299,12 +310,12 @@
   $('#run').onclick = async () => {
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = 'Calcul en cours…'; $('#progress').className = ''; };
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent)) { $('#progress').textContent = 'Calcul en cours…'; $('#progress').className = ''; } };
     let src;
     try {
-      src = KP.makeSources((u, o) => fetch(u, o), { signal: runCtl.signal, });
-      const persist = () => saveCache();
-      livePrice = await KP.prepare(txs, src, cache, show, { signal: runCtl.signal, concurrency: 4, onSave: persist, manual });
+      const persist = () => saveCache(), sig = runCtl.signal;
+      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual,
+        onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
       livePrice.txs = txs; renderDiag(src, livePrice);
       persist(); save(); renderTx();
       const st = src.stats;
@@ -453,7 +464,7 @@
       try {
         if (e.target.id === 'csv') dl(new Blob([X.makeCsv(data)], { type: 'text/csv;charset=utf-8' }), `kryptax-2086-${stamp}.csv`);
         if (e.target.id === 'xlsx') dl(new Blob([XLSX.write(X.makeXlsx(XLSX, data), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `kryptax-2086-${stamp}.xlsx`);
-        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`);
+        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear), X.logoPng()).output('blob'), `kryptax-2086-${stamp}.pdf`);
       } catch (err) { alert('Export impossible, réessayez.'); }
     }
   });
