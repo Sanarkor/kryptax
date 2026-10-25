@@ -110,8 +110,11 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     { id: 4, date: Date.UTC(2026, 8, 5), type: 'SELL', asset: 'AAA', qty: 1, eur: 100, fee: 0 },
     { id: 5, date: Date.UTC(2028, 1, 5), type: 'SELL', asset: 'AAA', qty: 2, eur: 200, fee: 0 }];
   const r = E.compute(T, P), Y = E.byYear(r);
-  const yo = X.yearOptions(Y, 2026); eq(yo[0], 2026, 'Années : commence en 2026 (2025 non proposée)'); eq(yo[yo.length - 1], 2028, 'Années : jusqu’à la dernière année des données'); eq(X.yearOptions({}, 2026).length, 2, 'Années sans données : 2026 et 2027');
-  eq(X.defaultYear(Y, 2026), 2028, 'Année par défaut : la plus récente avec cessions'); eq(X.defaultYear({}, 2026), 2026, 'Année par défaut sans cession : 2026');
+  const NOW = 2026; // date du jour simulée
+  for (const [now, a, b] of [[2026, 2021, 2026], [2028, 2023, 2028], [2031, 2026, 2031], [2060, 2055, 2060]]) { const yo = X.yearOptions(Y, now);
+    eq(yo.length, 6, `Date simulée ${now} : 6 années`); eq(yo[0], a, `Date simulée ${now} : commence en ${a}`); eq(yo[5], b, `Date simulée ${now} : finit en ${b} (aucune année future)`); eq(yo.every(y => X.selectable(y, now)) ? 1 : 0, 1, `Date simulée ${now} : toutes sélectionnables`); }
+  eq(X.selectable(2027, NOW) ? 1 : 0, 0, 'Année future refusée');
+  eq(X.defaultYear(Y, NOW), 2026, 'Défaut en 2026 : 2026 (cession 2028 future ignorée)'); eq(X.defaultYear(Y, 2028), 2028, 'Défaut en 2028 : 2028, la plus récente avec cessions'); eq(X.defaultYear(Y, 2031), 2028, 'Défaut en 2031 : 2028'); eq(X.defaultYear(Y, 2060), 2060, 'Défaut en 2060 : année en cours (cessions trop anciennes)'); eq(X.defaultYear({}, NOW), 2026, 'Défaut sans cession : année en cours');
   const x26 = X.exportData(Y, {}, () => [], T, 2026), all = X.exportData(Y, {}, () => [], T);
   eq(x26.cessions.length, 2, 'Export 2026 : seulement les 2 cessions de 2026'); eq(x26.totals.length, 1, 'Export 2026 : une seule ligne GLOBAL');
   eq(x26.cessions.every(c => c.year === 2026) ? 1 : 0, 1, 'Export 2026 : aucune cession d’une autre année');
