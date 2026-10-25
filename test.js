@@ -143,6 +143,11 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   m = KP.mergeImport(m.txs, f3); eq(m.txs.length, 5, 'Deux opérations identiques dans un même fichier : conservées');
   const L = KP.fileList(m.txs); eq(L.length, 3, 'Liste des fichiers : 3'); eq(L.map(f => f.name).sort().join(',') === 'a.pdf,b.csv,c.pdf' ? 1 : 0, 1, 'Liste des fichiers : noms');
   const after = m.txs.filter(t => t.source !== 'b.csv'); eq(KP.fileList(after).length, 2, 'Retirer un fichier (✕)');
+  { const A9 = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), H9 = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C9 = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
+    eq(/role="progressbar"[^>]*aria-valuenow/.test(H9) && /id="progress" aria-live="polite"/.test(H9) && !/<progress id="bar"/.test(H9) ? 1 : 0, 1, 'Progression : barre pleine largeur accessible, texte annoncé');
+    eq(!/sur \$\{tot\}|Cours récupérés/.test(A9) && /Calcul de vos plus-values en cours…/.test(A9) && /Math\.min\(97/.test(A9) && /if \(v > target\) target = v/.test(A9) ? 1 : 0, 1, 'Progression : sans numéros, lissée, jamais de recul, 97 % max avant la fin');
+    eq(/linear-gradient\(90deg,#3b82f6,#f59e0b,#22c55e\);transition:transform \.35s ease-out/.test(C9) && /prefers-reduced-motion:reduce\)\{\.kxfill\{transition:none\}/.test(C9) ? 1 : 0, 1, 'Progression : couleurs du logo, fluide, mouvement réduit respecté');
+    eq(/header \.sub\{font-size:1\.3em;font-weight:700[^}]*animation:kxglow 8s linear infinite\}/.test(C9) && /reduce\)\{header \.sub\{animation:none\}/.test(C9) ? 1 : 0, 1, 'Sous-titre : +30 %, gras, dégradé et halo du logo'); }
   const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'); eq(/function autoRun\(\)[^]*?\$\('#run'\)\.click\(\)[^]*?function renderFiles/.test(A) ? 1 : 0, 0, 'L’import ne lance plus le calcul'); }
 // CSP : chaque hôte appelé par le code doit figurer dans connect-src
 {
