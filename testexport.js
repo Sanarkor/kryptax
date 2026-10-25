@@ -23,4 +23,9 @@ chk(!/Soldes|Revenus/.test(txt) && /exclus \(non imposables\)\s+4\s*$/m.test(txt
 const csv = X.makeCsv(x);
 chk(/GLOBAL/.test(csv) && /TOTAL GLOBAL/.test(csv), 'CSV : ligne GLOBAL et total global');
 chk(!/revolut/i.test(txt + csv), 'PDF/CSV : aucune mention de la plateforme');
+// Année choisie : titre et année vide (fictif)
+{ const xy = X.exportData(Y, S, () => [], T, 2026), ty = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xy, X.title(2026)).output('arraybuffer')) }).toString();
+  chk(/Annee 2026 - declaration 2027|Année 2026 - déclaration 2027/.test(ty), 'PDF : titre « Année 2026 — déclaration 2027 »');
+  const xe = X.exportData(Y, S, () => [], T, 2027), te = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xe, X.title(2027)).output('arraybuffer')) }).toString();
+  chk(/Aucune cession imposable en 2027/.test(te) && /GLOBAL/.test(te) && /2027 - d.claration 2028/.test(te), 'PDF année sans cession : message et GLOBAL à 0'); }
 process.exit(ok ? 0 : 1);

@@ -101,6 +101,30 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const i0 = csv.indexOf('CESSIONS (2086)'); eq(csv.slice(i0 + 2).findIndex(l => l === ''), 19, 'CSV : 18 lignes sous CESSIONS + 1 ligne GLOBAL'); eq(csv[i0 + 2 + 18].split(';')[1] === 'GLOBAL' ? 1 : 0, 1, 'CSV : ligne GLOBAL en fin de tableau');
   eq(X.FORM.map(f => f[0]).join(',') === '211,212,213,214,215,216,217,218,220,221,222,223,224' ? 1 : 0, 1, 'Export : lignes 211 à 224 de la 2086 dans l’ordre');
 }
+// Année fiscale (données fictives sur plusieurs années) : calcul cumulatif, export de la seule année choisie
+{
+  const X = require('./export.js'), P = (a, ts) => ({ AAA: 100 })[a] || 100;
+  const T = [{ id: 1, date: Date.UTC(2025, 0, 5), type: 'BUY', asset: 'AAA', qty: 10, eur: 500, fee: 0 },
+    { id: 2, date: Date.UTC(2025, 5, 5), type: 'SELL', asset: 'AAA', qty: 1, eur: 100, fee: 0 },
+    { id: 3, date: Date.UTC(2026, 2, 5), type: 'SELL', asset: 'AAA', qty: 2, eur: 200, fee: 0 },
+    { id: 4, date: Date.UTC(2026, 8, 5), type: 'SELL', asset: 'AAA', qty: 1, eur: 100, fee: 0 },
+    { id: 5, date: Date.UTC(2028, 1, 5), type: 'SELL', asset: 'AAA', qty: 2, eur: 200, fee: 0 }];
+  const r = E.compute(T, P), Y = E.byYear(r);
+  const yo = X.yearOptions(Y, 2026); eq(yo[0], 2026, 'Années : commence en 2026 (2025 non proposée)'); eq(yo[yo.length - 1], 2028, 'Années : jusqu’à la dernière année des données'); eq(X.yearOptions({}, 2026).length, 2, 'Années sans données : 2026 et 2027');
+  eq(X.defaultYear(Y, 2026), 2028, 'Année par défaut : la plus récente avec cessions'); eq(X.defaultYear({}, 2026), 2026, 'Année par défaut sans cession : 2026');
+  const x26 = X.exportData(Y, {}, () => [], T, 2026), all = X.exportData(Y, {}, () => [], T);
+  eq(x26.cessions.length, 2, 'Export 2026 : seulement les 2 cessions de 2026'); eq(x26.totals.length, 1, 'Export 2026 : une seule ligne GLOBAL');
+  eq(x26.cessions.every(c => c.year === 2026) ? 1 : 0, 1, 'Export 2026 : aucune cession d’une autre année');
+  const c26 = all.cessions.filter(c => c.year === 2026); eq(x26.cessions[0].l221, c26[0].l221, 'Cumulatif : l. 221 de 2026 tient compte de la cession 2025');
+  eq(x26.cessions[0].l221 > 0 ? 1 : 0, 1, 'Cumulatif : l. 221 > 0 grâce à 2025'); eq(x26.cessions[0].l220, 500, 'Cumulatif : prix total d’acquisition depuis le premier achat');
+  eq(x26.totals[0].l213, 300, 'GLOBAL 2026 : 213 = 300'); eq(x26.totals[0].l224, +(x26.cessions[0].l224 + x26.cessions[1].l224).toFixed(2), 'GLOBAL 2026 = somme des 224 de 2026');
+  eq(X.makeCsv(x26).includes('Année 2026 — déclaration 2027') ? 1 : 0, 1, 'CSV : titre « Année 2026 — déclaration 2027 »');
+  const x27 = X.exportData(Y, {}, () => [], T, 2027); eq(x27.cessions.length, 0, 'Année sans cession : aucune ligne'); eq(x27.totals[0].n, 0, 'Année sans cession : GLOBAL à 0 cession'); eq(x27.totals[0].l224, 0, 'Année sans cession : total 0');
+  eq(X.makeCsv(x27).includes('Année 2027 — déclaration 2028') ? 1 : 0, 1, 'CSV année vide : titre cohérent');
+}
+// Messages après calcul : « ✅ Aucune erreur » ou erreur courte, pas de compteur ni « Calcul terminé »
+{ const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+  eq(A.includes('✅ Aucune erreur') ? 1 : 0, 1, 'Message « ✅ Aucune erreur » présent'); eq(/textContent = 'Calcul terminé|transactions importées, dont/.test(A) ? 1 : 0, 0, 'Pas de « Calcul terminé » ni de compteur de transactions'); }
 // CSP : chaque hôte appelé par le code doit figurer dans connect-src
 {
   const fs = require('fs'), html = fs.readFileSync(__dirname + '/index.html', 'utf8'), csp = (html.match(/connect-src ([^;"]*)/) || [])[1] || '';
