@@ -74,15 +74,15 @@
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
   const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);
   const qfmt = q => String(q).replace('.', ',');
-    /* Logo 100 % vectoriel (aucun canvas, aucune image) : pastille « K » en trois aplats bleu / orange / vert + « Kryptax » lettre par lettre en couleurs RVB explicites.
+    /* Logo 100 % vectoriel (aucun canvas, aucune image) : pastille « K » en trois aplats bleu / cyan / vert + « Kryptax » lettre par lettre en couleurs RVB explicites.
      Tout est en remplissage (setFillColor / setTextColor) : rendu identique dans toutes les visionneuses, y compris en mode sombre. */
-  const LOGO_COLORS = [[37, 99, 235], [59, 130, 246], [234, 88, 12], [245, 158, 11], [217, 119, 6], [22, 163, 74], [34, 197, 94]];
+  const LOGO_COLORS = [[37, 99, 235], [59, 130, 246], [14, 165, 233], [6, 182, 212], [20, 184, 166], [16, 185, 129], [22, 163, 74]];
   function logo(doc, x0, y0, size) {
     const h = size * 0.3528 * 0.95, top = y0 - h * 0.86, b = h; // pastille carrée alignée sur la hauteur des capitales
     doc.setLineWidth(0);
     doc.setFillColor(59, 130, 246); doc.roundedRect(x0, top, b, b, b * 0.22, b * 0.22, 'F');
-    doc.setFillColor(245, 158, 11); doc.triangle(x0 + b, top + b * 0.35, x0 + b, top + b, x0 + b * 0.35, top + b, 'F');
-    doc.setFillColor(34, 197, 94); doc.triangle(x0 + b, top + b * 0.68, x0 + b, top + b, x0 + b * 0.68, top + b, 'F');
+    doc.setFillColor(34, 211, 238); doc.triangle(x0 + b, top + b * 0.35, x0 + b, top + b, x0 + b * 0.35, top + b, 'F');
+    doc.setFillColor(16, 185, 129); doc.triangle(x0 + b, top + b * 0.68, x0 + b, top + b, x0 + b * 0.68, top + b, 'F');
     // « K » blanc en tracés pleins (barres), pas de police
     const u = b / 10; doc.setFillColor(255, 255, 255);
     doc.rect(x0 + 2.6 * u, top + 2 * u, 1.5 * u, 6 * u, 'F');
