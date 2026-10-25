@@ -43,6 +43,14 @@
   }
   let holders = JSON.parse(localStorage.getItem('kryptax.holders') || '{}'), holdInfo = '';
   const saveHolders = () => localStorage.setItem('kryptax.holders', JSON.stringify(holders));
+  /* Mentions légales et vie privée : <dialog> natif (Échap, focus, clic hors du cadre) */
+  { const d = $('#privacy'), o = $('#privopen');
+    if (d && o) {
+      o.onclick = e => { e.preventDefault(); if (d.showModal) d.showModal(); else d.setAttribute('open', ''); $('#privclose').focus(); };
+      $('#privclose').onclick = () => { d.close ? d.close() : d.removeAttribute('open'); o.focus(); };
+      d.addEventListener('click', e => { if (e.target === d) $('#privclose').click(); });
+      d.addEventListener('close', () => o.focus());
+    } }
   const showErr = m => { const n = $('#err'); if (n) { n.textContent = m || ''; n.hidden = !m; } };
   $('#files').addEventListener('change', async e => {
     showErr('');
@@ -193,7 +201,7 @@
     const el = $('#swaps'); if (!el) return;
     const byId = {}; txs.forEach(t => byId[t.id] = t);
     const outs = E.sortTx(txs).filter(t => (t.swapAuto && t.type === 'EXCH_OUT') || t.swapForce === 'taxable' && t.rawSwap === 'out');
-    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (ligne de type « … – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" style="width:100%">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
+    const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (ligne de type « … – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" class="wfull">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
     if (!outs.length) { el.innerHTML = txs.length ? chk : ''; return; }
     const nAuto = outs.filter(t => t.swapAuto).length, nForced = outs.length - nAuto;
     el.innerHTML = `<p class="ok">🔁 ${nAuto} échange${nAuto > 1 ? 's' : ''} crypto→crypto détecté${nAuto > 1 ? 's' : ''}, non imposable${nAuto > 1 ? 's' : ''}${nForced ? ` · ${nForced} forcé${nForced > 1 ? 's' : ''} imposable${nForced > 1 ? 's' : ''}` : ''}.</p>
@@ -329,8 +337,6 @@
     $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
   };
   $('#cancel').onclick = () => runCtl && runCtl.abort();
-  $('#cckey').value = localStorage.getItem('kryptax.cckey') || '';
-  $('#cckey').onchange = e => localStorage.setItem('kryptax.cckey', e.target.value.trim());
 
   /* ---------- Résultats 2086 ---------- */
   const ROWS = [
