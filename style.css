@@ -141,9 +141,10 @@ footer .law{display:block;margin-top:4px;font-size:.9em;overflow-wrap:anywhere}
 footer .footline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;text-align:left}
 footer .fiscfr{margin-left:auto}
 /* Encart publicitaire (remplaçable par une régie : seul le contenu de .adslot change) */
-.adslot{margin:18px 0 6px;padding:8px 12px 10px;border:1px solid var(--line);border-radius:12px;background:#0b1220;max-width:100%;box-sizing:border-box;overflow:hidden;}
-.adlabel{margin:0 0 6px;font-size:.7em;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.adslot{margin:14px 0 4px;padding:6px 8px 8px;border:1px solid var(--line);border-radius:12px;background:#0b1220;max-width:100%;box-sizing:border-box;overflow:hidden;}
+.adhead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 8px;margin:0 0 4px;font-size:.66em;line-height:1.4;color:var(--muted)}
+.adlabel{letter-spacing:.06em;text-transform:uppercase}
 .adhit{display:block;width:100%;padding:0;border:0;border-radius:8px;background:#000;cursor:pointer;overflow:hidden}
-.adimg{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
+.adimg{display:block;width:100%;height:auto;aspect-ratio:640/278;object-fit:cover}
 .admsg{margin:6px 0 0;font-size:.8em;color:var(--warn);text-align:center}
-.adnote{margin:8px 0 0;font-size:.72em;color:var(--muted);text-align:center}
+.adnote{opacity:.85}
