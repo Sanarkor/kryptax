@@ -2,6 +2,8 @@
 
 Kryptax aide à remplir le **formulaire 2086** (plus-values de cession d'actifs numériques) pour la **fiscalité française uniquement** : art. 150 VH bis du CGI, imposition forfaitaire de **12,8 %** (art. 200 C du CGI), BOI-RPPM-PVBMC-30.
 
+Gratuit, open-source, sans compte. Vos données restent sur votre appareil.
+
 En ligne : https://sanarkor.github.io/kryptax/
 
 > ⚠️ **Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
