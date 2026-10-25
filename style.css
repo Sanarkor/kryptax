@@ -134,3 +134,9 @@ details>summary{list-style:none}details>summary::-webkit-details-marker{display:
 footer .law{display:block;margin-top:4px;font-size:.9em;overflow-wrap:anywhere}
 .wfull{width:100%}.privlink{text-align:center;margin:-14px 0 14px;font-size:.72em}.privlink a{color:var(--muted);opacity:.7;text-decoration:none}.privlink a:hover,.privlink a:focus-visible{opacity:1;text-decoration:underline}#privacy{max-width:min(560px,calc(100vw - 24px));width:100%;box-sizing:border-box;max-height:85vh;overflow:auto;padding:0;border:1px solid #334155;border-radius:12px;background:#0f172a;color:#e2e8f0}#privacy::backdrop{background:rgba(0,0,0,.6)}#privacy .pv-in{padding:16px 18px;font-size:.9rem;line-height:1.45;overflow-wrap:anywhere}#privacy h2{margin:0 0 8px;font-size:1.1rem}#privacy h3{margin:12px 0 2px;font-size:.92rem}#privacy p{margin:0 0 6px}#privacy .pv-close{text-align:right;margin-top:12px}
 #special{font-size:.82em;color:var(--muted);padding:6px 10px;overflow-wrap:anywhere}#special summary{cursor:pointer}#special ul{margin:6px 0 4px 18px;padding:0}#special p{margin:2px 0}
+
+#pdfx.off{opacity:.45;filter:grayscale(1);cursor:not-allowed}
+.pdfmsg{margin-top:8px;text-align:left;overflow-wrap:anywhere}
+.pdfmsg button{margin-top:6px}
+footer .footline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;text-align:left}
+footer .fiscfr{margin-left:auto}

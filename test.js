@@ -149,7 +149,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github/.test(h));
   { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), D = (H.match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0], A = fs.readFileSync(__dirname + '/app.js', 'utf8'), P = fs.readFileSync(__dirname + '/pipeline.js', 'utf8');
     eq(D ? 1 : 0, 1, 'Panneau vie privée présent');
-    eq(H.includes('<footer>Kryptax — Formulaire 2086<br><span class="law">Art. 150 VH bis CGI') ? 1 : 0, 1, 'Pied de page inchangé');
+    eq(H.includes('<footer><div class="footline"><span>Kryptax — Formulaire 2086</span><span class="fiscfr">Fiscalité Française</span></div><span class="law">Art. 150 VH bis CGI') ? 1 : 0, 1, 'Pied de page inchangé');
     eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page');
     eq(/revolut|code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni Revolut ni « code ouvert »');
     eq(/style="/.test(H + A) ? 1 : 0, 0, 'Aucun style inline (CSP)');
@@ -224,7 +224,15 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     const r2 = await P.prepareRetry(txr.slice(0, 2), mkFail, {}, () => {}, { unit: 1, maxTries: 4 });
     eq(r2.tries === 4 && r2.failed.length === 1 ? 1 : 0, 1, 'Plafond de tentatives : arrêt puis cours ≈ et « Relancer »');
   }
-  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer>Kryptax — Formulaire 2086<br><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
+  { const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
+    eq((A.match(/makePdf\(/g) || []).length, 1, 'PDF : un seul point de génération');
+    const d = A.slice(A.indexOf('function downloadPdf'), A.indexOf('makePdf('));
+    eq(/currentBlockers\(\)[\s\S]*if \(b\.length\) \{ pdfRefused\(b\); return false; \}[\s\S]*if \(pdfBusy\) return false/.test(d) ? 1 : 0, 1, 'PDF : blocage imposé dans la génération (erreur, double clic)');
+    eq(/if \(e\.target\.id === 'pdfx'\) downloadPdf\(\);/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton passe par downloadPdf, message non bloquant');
+    eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
+    eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
+    eq(/footer \.footline\{display:flex;flex-wrap:wrap;justify-content:space-between/.test(C) ? 1 : 0, 1, 'Pied de page : Fiscalité Française à droite, retour à la ligne propre'); }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><div class="footline"><span>Kryptax — Formulaire 2086<\/span><span class="fiscfr">Fiscalité Française<\/span><\/div><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
   eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');
