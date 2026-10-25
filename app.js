@@ -310,17 +310,17 @@
   const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;
   let autoTry = 0, autoTimer = null, autoTick = null, autoFire = false;
   const retryDelay = k => k <= 5 ? RETRY_DELAY_MS : RETRY_DELAY_MS * Math.min(2 ** (k - 5), 10);
-  function cancelAuto() { clearTimeout(autoTimer); clearInterval(autoTick); autoTimer = autoTick = null; autoTry = 0; const p = $('#progress'); if (p && /dans \d+ s…$/.test(p.textContent)) p.textContent = ''; }
+  function autoInd(on) { const i = $('#autoind'); if (i) i.hidden = !on; }
+  function cancelAuto() { clearTimeout(autoTimer); clearInterval(autoTick); autoTimer = autoTick = null; autoTry = 0; autoInd(false); const p = $('#progress'); if (p && /dans \d+ s…$/.test(p.textContent)) p.textContent = ''; }
   function scheduleAuto(failed) {
     clearTimeout(autoTimer); clearInterval(autoTick); autoTimer = autoTick = null;
     const p = $('#progress'), est = [...lastEst].filter(x => x !== '*');
-    if (failed || !lastEst.size) { if (!failed && autoTry) { p.textContent = 'Tous les cours ont été trouvés.'; p.className = 'hint'; } autoTry = 0; return; }
+    if (failed || !lastEst.size) { autoInd(false); autoTry = 0; return; }
     const names = est.length ? ' pour ' + est.map(esc).join(', ') : '';
-    if (autoTry >= AUTO_MAX) { p.textContent = `Cours toujours estimé (≈)${names} après ${AUTO_MAX} tentatives automatiques : saisissez le cours ou touchez « Relancer » plus tard.`; p.className = 'warn'; autoTry = 0; return; }
+    if (autoTry >= AUTO_MAX) { p.textContent = `Cours toujours estimé (≈)${names} après ${AUTO_MAX} tentatives automatiques : saisissez le cours ou touchez « Relancer » plus tard.`; p.className = 'warn'; autoInd(false); autoTry = 0; return; }
     autoTry++; const k = autoTry, at = Date.now() + retryDelay(k);
     est.forEach(a => { delete cache[a + '|none']; }); // « aucune source » : on redemande
-    const tick = () => { p.textContent = `Nouvelle tentative ${k}/${AUTO_MAX} dans ${Math.max(1, Math.ceil((at - Date.now()) / 1000))} s…`; p.className = 'hint'; };
-    tick(); autoTick = setInterval(tick, 250);
+    autoInd(true); // relance discrète : petit indicateur dans les résultats, sans barre ni compte à rebours
     autoTimer = setTimeout(() => { clearInterval(autoTick); autoTimer = autoTick = null; if (runCtl) return; autoFire = true; $('#run').click(); }, retryDelay(k));
   }
   /* Barre = progression réelle pondérée : taux de change 0–5 %, cours à la minute 5–70 %, cours horaires 70–90 %, calcul et affichage 90–100 %.
@@ -347,7 +347,7 @@
     const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
     const map = (p, r) => lo + (hi - lo) * (PHASES[p][1] + (PHASES[p][2] - PHASES[p][1]) * r) / 60;
     return {
-      start() { val = 0; last = -1; lo = 0; hi = 60; lab = ''; live = true; w.classList.remove('done'); w.hidden = false; paint(); },
+      start(quiet) { val = 0; last = -1; lo = 0; hi = 60; lab = ''; live = !quiet; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); },
       step(name, n, tot) {
         const p = PHASES.findIndex(x => name === x[0] || name.indexOf(x[0] + ' ') === 0); if (p < 0 || !tot) return;
         if (p < last) { lo = val; last = -1; } /* relance : nouvelle passe sur la part restante */
@@ -360,15 +360,15 @@
   }
   $('#run').onclick = async () => {
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
-    $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
-    const bar = progBar(), t0 = Date.now(); bar.start(); if (!autoTry) doneShown = false; /* relances auto = même calcul */
+    $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; const quiet = autoTry > 0; $('#cancel').hidden = quiet; runCtl = new AbortController(); pdfState(); let failed = false;
+    const bar = progBar(), t0 = Date.now(); bar.start(quiet); if (!autoTry) doneShown = false; /* relances auto = même calcul */
     const show = (step, n, tot) => { if (/^Nouvelle/.test($('#progress').textContent)) $('#progress').textContent = ''; bar.step(step, n, tot); };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
       livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
-        onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
+        onRetry: (k, max, f) => { if (quiet) return; $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
       bar.at(60); livePrice.txs = txs; renderDiag(src, livePrice);
       persist(); save(); bar.at(80); renderTx(); bar.at(92);
       const st = src.stats;
