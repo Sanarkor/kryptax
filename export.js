@@ -152,6 +152,11 @@
   const selectable = (y, now) => y >= now - PAST && y <= now;
   function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => selectable(y.year, now) && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : now; }
   const title = y => `Année ${y} — déclaration ${y + 1}`;
-  const api = { fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
+  // Nom du PDF : kryptax-formulaire-2086-{année}-sur-{année+1}-JJ-MM-AAAA-HH-mm.pdf, date/heure réelles de l’export à Paris
+  function pdfName(y, now) {
+    const p = {}; for (const x of new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now || new Date())) p[x.type] = x.value;
+    return `kryptax-formulaire-2086-${y}-sur-${y + 1}-${p.day}-${p.month}-${p.year}-${p.hour}-${p.minute}.pdf`;
+  }
+  const api = { pdfName, fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);
