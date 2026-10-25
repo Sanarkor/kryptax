@@ -193,6 +193,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   { // cours à la minute / à la seconde (sources simulées, aucune donnée réelle)
     const M0 = Date.UTC(2025, 2, 3, 14, 27), calls = [];
     const fm = async u => { calls.push(u); const R = (j, st = 200) => ({ status: st, json: async () => j }), st = +((u.match(/startTime=(\d+)/) || [])[1] || 0);
+      if (/ticker\/price/.test(u)) return R(['AAAEUR', 'EURUSDT', 'BBBUSDT'].concat(Array.from({ length: 60 }, (_, i) => 'PAD' + i + 'USDT')).map(symbol => ({ symbol, price: '1' })));
       if (/aggTrades\?symbol=AAAEUR/.test(u)) return R([{ p: '12.5', T: st + 300 }]);
       if (/klines\?symbol=AAAEUR&interval=1m/.test(u)) return R([[st, '12', '12', '12', '12']]);
       if (/klines\?symbol=EURUSDT&interval=1m/.test(u)) return R([[st, '1.25']]);
@@ -206,6 +207,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     q = await S2.minute('AAA', M0); eq(q && q.k === 'minute' && q.p === 12 ? 1 : 0, 1, 'Minute : bougie Binance 1 min de la minute exacte');
     q = await S2.minute('BBB', M0 + 20e3); eq(q && q.k === 'minute' && q.src === 'OKX' && q.p === 4 ? 1 : 0, 1, 'Minute : bougie d’une autre minute refusée, repli OKX 1 min converti en € (USDT → €)');
     q = await S2.minute('CCC', M0); eq(q, null, 'Minute : aucune source → null (repli sur le cours horaire)');
+    eq(calls.filter(u => /binance/.test(u) && /symbol=(CCC|AAAUSDT|BBBEUR)/.test(u)).length + calls.filter(u => /ticker\/price/.test(u)).length, 1, 'Paires Binance inexistantes jamais demandées (liste des paires chargée une seule fois)');
     eq(P.hasTime(M0 + 7000) && !P.hasTime(Date.UTC(2025, 2, 3)) ? 1 : 0, 1, 'Heure présente détectée ; date seule → cours journalier');
     const cache = { ['AAA|m' + Math.floor(M0 / 60e3)]: 12, ['AAA|m' + Math.floor(M0 / 60e3) + 's']: 'minute|Binance', ['BBB|h' + Math.floor(M0 / 36e5)]: 4, 'BBB|src': 'OKX' };
     const fn = P.priceLookup([], cache, {}, { zeroIfUnknown: true }); fn('AAA', M0); fn('BBB', M0); fn('ZZZ', M0);

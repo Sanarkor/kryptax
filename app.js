@@ -290,6 +290,7 @@
       (src.assetDiag && Object.keys(src.assetDiag).length ? `<p class="hint">${Object.entries(src.assetDiag).map(([a, l]) => { const ok = l.find(x => / : OK$/.test(x)); return `<b>${esc(a)}</b> : ${ok ? esc(ok.replace(/ : OK$/, '')) : '≈ relevés'}`; }).join(' · ')}</p>` : '') + '</details>';
   }
   let runCtl = null;
+  function binSymsCached() { try { const o = JSON.parse(localStorage.getItem('kryptax.binsyms') || 'null'); return o && Date.now() - o.t < 864e5 && o.L.length > 50 ? new Set(o.L) : null; } catch (e) { return null; } } // liste publique des paires Binance (non sensible), 24 h
   /* Relance automatique tant qu'un cours n'est qu'estimé (≈) ou absent : 1 s après la fin du calcul, plafond AUTO_MAX, backoff léger après la 5e. */
   const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;
   let autoTry = 0, autoTimer = null, autoTick = null, autoFire = false;
@@ -311,11 +312,11 @@
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = autoTry ? `Nouvelle tentative ${autoTry}/${AUTO_MAX} en cours…` : 'Calcul en cours…'; $('#progress').className = ''; } };
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + (tot ? (step === 'Cours à la minute' ? 'Cours à la minute' : step === 'Cours' ? 'Récupération des cours' : step) + ` : ${n}/${tot}` : 'Calcul en cours…'); $('#progress').className = ''; } };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
-      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
+      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
       livePrice.txs = txs; renderDiag(src, livePrice);
