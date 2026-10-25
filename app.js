@@ -384,7 +384,7 @@
         h += `<div class="note warn">Cession du ${dt(c.date)} : cours introuvable pour ${c.missing.map(esc).join(', ')}. Renseignez le cours unitaire en € à ce moment : ${c.missing.map(a => `<label>${esc(a)} <input size="8" data-man="${esc(a)}@${c.tx.id}"></label>`).join(' ')} (0 si valeur négligeable) ou la valeur globale (ligne 212) : <input size="10" data-o212="${c.tx.id}"></div>`;
       }
       const ap = (a, c) => livePrice && livePrice.approx && livePrice.approx.has(a + '|' + c.date) ? '≈' : '';
-      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ')).join(' ;<br>')}</p></details>`;
+      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ') + (c.detail212.length ? ` <span class="prec">(${esc(KP.precLabel(KP.cessionPrec(livePrice, c)))})</span>` : '')).join(' ;<br>')}</p></details>`;
       h += `<p>Ligne 51 — total des prix de cession (218) : <b>${eur(y.total218)}</b>${y.exonere ? ' → <b>≤ 305 € : cessions exonérées</b>, pas d’autres lignes à remplir.' : ''}</p>`;
       h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : '<span class="' + (y.total224 >= 0 ? 'pos' : 'neg') + '">' + (y.total224 >= 0 ? '+' : '') + eur(y.total224) + '</span>'}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : flat tax = 12,8 % d’impôt + prélèvements sociaux (≈ 30 % au total ; taux des prélèvements sociaux à vérifier pour votre année) → environ ${eur(Math.max(0, y.total224) * 0.30)}. Option barème progressif : case 3CN.</div>`;
@@ -408,13 +408,17 @@
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const warns = sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : [];
       lastEst = new Set(est); if (t.incomplete) lastEst.add('*');
+      const PP = precOf(yc), precH = PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}<br>${yc.map((c, i) => PP.L[i] ? `C${i + 1} (${dt(c.date)}) : ${esc(PP.L[i])}` : '').filter(Boolean).join(' · ')}</p>` : '';
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
-      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + warns.map(e => `<div class="note warn">${e}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + h;
+      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + warns.map(e => `<div class="note warn">${e}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + precH + h;
     }
     $('#results').innerHTML = h; lastOut = out; lastY = Y; pdfState();
   }
+  function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); n += p.n; m += p.nMin; return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
+  const precText = P => `Cours pris à la minute pour ${P.m} opération${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
+  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = P.n ? precText(P) : ''; return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
@@ -482,7 +486,7 @@
     if (b.length) { pdfRefused(b); return false; }
     if (!adDone) return false;
     if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
-    const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs, fyear), stamp = fyear + '-decl' + (fyear + 1);
+    const X = window.KryptaxExport, data = withPrec(X.exportData(lastY, lastS, summaryRows, txs, fyear)), stamp = fyear + '-decl' + (fyear + 1);
     const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
     try { dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
     catch (err) { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } return false; }
