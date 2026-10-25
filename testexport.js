@@ -36,14 +36,13 @@ chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
   chk(xm.cessions.length === 45 && pg.length > 1, 'PDF 45 cessions : ' + pg.length + ' pages (> 1)');
   chk(pg.every(p => /224 Plus ou/.test(p) || !/^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : en-têtes de colonnes répétés');
   const lastTab = pg.map((p, i) => /^\s*GLOBAL/m.test(p) ? i : -1).filter(i => i >= 0); chk(lastTab.length === 1 && !pg.slice(lastTab[0] + 1).some(p => /^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : GLOBAL après la dernière cession'); }
-/* Logo : image embarquée (jamais noire), et repli texte coloré lettre par lettre ; analyse des pixels de la zone du logo (pdftoppm) */
+/* Logo : mot « Kryptax » vectoriel noir à contour gris métallique, sans icône ni couleur ; analyse des pixels de la zone du logo (pdftoppm) */
 { const cp = require('child_process'), zone = buf => { require('fs').writeFileSync('/tmp/kx-logo.pdf', buf); cp.execSync('pdftoppm -r 72 -f 1 -l 1 -x 0 -y 0 -W 170 -H 50 -singlefile /tmp/kx-logo.pdf /tmp/kx-logo'); const ppm = require('fs').readFileSync('/tmp/kx-logo.ppm'); let i = 0, nl = 0; while (nl < 3) if (ppm[i++] === 10) nl++;
-    let col = 0, dark = 0, blue = 0, orange = 0, green = 0, cyan = 0; for (; i + 2 < ppm.length; i += 3) { const r = ppm[i], g = ppm[i + 1], b = ppm[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn > 80) { col++; if (b > r && b > g) blue++; else if (r > 200 && g > 70 && b < 80) orange++; if (g > 150 && b > 150 && r < 120) cyan++; if (g > r && g > b) green++; } else if (mx < 90) dark++; } return { col, dark, blue, orange, green, cyan }; };
-  const pv = Buffer.from(X.makePdf(jsPDF, x, X.title(2026)).output('arraybuffer')), zv = zone(pv);
+    let col = 0, dark = 0, grey = 0; for (; i + 2 < ppm.length; i += 3) { const r = ppm[i], g = ppm[i + 1], b = ppm[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn > 60) col++; else if (mx < 60) dark++; else if (mx < 230) grey++; } return { col, dark, grey }; };
+  const pv = Buffer.from(X.makePdf(jsPDF, x, X.title(2026)).output('arraybuffer')), zv = zone(pv), src = require('fs').readFileSync(__dirname + '/export.js', 'utf8');
   chk(!/\/Subtype \/Image/.test(pv.toString('latin1')), 'Logo vectoriel : aucune image dans le PDF (pas de canvas)');
-  chk(zv.col > 300, 'Logo : zone colorée (' + zv.col + ' px couleur)');
-  chk(zv.dark < 450, 'Logo : sombre limité à l\'icône (' + zv.dark + ' px sombres) — échoue si le mot sort noir');
-  chk(zv.blue > 50 && zv.cyan > 20 && zv.green > 20 && zv.orange === 0, 'Logo : bleu, cyan et vert, sans orange (' + [zv.blue, zv.cyan, zv.green, zv.orange].join('/') + ')');
+  chk(zv.col < 20 && zv.dark > 200 && zv.grey > 50, 'Logo : « Kryptax » noir à contour gris, sans couleur (' + [zv.col, zv.dark, zv.grey].join('/') + ')');
+  chk(!/roundedRect\(x0, top/.test(src) && /renderingMode: 'fillThenStroke'/.test(src) && /logo\(doc, M, 15, 24\)/.test(src), 'Logo : sans icône K, aligné sur la marge gauche');
 }
 // Opérations particulières (jeu FICTIF) : détection par type/libellé, exclues des cessions, note courte en bas de la page paysage unique
 { const D = (m, d) => Date.UTC(2026, m, d, 10), T2 = [{ id: 's1', date: D(0, 2), type: 'BUY', asset: 'AAA', qty: 10, eur: 100, fee: 0, rawType: 'Achat' },
