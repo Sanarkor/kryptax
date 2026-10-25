@@ -289,7 +289,12 @@
     $('#diag').innerHTML = `<details><summary class="hint">Sources de prix : ${est ? est + ' actif' + (est > 1 ? 's' : '') + ' estimé' + (est > 1 ? 's' : '') + ' (≈)' : 'tous les cours trouvés'}</summary><table><tr><th>Source</th><th>État</th><th>Appels</th></tr>${Object.entries(src.diag).map(([k, d]) => `<tr><td>${esc(k)}</td><td>${d.ok ? 'OK' : '—'}</td><td class="num">${d.calls}</td></tr>`).join('')}</table>` +
       (src.assetDiag && Object.keys(src.assetDiag).length ? `<p class="hint">${Object.entries(src.assetDiag).map(([a, l]) => { const ok = l.find(x => / : OK$/.test(x)); return `<b>${esc(a)}</b> : ${ok ? esc(ok.replace(/ : OK$/, '')) : '≈ relevés'}`; }).join(' · ')}</p>` : '') + '</details>';
   }
-  let runCtl = null;
+  let runCtl = null, scopedYear = null;
+  /* Périmètre des cours : cessions jusqu'à la fin de l'année choisie (ou de la dernière année avec cessions) ; une année plus récente relance le calcul. */
+  function scopeUntil() {
+    const now = new Date().getFullYear(), ys = txs.filter(t => t.type === 'SELL' || t.type === 'PAY').map(t => new Date(t.date).getFullYear()).filter(y => y <= now);
+    scopedYear = fyear || (ys.length ? Math.max(...ys) : now); return new Date(scopedYear + 1, 0, 1).getTime();
+  }
   function binSymsCached() { try { const o = JSON.parse(localStorage.getItem('kryptax.binsyms') || 'null'); return o && Date.now() - o.t < 864e5 && o.L.length > 50 ? new Set(o.L) : null; } catch (e) { return null; } } // liste publique des paires Binance (non sensible), 24 h
   /* Relance automatique tant qu'un cours n'est qu'estimé (≈) ou absent : 1 s après la fin du calcul, plafond AUTO_MAX, backoff léger après la 5e. */
   const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;
@@ -316,7 +321,7 @@
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
-      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
+      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
       livePrice.txs = txs; renderDiag(src, livePrice);
@@ -402,13 +407,14 @@
       const now = new Date().getFullYear(), yrs = X.yearOptions(Y, now); if (!X.selectable(fyear, now)) fyear = X.defaultYear(Y, now);
       const t = X.exportData(Y, {}, () => [], [], fyear).totals[0], yc = (Y[fyear] || { cessions: [] }).cessions;
       const est = new Set(); yc.forEach(c => (c.detail212 || []).forEach(d => { if (livePrice && livePrice.approx && livePrice.approx.has(d.asset + '|' + c.date)) est.add(d.asset); }));
-      (livePrice && livePrice.unvalued ? [...livePrice.unvalued] : []).filter(x => manual[x] == null).forEach(x => est.add(x));
+      (livePrice && livePrice.unvalued ? [...livePrice.unvalued] : []).filter(x => manual[x] == null && yc.some(c => (c.detail212 || []).some(d => d.asset === x))).forEach(x => est.add(x)); // seulement les cryptos utiles aux cessions de l'année
+      const unk = (livePrice && livePrice.unknown || []).filter(x => manual[x] == null && yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const errs = [];
       if (t.incomplete) errs.push('Certains cours sont introuvables : le résultat est incomplet. Relancez le calcul plus tard.');
       else if (est.size) errs.push('Cours estimé (≈) pour ' + [...est].map(esc).join(', ') + ' : vérifiez le montant ou relancez plus tard.');
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
-      const warns = sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : [];
-      lastEst = new Set(est); if (t.incomplete) lastEst.add('*');
+      const warns = (unk.length ? ['Symbole non identifié, aucun cours demandé : ' + unk.map(esc).join(', ') + '. Saisissez son cours si besoin.'] : []).concat(sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : []);
+      lastEst = new Set([...est].filter(x => !unk.includes(x))); if (t.incomplete) lastEst.add('*'); // symbole non identifié : pas de relance
       const PP = precOf(yc), precH = PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '';
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
@@ -534,7 +540,7 @@
     return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening);
   }
   $('#results').addEventListener('change', e => {
-    if (e.target.id === 'fyear') { cancelAuto(); fyear = +e.target.value; renderResults(); return; }
+    if (e.target.id === 'fyear') { cancelAuto(); fyear = +e.target.value; if (scopedYear != null && fyear > scopedYear && !runCtl) { $('#run').click(); return; } renderResults(); return; }
     if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
     const k = e.target.dataset.cmp; if (k) { const v = E.parseNum(e.target.value); if (isFinite(v)) manual[k] = v; else delete manual[k]; save(); renderResults(); return; }
     const m = e.target.dataset.man, o = e.target.dataset.o212, v = E.parseNum(e.target.value);

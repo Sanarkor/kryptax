@@ -247,8 +247,23 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(r.tries, 2, 'Deux nouvelles tentatives');
     eq(rot.join() === '0,1,2' ? 1 : 0, 1, 'Nouvelles sources (rotation) à chaque tentative');
     eq(c['ZZZ|none'], 1, '« Aucun cours existant » : pas de boucle sur cet actif');
+    { // périmètre : seulement les cryptos identifiées des imports, aux dates utiles (données fictives)
+      const D = 86400e3, T1 = Date.UTC(2025, 5, 10, 9, 14), T2 = Date.UTC(2026, 2, 5, 15, 2), asked = [];
+      const tx = [{ id: 'p1', date: T1 - 9 * D, type: 'BUY', asset: 'AAA', qty: 3, eur: 30, fee: 0 }, { id: 'p2', date: T1 - 8 * D, type: 'BUY', asset: 'BBB', qty: 1, eur: 10, fee: 0 }, { id: 'p3', date: T1 - 7 * D, type: 'BUY', asset: 'QQQ', qty: 1, eur: 4, fee: 0 },
+        { id: 'p4', date: T1 - 5 * D, type: 'STAKING', asset: 'CCC', qty: 1, eur: 0, fee: 0 }, { id: 'p5', date: T1, type: 'SELL', asset: 'AAA', qty: 1, eur: 12, fee: 0 }, { id: 'p6', date: T2, type: 'SELL', asset: 'AAA', qty: 1, eur: 15, fee: 0 }];
+      const src = { known: async a => a !== 'QQQ', series: async (a, f, t) => { asked.push(['h', a, f, t]); const o = {}; for (let h = Math.floor(f / 36e5) - 3; h <= Math.floor(t / 36e5) + 3; h++) o[h] = 7; return { s: o, src: 'Test' }; },
+        minute: async (a, ts) => { asked.push(['m', a, ts]); return a === 'BBB' ? { p: 9, src: 'Test', k: 'minute' } : null; }, fxRange: async () => ({}), stats: {}, assetDiag: {} };
+      const c2 = {}, fz = await P.prepare(tx, src, c2, () => {}, { until: Date.UTC(2026, 0, 1), check: false });
+      eq(asked.some(x => x[1] === 'QQQ') ? 1 : 0, 0, 'Périmètre : aucune requête pour un symbole non identifié (signalé)');
+      eq(fz.unknown.join() === 'QQQ' ? 1 : 0, 1, 'Périmètre : symbole non identifié remonté à l’interface');
+      eq(asked.some(x => x[1] === 'CCC' && (x[2] === T1 - 5 * D)) ? 1 : 0, 0, 'Périmètre : aucun cours demandé à la date d’un revenu (staking)');
+      eq(asked.some(x => x[1] === 'CCC' && x[2] === T1) ? 1 : 0, 1, 'Crypto reçue en staking puis détenue : valorisée à la cession');
+      eq(asked.some(x => (x[2] || 0) >= Date.UTC(2026, 0, 1) || (x[3] || 0) >= Date.UTC(2026, 0, 1)) ? 1 : 0, 0, 'Périmètre : aucune requête pour une date hors de l’année choisie');
+      eq(asked.filter(x => x[0] === 'h' && x[1] === 'BBB').length, 0, 'Cours horaire inutile quand le cours à la minute est trouvé');
+      eq(asked.some(x => x[0] === 'm' && x[1] === 'BBB' && x[2] === T1) ? 1 : 0, 1, 'Valeur du portefeuille à la cession : crypto détenue (non vendue) bien demandée');
+    }
     let n2 = 0; const mkFail = () => ({ series: async () => { n2++; return undefined; }, fxRange: async () => ({}), stats: {}, assetDiag: {} });
-    const r2 = await P.prepareRetry(txr.slice(0, 2), mkFail, {}, () => {}, { unit: 1, maxTries: 4 });
+    const r2 = await P.prepareRetry(txr.slice(0, 2).concat([{ id: 'r9', date: T - 86400e3, type: 'BUY', asset: 'BBB', qty: 1, eur: 5, fee: 0 }]), mkFail, {}, () => {}, { unit: 1, maxTries: 4 });
     eq(r2.tries === 4 && r2.failed.length === 1 ? 1 : 0, 1, 'Plafond de tentatives : arrêt puis cours ≈ et « Relancer »');
   }
   { const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
@@ -263,7 +278,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/let adDone = false, adTimer = null, adSeen = false;/.test(A) && !/localStorage[^\n]*adSeen|adSeen[^\n]*localStorage/.test(A) && (A.match(/adSeen = true/g) || []).length === 1 ? 1 : 0, 1, 'Pub export : pub vue jusqu’au bout mémorisée en mémoire seulement (fermer avant la fin = pub revue)');
     eq(/const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;/.test(A) && /k <= 5 \? RETRY_DELAY_MS : RETRY_DELAY_MS \* Math\.min\(2 \*\* \(k - 5\), 10\)/.test(A) && /Nouvelle tentative \$\{k\}\/\$\{AUTO_MAX\} dans/.test(A) && /après \$\{AUTO_MAX\} tentatives automatiques/.test(A) ? 1 : 0, 1, 'Relance auto : 1 s, plafond 10, backoff après la 5e, message final');
     eq(['fyear = +e.target.value', 'dirty = true; window.__kxDone', "data-del')) return; cancelAuto()", 'cancelAuto(); txs = []', 'cancelAuto(); save(); dirty = !!txs.length', 'seront effacés.\')) return; cancelAuto();'].filter(x => { const i = A.indexOf(x); return i > 0 && A.slice(Math.max(0, i - 60), i + x.length + 20).includes('cancelAuto()'); }).length, 6, 'Relance auto annulée : année, import, retrait de fichier, effacement, réinitialisation');
-    eq(/renderResults\(\); scheduleAuto\(failed\);/.test(A) && /lastEst = new Set\(est\)/.test(A) ? 1 : 0, 1, 'Relance auto : déclenchée après chaque calcul tant qu’un cours est estimé');
+    eq(/renderResults\(\); scheduleAuto\(failed\);/.test(A) && /lastEst = new Set\(\[\.\.\.est\]\.filter\(x => !unk\.includes\(x\)\)\)/.test(A) ? 1 : 0, 1, 'Relance auto : déclenchée après chaque calcul tant qu’un cours est estimé');
     const XP = require('fs').readFileSync(__dirname + '/export.js', 'utf8');
     eq(/id="precsum">\$\{esc\(precText\(PP\)\)\}<\/p>/.test(A) && !/`C\$\{i \+ 1\} \(/.test(A) ? 1 : 0, 1, 'Interface : résumé de précision seul, sans liste C1…Cn');
     eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} opération/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
