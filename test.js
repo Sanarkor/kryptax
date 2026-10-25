@@ -212,6 +212,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     const r2 = await P.prepareRetry(txr.slice(0, 2), mkFail, {}, () => {}, { unit: 1, maxTries: 4 });
     eq(r2.tries === 4 && r2.failed.length === 1 ? 1 : 0, 1, 'Plafond de tentatives : arrêt puis cours ≈ et « Relancer »');
   }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer>Kryptax — Formulaire 2086<br><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
   eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');

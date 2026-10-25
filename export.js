@@ -92,6 +92,7 @@
     [...word].forEach(ch => { const c = gradAt((x - x0 + doc.getTextWidth(ch) / 2) / w); doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0); x += doc.getTextWidth(ch); });
     doc.setTextColor(20, 40, 70); return w;
   }
+  const LAW = 'Art. 150 VH bis CGI (plus-values sur crypto-actifs, seuil 305 €) · art. 200 C CGI (taux 12,8 %) · BOI-RPPM-PVBMC-30';
   function makePdf(jsPDF, x, title, img) {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }), A = r => r.map(v => ascii(v)), W = 297, H = 210, M = 8;
     const n = x.cessions.length, multi = x.totals.length > 1, fs = n <= 10 ? 8.4 : n <= 16 ? 7.6 : 7;
@@ -133,7 +134,7 @@
     doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 110);
     const note = doc.splitTextToSize(ascii('Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
     const yn = doc.lastAutoTable.finalY + 3; if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
-    const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); }
+    const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); doc.text(ascii(LAW), M, H - 5); }
     doc.setTextColor(0, 0, 0);
     return doc;
   }
