@@ -381,25 +381,33 @@
     const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if (live && (t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
     const raw = v => { if (v > val) { val = Math.min(100, v); paint(); } };
     const rmo = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-    const tick = () => { raf = 0; const el = Date.now() - ts; if (!hold || el >= READ_MIN_MS) { hold = false; raw(tgt); return; }
-      raw(Math.min(tgt, 25, rmo() ? 25 : 25 * el / READ_MIN_MS)); /* jamais au-delà de la lecture réelle, ni avant 2 s */
-      raf = requestAnimationFrame(tick); };
-    const set = v => { if (v > tgt) tgt = Math.min(100, v); if (!raf) tick(); };
+    /* Animation requestAnimationFrame : la valeur affichée rattrape la valeur réelle (tgt) par interpolation exponentielle, sans jamais reculer.
+       Entre deux réponses, glissement asymptotique lent vers ceil (= position de la prochaine réponse attendue) : jamais atteint, donc jamais d'avance sur le réel, mais pas de blocage visible. */
+    const CATCH_MS = 160, CREEP_MS = 1400; let ceil = 0, lastF = 0;
+    const tick = now => { raf = 0; const dt = lastF ? Math.min(100, now - lastF) : 16; lastF = now;
+      const el = Date.now() - ts; if (hold && el >= READ_MIN_MS) hold = false;
+      const lim = hold ? Math.min(25, rmo() ? 25 : 25 * el / READ_MIN_MS) : 100; /* lecture : au moins 2 s, jamais avant */
+      let v = val; if (rmo()) v = Math.max(v, tgt); else {
+        if (tgt > v) v += Math.max(0.05, (tgt - v) * (1 - Math.exp(-dt / CATCH_MS)));
+        if (v > tgt) v = Math.max(val, tgt);
+        if (ceil > v && v >= tgt - 0.5) v = Math.max(v, v + (ceil - v) * (1 - Math.exp(-dt / CREEP_MS))); }
+      raw(Math.min(v, lim)); if (live && val < 100) raf = requestAnimationFrame(tick); };
+    const set = (v, c) => { if (v > tgt) tgt = Math.min(100, v); ceil = Math.max(tgt, Math.min(100, c == null ? tgt : c)); if (!raf && live) { lastF = 0; raf = requestAnimationFrame(tick); } else if (!live) raw(tgt); };
     return {
-      start(quiet) { val = 0; tgt = 0; ts = Date.now(); hold = !quiet; if (raf) { cancelAnimationFrame(raf); raf = 0; } slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
+      start(quiet) { val = 0; tgt = 0; ceil = 0; lastF = 0; ts = Date.now(); hold = !quiet; if (raf) { cancelAnimationFrame(raf); raf = 0; } slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
       unit(name, n, tot) {
         const sg = SEG[name]; if (!sg || val >= sg[1]) return;
         if (name !== ph) { ph = name; lo = Math.max(val, sg[0]); d0 = 0; lastT = tot; set(lo); }
         if (!tot) return;
         if (tot !== lastT) { lo = val; d0 = Math.min(n, tot); lastT = tot; } /* total révisé : la part restante est répartie à partir d’ici */
         const span = Math.max(1, tot - d0), pos = k => lo + (sg[1] - lo) * Math.max(0, k - d0) / span;
-        set(pos(n)); /* valeur exacte : unités réellement terminées, sans lissage */
+        set(pos(n), Math.min(sg[1] - 0.5, pos(Math.min(tot, n + 1)))); /* réel = unités terminées ; plafond du glissement = prochaine réponse */
       },
       step() {},
       at(v) { set(v); },
       end(ok) { clearInterval(timer); if (!ok) { live = false; hold = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } w.hidden = true; return; }
-        const fin = () => { live = false; set(100); w.classList.add('done'); timer = setTimeout(() => { w.hidden = true; }, 600); };
-        const rest = hold ? READ_MIN_MS - (Date.now() - ts) : 0; set(100); if (rest > 0) timer = setTimeout(fin, rest); else fin(); } /* 100 % dès que le formulaire est prêt, sans animation d’attente */
+        const fin = () => { live = false; tgt = 100; raw(100); w.classList.add('done'); timer = setTimeout(() => { w.hidden = true; }, 600); };
+        const rest = hold ? READ_MIN_MS - (Date.now() - ts) : 0; if (rest > 0) { set(100); }; if (rest > 0) timer = setTimeout(fin, rest); else fin(); } /* 100 % dès que le formulaire est prêt, sans animation d’attente */
     };
   }
   $('#run').onclick = async () => {

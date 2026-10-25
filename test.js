@@ -149,7 +149,21 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   { const A9 = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), H9 = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C9 = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
     eq(/role="progressbar"[^>]*aria-valuenow/.test(H9) && /id="progress" aria-live="polite"/.test(H9) && !/<progress id="bar"/.test(H9) ? 1 : 0, 1, 'Progression : barre pleine largeur accessible, texte annoncé');
     eq(!/sur \$\{tot\}|Cours récupérés/.test(A9) && /Lecture de vos fichiers…/.test(A9) && /Récupération des cours…/.test(A9) && /Génération du formulaire 2086…/.test(A9) && !/Calcul de vos plus-values/.test(A9) && /lecture: \[0, 25\], cours: \[25, 90\], fin: \[90, 100\]/.test(A9) && /bar\.at\(98\); renderResults\(\); bar\.end\(!failed\)/.test(A9) && !/Math\.min\(97/.test(A9) && /if \(v > val\)/.test(A9) && /if \(tot !== lastT\) \{ lo = val;/.test(A9) && !/kxshine/.test(C9) ? 1 : 0, 1, 'Progression : réelle pondérée, sans numéros, jamais de recul, pas de plafond arbitraire');
-    eq(!/creep|setInterval\(creep/.test(A9) && /if \(!hold \|\| el >= READ_MIN_MS\) \{ hold = false; raw\(tgt\); return; \}/.test(A9) && /Math\.min\(tgt, 25,/.test(A9) ? 1 : 0, 1, 'Progression : aucun délai après la lecture (cours et génération = progression réelle)');
+    eq(/requestAnimationFrame\(tick\)/.test(A9) && !/setInterval\(/.test(A9.slice(A9.indexOf('function progBar'), A9.indexOf("$('#run').onclick"))) ? 1 : 0, 1, 'Progression : animation requestAnimationFrame, sans minuterie à paliers');
+    { /* Simulation : rAF factice, réponses de cours irrégulières (rafale puis attente) */
+      const src = A9.slice(A9.indexOf('  const SEG ='), A9.indexOf('  const PLABEL')) + A9.slice(A9.indexOf('  function progBar'), A9.indexOf("  $('#run').onclick"));
+      let now = 0, q = []; const el = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, hidden: true, textContent: '', className: '' });
+      const els = { '#barwrap': el(), '#bar': el(), '#barfill': el(), '#progress': el() };
+      const sb = { $: s => els[s], Date: { now: () => now }, window: {}, requestAnimationFrame: f => { q.push(f); return q.length; }, cancelAnimationFrame() {}, setTimeout: (f) => 1, clearTimeout() {}, clearInterval() {}, PLABEL: () => '' };
+      const pb = new Function(...Object.keys(sb), src + '; return progBar;')(...Object.values(sb))();
+      const vals = []; const run = ms => { for (let i = 0; i < ms / 16; i++) { now += 16; const f = q; q = []; f.forEach(g => g(now)); vals.push(parseFloat((els['#barfill'].style.transform || 'scaleX(0)').slice(7)) * 100); } };
+      pb.start(false); pb.unit('lecture', 1, 1); run(2100); pb.unit('cours', 0, 10);
+      pb.unit('cours', 5, 10); run(300); const afterBurst = vals[vals.length - 1]; run(4000); const afterWait = vals[vals.length - 1];
+      let back = 0, maxJump = 0; for (let i = 1; i < vals.length; i++) { if (vals[i] < vals[i - 1] - 1e-9) back++; maxJump = Math.max(maxJump, vals[i] - vals[i - 1]); }
+      eq(back, 0, 'Progression fluide : jamais de recul');
+      eq(afterBurst < 25 + 65 * 5 / 10 + 0.01 && afterWait > afterBurst + 1 && afterWait < 25 + 65 * 6 / 10 ? 1 : 0, 1, 'Progression fluide : avance douce pendant l’attente, sans dépasser la prochaine réponse');
+      eq(maxJump < 6 ? 1 : 0, 1, 'Progression fluide : pas de saut brutal (' + maxJump.toFixed(2) + ')');
+      pb.unit('cours', 10, 10); pb.end(true); eq(vals.length >= 0 && els['#barfill'].style.transform === 'scaleX(1.0000)' ? 1 : 0, 1, 'Progression : 100 % dès que tout est prêt'); }
     eq(/READ_MIN_MS = 2000/.test(A9) && /25 \* el \/ READ_MIN_MS/.test(A9) && /prefers-reduced-motion/.test(A9) && /setTimeout\(fin, rest\)/.test(A9) ? 1 : 0, 1, 'Progression : « Lecture de vos fichiers… » affichée au moins 2 s, montée fluide 0 → 25 %');
     eq(/linear-gradient\(90deg,#22d3ee,#10b981\);box-shadow:[^;]*;transition:transform \.12s linear/.test(C9) && /prefers-reduced-motion:reduce\)\{\.kxfill\{transition:none\}/.test(C9) ? 1 : 0, 1, 'Progression : bleu-vert avec halo, fluide, mouvement réduit respecté');
     eq(/header \.sub\{font-size:1\.04em;font-weight:700[^}]*color:#fff[^}]*text-shadow/.test(C9) && !/header \.sub\{[^}]*animation/.test(C9) && !/#f59e0b\)?;box-shadow|kxfill\{[^}]*#f59e0b/.test(C9) ? 1 : 0, 1, 'Sous-titre blanc sobre, contour gris, sans animation ; barre sans orange'); }
