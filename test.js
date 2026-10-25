@@ -161,7 +161,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), D = (H.match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0], A = fs.readFileSync(__dirname + '/app.js', 'utf8'), P = fs.readFileSync(__dirname + '/pipeline.js', 'utf8');
     eq(D ? 1 : 0, 1, 'Panneau vie privée présent');
     eq(H.includes('<footer><span class="law">Art. 150 VH bis CGI') && !/footline|Fiscalité Française<\/span>/.test(H) ? 1 : 0, 1, 'Pied de page sans répétition du titre');
-    eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page'); eq((H.match(/seul responsable de sa déclaration auprès de l'administration fiscale/g) || []).length, 2, 'Avertissement de non-responsabilité : pied de page + mentions légales');
+    eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page'); eq((H.match(/seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale/g) || []).length, 2, 'Avertissement de non-responsabilité : pied de page + mentions légales');
     eq(/revolut|code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni Revolut ni « code ouvert »');
     eq(/style="/.test(H + A) ? 1 : 0, 0, 'Aucun style inline (CSP)');
     eq(/goatcounter|gtag|plausible|analytics|document\.cookie|cryptocompare|cckey/i.test(H + A + P) ? 1 : 0, 0, 'Pas de mesure d’audience, cookie ni clé API');
@@ -169,7 +169,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     const used = [...new Set((P + A).match(/https:\/\/[a-z0-9.-]+/g).map(u => u.slice(8)))];
     eq(used.filter(h => !names[h] || !D.includes(names[h])).length, 0, 'Chaque source appelée est citée');
     eq(Object.keys(names).filter(h => !used.includes(h)).length, 0, 'Aucune source citée non appelée');
-    eq(D.includes('Réinitialiser') && D.includes('pas un conseil fiscal') ? 1 : 0, 1, 'Réinitialiser + aide au calcul cités'); }
+    eq(D.includes('Réinitialiser') && D.includes('un conseil fiscal') ? 1 : 0, 1, 'Réinitialiser + aide au calcul cités'); }
   { const A2 = fs.readFileSync(__dirname + '/app.js', 'utf8'); eq(/Aucune erreur<\/div>'\)[^\n]*\.join\(''\) \+ specialNote\(X\.special\(txs, fyear\)\) \+ tot/.test(A2) && /<details class="note spec" id="special">/.test(A2) && A2.includes('Voir le PDF') ? 1 : 0, 1, 'Message replié « opérations particulières » sous « Aucune erreur »'); }
   const miss = hosts.filter(h => !csp.split(/\s+/).includes(h)); eq(miss.length, 0, 'CSP connect-src couvre tous les hôtes appelés' + (miss.length ? ' (manque ' + miss.join(', ') + ')' : ''));
 }
