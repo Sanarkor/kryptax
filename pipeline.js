@@ -74,7 +74,7 @@
         if (signal && signal.aborted) throw new Error('Annulé');
         d.calls++;
         // limitation de débit : au moins GAP ms entre deux appels à la même source
-        const GAP = opt.gap != null ? opt.gap : /Binance/.test(srcName) ? 50 : 150, nx = Math.max(Date.now(), (nextAt[srcName] || 0)); nextAt[srcName] = nx + GAP; if (nx > Date.now()) await sleep(nx - Date.now());
+        const GAP = opt.gap != null ? opt.gap : /Binance/.test(srcName) ? 25 : /^(OKX|Bitget)$/.test(srcName) ? 100 : 150, /* limites publiques : Binance 6000 poids/min, OKX 10 req/s, Bitget 20 req/s */ nx = Math.max(Date.now(), (nextAt[srcName] || 0)); nextAt[srcName] = nx + GAP; if (nx > Date.now()) await sleep(nx - Date.now());
         try {
           const r = await fetchT(url);
           if (r.status === 429 || r.status >= 500) { err = 'HTTP ' + r.status; await sleep(1500 * (i + 1)); continue; }
@@ -332,9 +332,26 @@
     }
     /* Cours à la minute (ou à la seconde) : Binance (aggTrades si l'heure a des secondes, sinon bougie 1 min), puis OKX et Bitget 1 min.
        Bougie retenue seulement si elle correspond exactement à la minute demandée. -> { p (€), src, k: 'seconde'|'minute' } | null | undefined */
-    const minEur = {};
+    const minEur = {}, klMemo = {};
+    /* Regroupement sans perte : les minutes proches d'une même paire (≤ 1000 min) en une seule requête de bougies 1 min ; bougie exacte ou rien, comme la requête unitaire. */
+    async function rangeFill(sym, L) {
+      if (!(await binHas(sym))) return; L = [...new Set(L)].filter(m => !((sym + '|' + m) in klMemo)).sort((x, y) => x - y);
+      const groups = []; for (const m of L) { const g = groups[groups.length - 1]; if (g && m - g[0] <= 999 * MIN) g.push(m); else groups.push([m]); }
+      await Promise.all(groups.filter(g => g.length > 1).map(async g => {
+        const h = hosts.find(x => !deadHost.has(x)); if (!h) return;
+        const r = await get(h.includes('vision') ? 'Binance (data-api)' : 'Binance (api)', `${h}/api/v3/klines?symbol=${sym}&interval=1m&startTime=${g[0]}&endTime=${g[g.length - 1]}&limit=1000`);
+        if (r.err || !Array.isArray(r.j)) return; const o = {}; for (const c of r.j) o[+c[0]] = +c[1];
+        for (const m of g) klMemo[sym + '|' + m] = o[m] != null ? o[m] : null;
+      }));
+    }
+    async function prefetchMinutes(items) {
+      const M = ts => Math.floor(ts / MIN) * MIN; await rangeFill('EURUSDT', items.map(n => M(n.ts)));
+      const by = {}; for (const n of items) if (n.ts % MIN === 0) (by[baseSym(n.asset)] = by[baseSym(n.asset)] || []).push(M(n.ts)); // à la seconde : aggTrades d'abord, pas de bougies d'avance
+      await Promise.all(Object.entries(by).map(async ([a, L]) => { await rangeFill(a + 'EUR', L); await rangeFill(a + 'USDT', L.filter(m => !klMemo[a + 'EUR|' + m])); }));
+    }
     async function binMin(sym, m) { // bougie 1 min Binance : ouverture de la minute m (ms) ; null = paire absente / pas de bougie
       if (!(await binHas(sym))) return null;
+      const mk = sym + '|' + m; if (mk in klMemo) return klMemo[mk];
       for (const h of hosts) {
         if (deadHost.has(h)) continue;
         const r = await get(h.includes('vision') ? 'Binance (data-api)' : 'Binance (api)', `${h}/api/v3/klines?symbol=${sym}&interval=1m&startTime=${m}&limit=1`);
@@ -381,7 +398,7 @@
       for (const p of pts) { const h = p.ts / HOUR; let b = null; for (const k of ks) if (Math.abs(k - h) <= 24 && (b == null || Math.abs(k - h) < Math.abs(b - h))) b = k; if (b != null && le[b] > 0) r.push(p.p / le[b]); }
       r.sort((u, v) => u - v); return r.length ? r[r.length >> 1] : null;
     }
-    return { fxRange, series, minute, known, checkPts, diag, stats, assetDiag };
+    return { fxRange, series, minute, prefetchMinutes, known, checkPts, diag, stats, assetDiag };
   }
   /* Exécute des tâches avec au plus n en parallèle. */
   async function pool(items, n, fn, signal) {
@@ -451,8 +468,8 @@
     if (src.minute && opt.minute !== false) {
       const seen = new Set(), todo = base.filter(n => !n.rec && hasTime(n.ts)).map(n => ({ asset: n.asset, ts: n.ts, k: minKey(n.asset, n.ts) }))
         .filter(n => typeof cache[n.k] !== 'number' && cache[n.k + 'x'] == null && !seen.has(n.k) && seen.add(n.k)).slice(0, opt.maxMinute != null ? opt.maxMinute : 400);
-      let dm = 0; const got = {};
-      await pool(todo, opt.minuteConcurrency || 4, async n => {
+      let dm = 0; const got = {}; if (src.prefetchMinutes && todo.length > 1) await src.prefetchMinutes(todo);
+      await pool(todo, opt.minuteConcurrency || 8, async n => {
         const r = await src.minute(n.asset, n.ts);
         if (r) { cache[n.k] = r.p; cache[n.k + 's'] = r.k + '|' + r.src; (got[n.asset] = got[n.asset] || []).push({ ts: n.ts, p: r.p, k: n.k }); } else if (r === null) cache[n.k + 'x'] = 1; // undefined (réseau) : réessayé au prochain calcul
         log('Cours à la minute', ++dm, todo.length); if (dm % 20 === 0) save();
