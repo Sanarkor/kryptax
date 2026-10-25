@@ -402,7 +402,7 @@
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
-    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p><p id="pdfmsg" class="note warn pdfmsg" role="status" aria-live="polite" hidden></p>';
+    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Voir le PDF</button> <button id="peek" class="ghost small" title="Aperçu du PDF (montants masqués)" aria-label="Aperçu du PDF">👁</button> <button id="print" class="ghost" hidden>Imprimer</button></p><p id="pdfmsg" class="note warn pdfmsg" role="status" aria-live="polite" hidden></p>';
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
     const X = window.KryptaxExport;
     if (X) {
@@ -457,7 +457,7 @@
   function pdfRefused(b) {
     const m = $('#pdfmsg'); if (!m) return;
     const rr = b.some(x => x.rerun) && !runCtl;
-    m.innerHTML = '<b>Téléchargement impossible</b> : corrigez d’abord l’erreur ci-dessus.' + b.map(x => '<br>• ' + esc(x.msg.charAt(0).toUpperCase() + x.msg.slice(1))).join('') + (rr ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : '');
+    m.innerHTML = '<b>PDF indisponible</b> : corrigez d’abord l’erreur ci-dessus.' + b.map(x => '<br>• ' + esc(x.msg.charAt(0).toUpperCase() + x.msg.slice(1))).join('') + (rr ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : '');
     m.hidden = false;
   }
   /* ---------- Pub de démonstration avant le PDF (fictive) ---------- */
@@ -470,7 +470,7 @@
     const img = $('#adgateimg'); if (img && !img.src && window.KryptaxAd) img.src = window.KryptaxAd.img;
     const go = $('#adgatego'), cnt = $('#adgatecount'), bar = $('#adgatebar');
     adDone = false; clearInterval(adTimer);
-    go.disabled = true; go.setAttribute('aria-disabled', 'true'); go.textContent = 'Télécharger mon PDF';
+    go.disabled = true; go.setAttribute('aria-disabled', 'true'); go.textContent = 'Voir mon PDF';
     let left = AD_DELAY_S; const t0 = Date.now();
     const tick = () => {
       left = Math.max(0, AD_DELAY_S - Math.floor((Date.now() - t0) / 1000));
@@ -489,6 +489,32 @@
       $('#adgateclose').onclick = closeAdGate;
       $('#adgatego').onclick = () => { if (!adDone) return; if (downloadPdf()) closeAdGate(); };
     } }
+  /* Aperçu : pages rendues en images (pdf.js local, fonctionne sur iOS/Android), puis « Enregistrer le PDF ». */
+  let pvUrl = null, pvBlob = null, pvName = '';
+  async function showPdf(blob, name) {
+    const d = $('#pdfview'), box = $('#pvpages'); if (pvUrl) URL.revokeObjectURL(pvUrl);
+    pvBlob = blob; pvName = name; pvUrl = URL.createObjectURL(blob); $('#pvopen').href = pvUrl;
+    box.innerHTML = '<p class="hint">Préparation de l’aperçu…</p>'; box.setAttribute('aria-busy', 'true');
+    if (d.showModal) d.showModal(); else d.setAttribute('open', ''); $('#pvsave').focus();
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise; box.innerHTML = '';
+      const w = Math.max(320, box.clientWidth || 340), dpr = Math.min(3, window.devicePixelRatio || 1);
+      for (let i = 1; i <= doc.numPages; i++) {
+        const pg = await doc.getPage(i), v0 = pg.getViewport({ scale: 1 }), v = pg.getViewport({ scale: Math.max(w * dpr / v0.width, 1.5) });
+        const c = document.createElement('canvas'); c.width = Math.ceil(v.width); c.height = Math.ceil(v.height); c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Page ' + i + ' du PDF');
+        box.appendChild(c); await pg.render({ canvasContext: c.getContext('2d'), viewport: v }).promise;
+      }
+    } catch (e) { box.innerHTML = '<p class="hint">Aperçu indisponible sur cet appareil : utilisez « Ouvrir dans le navigateur » ou « Enregistrer le PDF ».</p>'; }
+    box.setAttribute('aria-busy', 'false');
+  }
+  function savePdf() {
+    if (!pvBlob) return;
+    const f = typeof File === 'function' ? new File([pvBlob], pvName, { type: 'application/pdf' }) : null;
+    if (f && navigator.canShare && navigator.canShare({ files: [f] }) && /iPhone|iPad|iPod/.test(navigator.userAgent)) { navigator.share({ files: [f], title: pvName }).catch(() => {}); return; } // iOS : « Enregistrer dans Fichiers »
+    const a = document.createElement('a'); a.href = pvUrl; a.download = pvName; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000); window.__kxPdfSaved = (window.__kxPdfSaved || 0) + 1;
+  }
+  { const d = $('#pdfview'); if (d) { $('#pvsave').onclick = savePdf; $('#pvclose').onclick = () => { if (d.close) d.close(); else d.removeAttribute('open'); const p = $('#pdfx'); if (p) p.focus(); }; } }
   // Seul point de génération du PDF : refuse s’il reste une erreur, si la pub n’est pas finie, et ignore un double clic
   function downloadPdf() {
     const b = currentBlockers(); pdfState();
@@ -496,8 +522,7 @@
     if (!adDone) return false;
     if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
     const X = window.KryptaxExport, data = withPrec(X.exportData(lastY, lastS, summaryRows, txs, fyear)), stamp = fyear + '-decl' + (fyear + 1);
-    const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
-    try { dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
+    try { showPdf(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
     catch (err) { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } return false; }
   }
   { const hb = document.querySelector('details.help'); if (hb) hb.addEventListener('click', e => { if (!hb.open || e.target.closest('a, summary, input, button, select, label')) return; hb.open = false; }); }

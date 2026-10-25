@@ -151,6 +151,13 @@ footer .fiscfr{margin-left:auto}
 /* Pub de démonstration avant le PDF */
 #adgate{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;background:var(--bg);color:var(--text);box-sizing:border-box}
 #adgate::backdrop{background:#000c}
+#pdfview{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;background:var(--bg);color:var(--text);box-sizing:border-box}
+#pdfview::backdrop{background:#000c}
+.pvw-in{display:flex;flex-direction:column;height:100%;box-sizing:border-box;padding:8px}
+.pvw-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;font-weight:600}
+.pvw-pages{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+.pvw-pages canvas{display:block;width:100%;height:auto;margin:0 0 8px;background:#fff;box-shadow:0 1px 4px #0004}
+.pvw-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin:8px 0 0}
 .ag-in{display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:100%;max-width:640px;margin:0 auto;padding:16px;box-sizing:border-box}
 .ag-head{display:flex;justify-content:space-between;align-items:center;margin:0;font-size:.75em;color:var(--muted)}
 .ag-img{display:block;width:100%;height:auto;aspect-ratio:640/278;border-radius:10px;border:1px solid var(--line)}

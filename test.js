@@ -286,6 +286,10 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq((A.match(/makePdf\(/g) || []).length, 1, 'PDF : un seul point de génération');
     const d = A.slice(A.indexOf('function downloadPdf'), A.indexOf('makePdf('));
     eq(/currentBlockers\(\)[\s\S]*if \(b\.length\) \{ pdfRefused\(b\); return false; \}[\s\S]*if \(pdfBusy\) return false/.test(d) ? 1 : 0, 1, 'PDF : blocage imposé dans la génération (erreur, double clic)');
+    { const dd = A.slice(A.indexOf('function downloadPdf'), A.indexOf('function specialNote')), ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
+      eq(/showPdf\(/.test(dd) && !/\.download\s*=/.test(dd) ? 1 : 0, 1, 'PDF : affiché d’abord (aperçu), pas de téléchargement direct');
+      eq(/id="pdfview"/.test(ih) && /id="pvsave"[^>]*>Enregistrer le PDF</.test(ih) && /Voir mon PDF/.test(ih) ? 1 : 0, 1, 'Aperçu : bouton « Enregistrer le PDF » après la pub « Voir mon PDF »');
+      eq(/a\.download = pvName/.test(A) && /getDocument\(/.test(A.slice(A.indexOf('async function showPdf'))) ? 1 : 0, 1, 'Aperçu rendu en images (pdf.js), enregistrement seulement sur demande'); }
     eq(/if \(e\.target\.id === 'pdfx'\) \{ if \(adSeen\) \{ adDone = true; downloadPdf\(\); adDone = false; \} else openAdGate\(\); \}/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton ouvre la pub, message non bloquant');
     eq((A.match(/const AD_DELAY_S = (\d+);/) || [])[1], '6', 'Pub export : durée unique AD_DELAY_S = 6');
     eq(/if \(!adDone\) return false;/.test(d) && /adDone = true; adSeen = true; go\.disabled = false/.test(A) ? 1 : 0, 1, 'Pub export : PDF seulement après le décompte (bouton activé à la fin)');
