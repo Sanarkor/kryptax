@@ -1,0 +1,11 @@
+
+Transactions
+User,00000000-0000-0000-0000-000000000000
+ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+cb-1,2026-01-07 10:00:00 UTC,Buy,BTC,0.01,EUR,€50000.00,€500.00,€505.00,€5.00,Bought 0.01 BTC for €505.00 EUR
+cb-2,2026-02-07 10:00:00 UTC,Convert,BTC,0.002,EUR,€52000.00,€104.00,€104.00,€0.00,Converted 0.002 BTC to 0.04 ETH
+cb-3,2026-03-07 10:00:00 UTC,Staking Income,ETH,0.0005,EUR,€2500.00,€1.25,€1.25,€0.00,
+cb-4,2026-04-07 10:00:00 UTC,Sell,BTC,-0.003,EUR,€60000.00,€180.00,€178.00,€2.00,Sold 0.003 BTC for €178.00 EUR
+cb-5,2026-05-07 10:00:00 UTC,Send,ETH,-0.01,EUR,€2600.00,€26.00,€26.00,€0.00,
+cb-6,2026-05-08 10:00:00 UTC,Learning Reward,XYZ,3,EUR,€1.00,€3.00,€3.00,€0.00,
+cb-7,2026-05-09 10:00:00 UTC,Deposit,EUR,100,EUR,€1.00,€100.00,€100.00,€0.00,

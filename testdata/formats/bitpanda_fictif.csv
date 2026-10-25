@@ -1,0 +1,11 @@
+Bitpanda transaction history
+Created at,2026-06-01
+User,fictif@example.invalid
+"Transaction ID",Timestamp,"Transaction Type",In/Out,"Amount Fiat",Fiat,"Amount Asset",Asset,"Asset market price","Asset market price currency","Asset class","Product ID",Fee,"Fee asset",Spread,"Spread Currency","Tax Fiat"
+T-0001,2026-01-08T10:00:00+01:00,deposit,incoming,1000.00,EUR,-,EUR,-,-,Fiat,-,-,-,-,-,-
+T-0002,2026-01-09T10:00:00+01:00,buy,outgoing,300.00,EUR,0.10000000,ETH,3000.00,EUR,Cryptocurrency,5,-,-,1.20,EUR,-
+T-0003,2026-02-09T10:00:00+01:00,transfer(stake),outgoing,-,EUR,0.05000000,ETH,-,-,Cryptocurrency,5,-,-,-,-,-
+T-0004,2026-03-09T10:00:00+01:00,reward,incoming,0.50,EUR,0.00020000,ETH,2500.00,EUR,Cryptocurrency,5,-,-,-,-,-
+T-0005,2026-04-09T10:00:00+02:00,sell,incoming,90.00,EUR,0.03000000,ETH,3000.00,EUR,Cryptocurrency,5,-,-,0.40,EUR,-
+T-0006,2026-04-10T10:00:00+02:00,buy,outgoing,50.00,EUR,0.25000000,XAU,200.00,EUR,Metal,28,-,-,-,-,-
+T-0007,2026-05-09T10:00:00+02:00,withdrawal,outgoing,-,EUR,0.01000000,ETH,-,-,Cryptocurrency,5,0.00010000,ETH,-,-,-
