@@ -268,6 +268,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
     eq(/footer \.footline\{display:flex;flex-wrap:wrap;justify-content:space-between/.test(C) ? 1 : 0, 1, 'Pied de page : Fiscalité Française à droite, retour à la ligne propre'); }
+  { const pv = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0];
+    eq(!/pas de publicité/i.test(pv) && /publicités fictives de démonstration/.test(pv) && /aucune régie publicitaire/.test(pv) && /consentement aux cookies/.test(pv) && !/revolut/i.test(pv) ? 1 : 0, 1, 'Vie privée : publicité fictive décrite honnêtement, consentement prévu'); }
   { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8'), ad = (ih.match(/<aside class="adslot" aria-label="Publicité">[\s\S]*?<\/aside>/) || [''])[0];
     eq((ih.match(/class="adslot"/g) || []).length, 1, 'Pub : un seul encart <aside class="adslot">');
     eq(ad.includes('<span class="adlabel">Publicité</span>') && ad.includes('Exemple de pub fictive — emplacement réservé') ? 1 : 0, 1, 'Pub : étiquette « Publicité » + mention fictive');
