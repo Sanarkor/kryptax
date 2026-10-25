@@ -238,3 +238,10 @@ section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;to
 .disclaimp{font-weight:700;color:#fbbf24;font-size:1.02em;line-height:1.45}
 
 .signature{text-align:center;margin:-6px auto 18px;padding:0 12px;font-size:.68em;color:var(--muted);opacity:.6;letter-spacing:.02em;overflow-wrap:break-word}
+
+/* Signature sous « ptax » : du jambage du p jusqu'au x, centrée, fine */
+header h1{padding-bottom:.2em}
+.ptax{position:relative;display:inline-block}
+.hsig{position:absolute;left:0;right:0;top:calc(100% - .2em);display:block;text-align:center;white-space:nowrap;overflow:visible;
+  font-size:.116em;font-weight:500;letter-spacing:.05em;line-height:1.2;font-family:inherit;
+  background:linear-gradient(90deg,#94a3b8,#7dd3fc,#94a3b8);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;opacity:.75;pointer-events:none;animation:none}
