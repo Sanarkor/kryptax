@@ -20,7 +20,7 @@
       return Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)); }
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return Date.parse(s + 'T00:00:00Z');
     if (/^\d{9,10}(\.\d+)?$/.test(s)) return Math.round(parseFloat(s) * 1000);
-    return E.parseDate(s);
+    return E.parseDate(s, undefined, 'UTC');
   }
   /* Codes Kraken : XXBT -> BTC, XETH -> ETH, ZEUR -> EUR, XXDG -> DOGE, ETH2.S -> ETH2.S (suffixes gérés par le moteur de cours) */
   const KR = { XXBT: 'BTC', XBT: 'BTC', XXDG: 'DOGE', XDG: 'DOGE', XETH: 'ETH', XETC: 'ETC', XLTC: 'LTC', XXRP: 'XRP', XXLM: 'XLM', XXMR: 'XMR', XZEC: 'ZEC', XREP: 'REP', XMLN: 'MLN', ZEUR: 'EUR', ZUSD: 'USD', ZGBP: 'GBP', ZCAD: 'CAD', ZJPY: 'JPY', ZCHF: 'CHF', ZAUD: 'AUD' };
