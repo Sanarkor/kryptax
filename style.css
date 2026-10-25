@@ -210,3 +210,4 @@ header h1{position:relative}.ptax{display:inline}
 header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;color:#94a3b8;max-width:100%;overflow-wrap:break-word}
 @media(min-width:700px){header .sub2{font-size:1em}}
 @media print{header .sub2{color:#333}}
+.kofifoot{text-align:center;margin:-4px 0 18px}.kofifoot .kofi{margin:0;font-size:.85rem;padding:.4em 1em}
