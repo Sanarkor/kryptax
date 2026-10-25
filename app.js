@@ -35,7 +35,7 @@
     const domW = r0.getBoundingClientRect().width / zoom, sf = canvasFont(s, t, domW - t.length * lsS, 40);
     const a0 = inkX(t.charAt(0), sf, 40), aN = inkX(t.charAt(t.length - 1), sf, 40), g = inkX.c.getContext('2d'); g.font = sf; const lastAdv = g.measureText(t.charAt(t.length - 1)).width;
     const inkW = domW - a0[0] - (lastAdv - aN[1]) - lsS; /* encre du texte complet à 40 px */
-    const k = (R - L) / inkW; s.style.fontSize = (40 * k).toFixed(3) + 'px'; s.style.left = (L - a0[0] * k).toFixed(2) + 'px'; }
+    const k = (R - L) / inkW; s.style.fontSize = (40 * k).toFixed(3) + 'px'; s.style.left = (L - a0[0] * k + (PC ? 38 : 0)).toFixed(2) + 'px'; } /* PC : signature entière décalée d'environ 1 cm (38 px) vers la droite ; mobile inchangé */
   { let q = 0; const run = () => { if (q) return; q = requestAnimationFrame(() => { q = 0; fitSig(); }); };
     fitSig(); requestAnimationFrame(() => requestAnimationFrame(run)); /* après le premier rendu */
     setTimeout(run, 300); setTimeout(run, 1000); /* secours */
