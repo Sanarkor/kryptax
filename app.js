@@ -11,6 +11,7 @@
   // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
   for (const k in cache) if (typeof cache[k] !== 'number' || !/\|h\d+$|\|none$/.test(k)) delete cache[k];
   const save = () => { localStorage.setItem(LS.tx, JSON.stringify(txs)); localStorage.setItem(LS.manual, JSON.stringify(manual)); };
+  try { if (txs.length) E.detectSwaps(txs); } catch (e) {}
   let showAll = false, pdfBal = load('kryptax.balances', null), opening = load('kryptax.opening', null);
   const saveCache = () => { try { localStorage.setItem(LS.cache, JSON.stringify(cache)); } catch (e) {} };
   const eur = n => (n == null || !isFinite(n)) ? '—' : n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
@@ -202,6 +203,22 @@
       <p class="hint">Une vente et un achat d’une autre crypto à la même seconde (≤ 5 s), pour une valeur proche (±8 %), sont un échange crypto→crypto : non imposable. Une vente vers des euros n’a pas d’achat simultané. Si une ligne est fausse, forcez-la.</p>
       <div class="scroll"><table><tr><th>Date</th><th>Vendu</th><th>Reçu</th><th class="n">Valeur</th><th>Traitement</th></tr>${outs.map(t => { const b = byId[t.swapWith || t.rawSwapWith]; return `<tr data-sw="${t.id}"><td>${dt(t.date)}</td><td>${num(t.qty)} ${esc(t.asset)}</td><td>${b ? num(b.qty) + ' ' + esc(b.asset) : '—'}</td><td class="n">${eur(t.eur || 0)}</td><td>${t.swapAuto ? 'Échange (non imposable) <button class="small ghost" data-force>Forcer imposable</button>' : 'Vente imposable (forcée) <button class="small ghost" data-unforce>Rétablir échange</button>'}</td></tr>`; }).join('')}</table></div></details>` + chk;
   }
+  /* Retraits sans dépôt correspondant : l'utilisateur choisit leur traitement avant l'export PDF */
+  const XCH = [['own', 'Vers mon portefeuille non importé'], ['gift', 'Frais, perte ou don'], ['sale', 'Paiement ou vente oubliée'], ['ignore', 'Ignorer']];
+  function renderXfers() {
+    const el = $('#xfers'); if (!el) return;
+    const L = E.openSends(txs, true), open = L.filter(t => !t.sendChoice).length, np = txs.filter(t => t.type === 'SEND' && t.xferWith).length;
+    if (!L.length && !np) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = (np ? `<p class="ok">↔️ ${np} transfert${np > 1 ? 's' : ''} entre vos comptes reconnu${np > 1 ? 's' : ''} (retrait + dépôt) : non imposable${np > 1 ? 's' : ''}.</p>` : '') + (L.length ? `<div class="xbox${open ? ' xopen' : ''}"><p class="xtitle">${open ? `⚠️ ${open} retrait${open > 1 ? 's' : ''} sans dépôt correspondant : que sont-ils devenus ?` : '✅ Retraits qualifiés'}</p>
+      <p class="hint">Choisir avant l’export PDF. Portefeuille non importé : reste dans le portefeuille (212). Frais, perte ou don : sort sans être imposé. Paiement ou vente oubliée : cession imposable au cours du moment.</p>
+      <ul class="xlist">${L.map(t => `<li data-xf="${esc(t.id)}"><span class="xwhat"><b>${num(t.qty)} ${esc(t.asset)}</b> · ${dt(t.date)}</span><select aria-label="Traitement du retrait de ${num(t.qty)} ${esc(t.asset)}"><option value="">— Choisir —</option>${XCH.map(([v, l]) => `<option value="${v}"${t.sendChoice === v ? ' selected' : ''}>${l}</option>`).join('')}</select></li>`).join('')}</ul></div>` : '');
+  }
+  $('#xfers') && $('#xfers').addEventListener('change', e => {
+    const li = e.target.closest('li[data-xf]'); if (!li) return; const t = txs.find(x => String(x.id) === li.dataset.xf); if (!t) return;
+    if (e.target.value) t.sendChoice = e.target.value; else delete t.sendChoice;
+    cancelAuto(); save(); dirty = true; window.__kxDone = false; renderTx(); pdfState();
+  });
   $('#swaps') && $('#swaps').addEventListener('click', e => {
     if (e.target.id === 'fiatgo') {
       fiatText = $('#fiattxt').value; localStorage.setItem('kryptax.fiat', fiatText); const f = E.parseFiatSales(fiatText), r = E.crossCheck(txs, f), L = (a, m) => a.length ? `<li>${m} (${a.length}) : ${a.map(x => esc((x.t ? x.t.asset + ' ' + dt(x.t.date) : x.asset + ' ' + dt(x.date)))).join(', ')}</li>` : '';
@@ -236,8 +253,8 @@
   $('#flist').addEventListener('click', e => { const n = e.target.dataset && e.target.dataset.rmf; if (n == null) return; txs = txs.filter(t => (t.source || 'Saisie manuelle') !== n); E.detectSwaps(txs); cancelAuto(); save(); dirty = !!txs.length; window.__kxDone = false; $('#results').innerHTML = ''; renderTx(); });
   $('#validate').onclick = () => { if (!txs.length || KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') return; holdInfo = ''; dirty = false; renderFiles(); $('#run').click(); };
   function renderTx() {
-    renderSwaps(); renderFiles();
-    const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
+    renderSwaps(); renderXfers(); renderFiles();
+    const all = E.sortTx(txs), sales = all.filter(E.isCess), s = showAll ? all : sales;
     $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
     $('#calc').hidden = !all.length; $('#txnote2').textContent = '';
     $('#txinfo').textContent = all.length ? (showAll ? `${all.length} transactions affichées (dont ${sales.length} ventes)` : `${sales.length} ventes affichées sur ${all.length} transactions`) : '';
@@ -310,7 +327,7 @@
   let runCtl = null, scopedYear = null;
   /* Périmètre des cours : cessions jusqu'à la fin de l'année choisie (ou de la dernière année avec cessions) ; une année plus récente relance le calcul. */
   function scopeUntil() {
-    const now = new Date().getFullYear(), ys = txs.filter(t => t.type === 'SELL' || t.type === 'PAY').map(t => E.parisYear(t.date)).filter(y => y <= now);
+    const now = new Date().getFullYear(), ys = txs.filter(E.isCess).map(t => E.parisYear(t.date)).filter(y => y <= now);
     scopedYear = fyear || (ys.length ? Math.max(...ys) : now); return new Date(scopedYear + 1, 0, 1).getTime();
   }
   function binSymsCached() { try { const o = JSON.parse(localStorage.getItem('kryptax.binsyms') || 'null'); return o && Date.now() - o.t < 864e5 && o.L.length > 50 ? new Set(o.L) : null; } catch (e) { return null; } } // liste publique des paires Binance (non sensible), 24 h
@@ -507,6 +524,7 @@
     if (dirty) b.push({ k: 'imports', msg: 'vos imports ont changé : touchez « Valider mes imports » pour recalculer.' });
     if (KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') b.push({ k: 'holders', msg: 'vos relevés semblent appartenir à des personnes différentes : retirez le fichier concerné.' });
     if ($('#err') && !$('#err').hidden) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
+    { const n = E.openSends(txs).length; if (n) b.push({ k: 'xfer', msg: `${n} retrait${n > 1 ? 's' : ''} sans dépôt correspondant : choisissez leur traitement dans « 1. Importer ».` }); }
     if (t && t.incomplete) b.push({ k: 'cours', rerun: true, msg: 'des cours sont introuvables, le résultat est incomplet : relancez le calcul.' });
     else if (est && est.size) b.push({ k: 'estime', rerun: true, msg: 'un cours est seulement estimé (≈) : relancez le calcul ou saisissez le cours.' });
     return b;
@@ -619,7 +637,7 @@
   function computeWithPrices() {
     const withOverride = txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] }));
     // le moteur passe (asset, ts) ; on retrouve la cession concernée par son horodatage
-    const byTs = {}; txs.forEach(t => { if (t.type === 'SELL' || t.type === 'PAY') byTs[t.date] = byTs[t.date] || t.id; });
+    const byTs = {}; txs.forEach(t => { if (E.isCess(t)) byTs[t.date] = byTs[t.date] || t.id; });
     return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening);
   }
   $('#results').addEventListener('change', e => {

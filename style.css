@@ -226,3 +226,11 @@ header h1{line-height:1.22;padding-bottom:.06em}
 section.dropover{position:relative;border:1.5px dashed #22d3ee;box-shadow:0 0 0 3px rgba(34,211,238,.12),0 0 22px rgba(34,211,238,.22),0 8px 24px #0006}
 section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;top:6px;right:14px;font-size:.78rem;color:#67e8f9;background:#0b1220cc;padding:2px 8px;border-radius:999px;pointer-events:none}
 @media (max-width:480px){section.dropover::after{top:auto;bottom:6px}}
+/* Retraits sans dépôt correspondant */
+.xbox{margin:10px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;max-width:100%;box-sizing:border-box}
+.xbox.xopen{border-color:var(--warn)}
+.xtitle{margin:0 0 4px;font-weight:600;overflow-wrap:anywhere}
+.xlist{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+.xlist li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}
+.xwhat{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}
+.xlist select{flex:1 1 180px;min-width:0;max-width:100%}
