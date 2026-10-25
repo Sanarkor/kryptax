@@ -397,5 +397,6 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
     eq(/const KOFI_URL = '';/.test(AP) && /<a id="kofi" class="btn kofi" target="_blank" rel="noopener noreferrer" hidden>☕ Offrir un café<\/a>/.test(IH) && /<div id="kofinote" hidden>/.test(IH) ? 1 : 0, 1, 'Ko-fi : bouton et mention prêts mais masqués tant que KOFI_URL est vide');
     eq(/function savePdf\(\) \{ showKofi\(\);/.test(AP) && /u\.hostname === 'ko-fi\.com'/.test(AP) && /aucune donnée à Ko-fi/.test(IH) ? 1 : 0, 1, 'Ko-fi : affiché après l’enregistrement du PDF, URL Ko-fi vérifiée, mention vie privée'); }
+  eq(require('fs').readFileSync(__dirname + '/index.html', 'utf8').includes('<p>Éditeur : Damien M. alias « Sanarkor ». Hébergement : GitHub Pages (GitHub, Inc.).</p>') ? 1 : 0, 1, 'Mentions : éditeur Damien M. alias « Sanarkor »');
   process.exit(ok ? 0 : 1);
 })();
