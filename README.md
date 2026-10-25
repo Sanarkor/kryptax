@@ -4,7 +4,7 @@ Kryptax aide à remplir le **formulaire 2086** (plus-values de cession d'actifs 
 
 En ligne : https://sanarkor.github.io/kryptax/
 
-> ⚠️ Outil d'aide au calcul, **pas un conseil fiscal**. Vérifiez chaque ligne avec la notice officielle 2086 (impots.gouv.fr) avant de déclarer.
+> ⚠️ **Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
 
 Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
 
