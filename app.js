@@ -359,11 +359,17 @@
     }
   }
   function progBar() {
-    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, lab = '', live = false, cap = 0, slow = false, timer = null, ph = '', lo = 0, d0 = 0, lastT = 0;
+    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, lab = '', live = false, cap = 0, slow = false, timer = null, ph = '', lo = 0, d0 = 0, lastT = 0, tgt = 0, ts = 0, raf = 0, hold = false;
+    const READ_MIN_MS = 2000; /* « Lecture de vos fichiers… » reste affichée au moins 2 s (montée fluide 0 → 25 %), seule phase avec une durée minimale */
     const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if (live && (t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
-    const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
+    const raw = v => { if (v > val) { val = Math.min(100, v); paint(); } };
+    const rmo = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const tick = () => { raf = 0; const el = Date.now() - ts; if (!hold || el >= READ_MIN_MS) { hold = false; raw(tgt); return; }
+      raw(Math.min(tgt, 25, rmo() ? 25 : 25 * el / READ_MIN_MS)); /* jamais au-delà de la lecture réelle, ni avant 2 s */
+      raf = requestAnimationFrame(tick); };
+    const set = v => { if (v > tgt) tgt = Math.min(100, v); if (!raf) tick(); };
     return {
-      start(quiet) { val = 0; slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
+      start(quiet) { val = 0; tgt = 0; ts = Date.now(); hold = !quiet; if (raf) { cancelAnimationFrame(raf); raf = 0; } slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
       unit(name, n, tot) {
         const sg = SEG[name]; if (!sg || val >= sg[1]) return;
         if (name !== ph) { ph = name; lo = Math.max(val, sg[0]); d0 = 0; lastT = tot; set(lo); }
@@ -374,7 +380,9 @@
       },
       step() {},
       at(v) { set(v); },
-      end(ok) { live = false; clearInterval(timer); if (ok) { set(100); w.classList.add('done'); timer = setTimeout(() => { w.hidden = true; }, 600); } else w.hidden = true; } /* 100 % dès que le formulaire est prêt, sans animation d’attente */
+      end(ok) { clearInterval(timer); if (!ok) { live = false; hold = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } w.hidden = true; return; }
+        const fin = () => { live = false; set(100); w.classList.add('done'); timer = setTimeout(() => { w.hidden = true; }, 600); };
+        const rest = hold ? READ_MIN_MS - (Date.now() - ts) : 0; set(100); if (rest > 0) timer = setTimeout(fin, rest); else fin(); } /* 100 % dès que le formulaire est prêt, sans animation d’attente */
     };
   }
   $('#run').onclick = async () => {
