@@ -56,13 +56,13 @@
   function baseSym(a) { a = String(a).toUpperCase().replace(/\.(S|M|F|P)$/, ''); return ALIAS[a] || a; }
   function makeSources(fetchFn, opt) {
     opt = opt || {};
-    const TIMEOUT = opt.timeout || 8000, signal = opt.signal, diag = {};
+    const TIMEOUT = opt.timeout || 5000, signal = opt.signal, diag = {};
     const D = s => diag[s] || (diag[s] = { calls: 0, ok: 0, fail: 0, last: '' });
     const stats = { get calls() { return Object.values(diag).reduce((a, d) => a + d.calls, 0); }, get fails() { return Object.values(diag).reduce((a, d) => a + d.fail, 0); } };
     async function fetchT(url) {
       const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const onAbort = () => ac && ac.abort(); if (signal && signal.addEventListener) signal.addEventListener('abort', onAbort);
-      const tm = setTimeout(() => ac && ac.abort(), TIMEOUT); // 8 s maximum par requête
+      const tm = setTimeout(() => ac && ac.abort(), TIMEOUT); // 5 s maximum par requête, puis source suivante
       try { return await fetchFn(url, ac ? { signal: ac.signal } : undefined); }
       finally { clearTimeout(tm); if (signal && signal.removeEventListener) signal.removeEventListener('abort', onAbort); }
     }
@@ -74,14 +74,14 @@
         if (signal && signal.aborted) throw new Error('Annulé');
         d.calls++;
         // limitation de débit : au moins GAP ms entre deux appels à la même source
-        const GAP = opt.gap != null ? opt.gap : 150, nx = Math.max(Date.now(), (nextAt[srcName] || 0)); nextAt[srcName] = nx + GAP; if (nx > Date.now()) await sleep(nx - Date.now());
+        const GAP = opt.gap != null ? opt.gap : /Binance/.test(srcName) ? 50 : 150, nx = Math.max(Date.now(), (nextAt[srcName] || 0)); nextAt[srcName] = nx + GAP; if (nx > Date.now()) await sleep(nx - Date.now());
         try {
           const r = await fetchT(url);
           if (r.status === 429 || r.status >= 500) { err = 'HTTP ' + r.status; await sleep(1500 * (i + 1)); continue; }
           const j = await r.json().catch(() => null);
           if (r.status >= 400) { d.ok++; return { j: j || {}, status: r.status }; }
           d.ok++; return { j };
-        } catch (e) { if (signal && signal.aborted) throw new Error('Annulé'); err = e && e.name === 'AbortError' ? 'délai dépassé (8 s)' : (e && e.message) || 'réseau'; if (i + 1 < tries) await sleep(500); }
+        } catch (e) { if (signal && signal.aborted) throw new Error('Annulé'); err = e && e.name === 'AbortError' ? 'délai dépassé (' + TIMEOUT / 1000 + ' s)' : (e && e.message) || 'réseau'; if (i + 1 < tries) await sleep(500); }
       }
       d.fail++; d.last = err; noteErr(srcName, err); return { err };
     }
@@ -98,7 +98,23 @@
     }
     /* Série horaire Binance (limit 1000 par appel). null = paire inexistante, undefined = hôte injoignable. */
     const hosts = ['https://data-api.binance.vision', 'https://api.binance.com'], deadHost = new Set(), hostFails = {};
+    /* Liste des paires Binance (un seul appel, ~160 ko, réutilisée 24 h par l'appli) : on ne demande jamais une paire inexistante.
+       Sinon Binance répond 400 sans en-tête CORS : erreur console, allers-retours perdus et hôte jugé mort pour tout le calcul. */
+    let symP = null;
+    function binSyms() {
+      if (opt.binSyms) return Promise.resolve(opt.binSyms);
+      if (!symP) symP = (async () => {
+        for (const h of hosts) {
+          try { const r = await fetchT(h + '/api/v3/ticker/price'); if (r.status !== 200) continue; const j = await r.json(); if (Array.isArray(j) && j.length > 50) { const set = new Set(j.map(x => x.symbol)); if (opt.onBinSyms) opt.onBinSyms([...set]); return set; } }
+          catch (e) { if (signal && signal.aborted) throw new Error('Annulé'); }
+        }
+        return null; // liste indisponible : on essaie quand même les paires
+      })();
+      return symP;
+    }
+    const binHas = async sym => { const set = await binSyms(); return !set || set.has(sym); };
     async function binanceSeries(sym, from, to) {
+      if (!(await binHas(sym))) return null;
       for (const h of hosts) {
         if (deadHost.has(h)) continue;
         const out = {}; let start = Math.floor(from / HOUR) * HOUR - HOUR, failed = false;
@@ -199,6 +215,16 @@
       for (const id of ids) { const r = await llamaOne(id, from, to); if (r === undefined) return undefined; if (r && Object.keys(r).length) return r; }
       return null;
     }
+    async function llamaDaily(a, from, to) { // points journaliers DefiLlama (≤ 500 par appel), pour le contrôle croisé
+      const id = [].concat(geckoIds[a] || [])[0]; if (!id) return null; const out = {}; let st = Math.floor(from / 1000) - DAY / 1000;
+      while (st <= to / 1000 + DAY / 1000) {
+        const r = await get('DefiLlama', `https://coins.llama.fi/chart/coingecko:${id}?start=${st}&span=500&period=1d&searchWidth=1h`);
+        if (r.err) return undefined; const c = r.j && r.j.coins && r.j.coins['coingecko:' + id]; if (!c) break;
+        for (const p of c.prices || []) out[Math.round(p.timestamp * 1000 / HOUR)] = +p.price;
+        st += 500 * DAY / 1000;
+      }
+      return out;
+    }
     async function llamaOne(id, from, to) {
       const out = {}; let s = Math.floor(from / 1000) - 3600;
       while (s <= to / 1000 + 3600) {
@@ -288,9 +314,9 @@
           if (usd) { s = await toEur(s, from, to); if (!s || !Object.keys(s).length) { log.push(name + ' : conversion $→€ impossible'); net = true; continue; } }
           log.push(name + ' : OK');
           if (known && name !== 'DefiLlama' && opt.check !== false) { // contrôle croisé avec DefiLlama
-            if (llama === null) { const l = await llamaSeries(a, from, to); llama = l && Object.keys(l).length ? await toEur(l, from, to) : false; }
+            if (llama === null) { const l = await llamaDaily(a, from, to); llama = l && Object.keys(l).length ? await toEur(l, from, to) : false; } // contrôle sur points journaliers : 1 appel pour 500 jours
             const g = llama ? gap(s, llama) : null;
-            if (g && (g > 1.3 || g < 1 / 1.3)) { log.push('Écart ' + Math.round((g - 1) * 100) + ' % avec DefiLlama : cours DefiLlama retenu, à vérifier'); return { s: llama, src: 'DefiLlama', suspect: true }; }
+            if (g && (g > 1.3 || g < 1 / 1.3)) { log.push('Écart ' + Math.round((g - 1) * 100) + ' % avec DefiLlama : cours DefiLlama retenu, à vérifier'); const lh = await llamaSeries(a, from, to), le = lh && Object.keys(lh).length ? await toEur(lh, from, to) : null; return { s: le && Object.keys(le).length ? le : llama, src: 'DefiLlama', suspect: true }; }
           }
           // série partielle (paire listée après le début de la plage, ou trou) : on garde et on complète avec les sources suivantes
           const h0 = Math.floor(from / HOUR), h1 = Math.floor(Math.min(to, Date.now() - HOUR) / HOUR);
@@ -308,6 +334,7 @@
        Bougie retenue seulement si elle correspond exactement à la minute demandée. -> { p (€), src, k: 'seconde'|'minute' } | null | undefined */
     const minEur = {};
     async function binMin(sym, m) { // bougie 1 min Binance : ouverture de la minute m (ms) ; null = paire absente / pas de bougie
+      if (!(await binHas(sym))) return null;
       for (const h of hosts) {
         if (deadHost.has(h)) continue;
         const r = await get(h.includes('vision') ? 'Binance (data-api)' : 'Binance (api)', `${h}/api/v3/klines?symbol=${sym}&interval=1m&startTime=${m}&limit=1`);
@@ -322,22 +349,24 @@
     }
     async function minute(a0, ts) {
       const a = baseSym(a0), m = Math.floor(ts / MIN) * MIN, sec = ts % MIN !== 0; let net = false;
-      for (const [q, usd] of [['EUR', false], ['USDT', true]]) {
-        if (sec) { // à la seconde : première transaction Binance dans la seconde qui suit l'horodatage
-          const h = hosts.find(x => !deadHost.has(x)); if (!h) break;
+      const hasE = await binHas(a + 'EUR'), hasU = await binHas(a + 'USDT');
+      if (sec && (hasU || hasE)) { // à la seconde : une seule requête, sur la paire la plus liquide (USDT, sinon EUR)
+        const q = hasU ? 'USDT' : 'EUR', h = hosts.find(x => !deadHost.has(x));
+        if (h) {
           const r = await get(h.includes('vision') ? 'Binance (data-api)' : 'Binance (api)', `${h}/api/v3/aggTrades?symbol=${a}${q}&startTime=${ts}&endTime=${ts + 999}&limit=1`);
-          if (r.err) { net = true; continue; }
-          if (!Array.isArray(r.j)) continue; // paire absente
-          if (r.j[0]) { const f = usd ? await usdtEur(m) : 1; if (f) return { p: +r.j[0].p * f, src: 'Binance', k: 'seconde' }; }
+          if (r.err) net = true; else if (Array.isArray(r.j) && r.j[0]) { const f = q === 'USDT' ? await usdtEur(m) : 1; if (f) return { p: +r.j[0].p * f, src: 'Binance', k: 'seconde' }; }
         }
+      }
+      for (const [q, usd, has] of [['EUR', false, hasE], ['USDT', true, hasU]]) { // sinon bougie de la minute
+        if (!has) continue;
         const p = await binMin(a + q, m);
         if (p === undefined) { net = true; continue; }
         if (p) { const f = usd ? await usdtEur(m) : 1; if (f) return { p: p * f, src: 'Binance', k: 'minute' }; }
       }
       const r1 = await get('OKX', `https://www.okx.com/api/v5/market/history-candles?instId=${a}-USDT&bar=1m&limit=1&after=${m + MIN}`);
       if (r1.err) net = true; else { const c = r1.j && Array.isArray(r1.j.data) && r1.j.data[0]; if (c && +c[0] === m) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'OKX', k: 'minute' }; } }
-      const r2 = await get('Bitget', `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${a}USDT&granularity=1min&endTime=${m}&limit=1`);
-      if (r2.err) net = true; else { const c = r2.j && Array.isArray(r2.j.data) && r2.j.data[0]; if (c && +c[0] === m && +c[5] > 0) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'Bitget', k: 'minute' }; } }
+      const r2 = await get('Bitget', `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${a}USDT&granularity=1min&endTime=${m + MIN}&limit=2`);
+      if (r2.err) net = true; else { const c = r2.j && Array.isArray(r2.j.data) && r2.j.data.find(x => +x[0] === m); if (c && +c[5] > 0) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'Bitget', k: 'minute' }; } }
       return net ? undefined : null;
     }
     return { fxRange, series, minute, diag, stats, assetDiag };
@@ -418,7 +447,7 @@
       const seen = new Set(), todo = E.neededPrices(txs).filter(n => hasTime(n.ts)).map(n => ({ asset: n.asset, ts: n.ts, k: minKey(n.asset, n.ts) }))
         .filter(n => typeof cache[n.k] !== 'number' && cache[n.k + 'x'] == null && !seen.has(n.k) && seen.add(n.k)).slice(0, opt.maxMinute != null ? opt.maxMinute : 400);
       let dm = 0;
-      await pool(todo, 2, async n => {
+      await pool(todo, opt.minuteConcurrency || 4, async n => {
         const r = await src.minute(n.asset, n.ts);
         if (r) { cache[n.k] = r.p; cache[n.k + 's'] = r.k + '|' + r.src; } else if (r === null) cache[n.k + 'x'] = 1; // undefined (réseau) : réessayé au prochain calcul
         log('Cours à la minute', ++dm, todo.length); if (dm % 20 === 0) save();
