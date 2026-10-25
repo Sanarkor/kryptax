@@ -546,7 +546,7 @@
     const tick = () => {
       const el = (Date.now() - t0) / 1000;
       bar.style.transform = 'scaleX(' + Math.min(1, el / AD_VIDEO_S).toFixed(4) + ')';
-      if (!half && el >= AD_VIDEO_S / 2) { half = true; s1.classList.remove('on'); s2.classList.add('on'); hook.textContent = 'Rencontre coquine : discutez, c’est gratuit'; }
+      if (!half && el >= AD_VIDEO_S / 2) { half = true; s1.classList.remove('on'); s2.classList.add('on'); hook.textContent = 'CHOC : le magazine qui fait parler'; }
       if (el < AD_SKIP_S) { const n = Math.ceil(AD_SKIP_S - el); if (n !== lastN) { lastN = n; cnt.textContent = `Vous pourrez passer la pub dans ${n}…`; } return; }
       if (!adDone) { adDone = true; cnt.textContent = 'Vous pouvez passer la pub.'; cnt.classList.add('sr'); go.hidden = false; go.focus(); }
       if (el >= AD_VIDEO_S) { clearInterval(adTimer); adSeen = true; go.textContent = 'Voir mon PDF'; cnt.textContent = 'Pub terminée : votre PDF est prêt.'; }
