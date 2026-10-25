@@ -327,7 +327,7 @@
      Une relance (étape déjà passée) répartit le reste entre la valeur atteinte et 90 % : jamais de recul, jamais d'avance sur le réel. */
   /* Barre = progression réelle : lecture 0–25 %, récupération des cours 25–90 % (chaque réponse fait avancer, total révisé sans recul), génération 90–100 %.
      Entre deux réponses, la barre glisse doucement vers la réponse suivante sans jamais l’atteindre (pas de plateau, pas d’avance sur le réel). */
-  const SEG = { lecture: [0, 25], cours: [25, 86], fin: [90, 100] };
+  const SEG = { lecture: [0, 25], cours: [25, 90], fin: [90, 100] };
   const PLABEL = v => v < 25 ? 'Lecture de vos fichiers…' : v < 90 ? 'Récupération des cours…' : 'Génération du formulaire 2086…';
   // Popup de fin de calcul réussi (une fois par calcul) : ✓, titre, bouton vers « 2. Résultat et export »
   let doneShown = false;
@@ -354,20 +354,19 @@
     const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, lab = '', live = false, cap = 0, slow = false, timer = null, ph = '', lo = 0, d0 = 0, lastT = 0;
     const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if (live && (t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
     const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
-    const creep = () => { if (cap > val + 0.05) { val = Math.min(cap, val + Math.max(0.05, (cap - val) * (slow ? 0.015 : 0.08))); paint(); } };
     return {
-      start(quiet) { val = 0; slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); timer = setInterval(creep, 200); },
+      start(quiet) { val = 0; slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
       unit(name, n, tot) {
         const sg = SEG[name]; if (!sg || val >= sg[1]) return;
         if (name !== ph) { ph = name; lo = Math.max(val, sg[0]); d0 = 0; lastT = tot; set(lo); }
         if (!tot) return;
         if (tot !== lastT) { lo = val; d0 = Math.min(n, tot); lastT = tot; } /* total révisé : la part restante est répartie à partir d’ici */
         const span = Math.max(1, tot - d0), pos = k => lo + (sg[1] - lo) * Math.max(0, k - d0) / span;
-        set(pos(n)); cap = n < tot ? pos(n) + (pos(n + 1) - pos(n)) * 0.85 : (name === 'cours' ? 89.6 : sg[1]); slow = name === 'cours' && n >= tot; /* passe finie : vérifications et relances éventuelles, la barre avance lentement jusqu’à 90 */
+        set(pos(n)); /* valeur exacte : unités réellement terminées, sans lissage */
       },
       step() {},
-      at(v) { set(v); slow = false; cap = Math.max(cap, Math.min(99, v + 4)); },
-      end(ok) { live = false; clearInterval(timer); if (ok) { const st = Math.max(1, (100 - val) / 10); timer = setInterval(() => { set(Math.min(100, val + st)); if (val >= 100) { clearInterval(timer); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 600); } }, 60); } else w.hidden = true; } /* fin : 90 → 100 % en douceur (~0,6 s), 100 % seulement à la toute fin */
+      at(v) { set(v); },
+      end(ok) { live = false; clearInterval(timer); if (ok) { set(100); w.classList.add('done'); timer = setTimeout(() => { w.hidden = true; }, 600); } else w.hidden = true; } /* 100 % dès que le formulaire est prêt, sans animation d’attente */
     };
   }
   $('#run').onclick = async () => {
