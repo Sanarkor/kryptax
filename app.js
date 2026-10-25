@@ -426,10 +426,40 @@
     m.innerHTML = '<b>Téléchargement impossible</b> : corrigez d’abord l’erreur ci-dessus.' + b.map(x => '<br>• ' + esc(x.msg.charAt(0).toUpperCase() + x.msg.slice(1))).join('') + (rr ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : '');
     m.hidden = false;
   }
-  // Seul point de génération du PDF : refuse s’il reste une erreur, et ignore un double clic
+  /* ---------- Pub de démonstration avant le PDF (fictive) ---------- */
+  const AD_DELAY_S = 6; // durée de la pub avant le PDF, en secondes
+  let adDone = false, adTimer = null;
+  function openAdGate() {
+    const b = currentBlockers(); pdfState();
+    if (b.length) { pdfRefused(b); return; }
+    const d = $('#adgate'); if (!d) return;
+    const img = $('#adgateimg'); if (img && !img.src && window.KryptaxAd) img.src = window.KryptaxAd.img;
+    const go = $('#adgatego'), cnt = $('#adgatecount'), bar = $('#adgatebar');
+    adDone = false; clearInterval(adTimer);
+    go.disabled = true; go.setAttribute('aria-disabled', 'true'); go.textContent = 'Télécharger mon PDF';
+    let left = AD_DELAY_S; const t0 = Date.now();
+    const tick = () => {
+      left = Math.max(0, AD_DELAY_S - Math.floor((Date.now() - t0) / 1000));
+      cnt.textContent = left > 0 ? `Votre PDF sera prêt dans ${left} s` : 'Votre PDF est prêt';
+      bar.value = Math.min(AD_DELAY_S, (Date.now() - t0) / 1000);
+      if (left <= 0) { clearInterval(adTimer); adDone = true; go.disabled = false; go.setAttribute('aria-disabled', 'false'); go.focus(); }
+    };
+    bar.max = AD_DELAY_S; tick(); adTimer = setInterval(tick, 200);
+    if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+    $('#adgateclose').focus();
+  }
+  function closeAdGate() { clearInterval(adTimer); adDone = false; const d = $('#adgate'); if (d && d.open) { if (d.close) d.close(); else d.removeAttribute('open'); } const p = $('#pdfx'); if (p) p.focus(); }
+  { const d = $('#adgate');
+    if (d) {
+      d.addEventListener('close', () => { clearInterval(adTimer); adDone = false; });
+      $('#adgateclose').onclick = closeAdGate;
+      $('#adgatego').onclick = () => { if (!adDone) return; if (downloadPdf()) closeAdGate(); };
+    } }
+  // Seul point de génération du PDF : refuse s’il reste une erreur, si la pub n’est pas finie, et ignore un double clic
   function downloadPdf() {
     const b = currentBlockers(); pdfState();
     if (b.length) { pdfRefused(b); return false; }
+    if (!adDone) return false;
     if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
     const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs, fyear), stamp = fyear + '-decl' + (fyear + 1);
     const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
@@ -490,7 +520,7 @@
     if (e.target.id === 'print') window.print();
     if (e.target.id === 'rerun') $('#run').click();
     if (e.target.closest && e.target.closest('#peek')) showPeek();
-    if (e.target.id === 'pdfx') downloadPdf();
+    if (e.target.id === 'pdfx') openAdGate();
   });
 
   /* ---------- Exemple fictif ---------- */
