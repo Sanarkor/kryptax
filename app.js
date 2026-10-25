@@ -1,7 +1,8 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
-  const KOFI_URL = 'don-test.html'; // page de test en attendant le lien Ko-fi de Damien (vide = bouton masqué ; mention Ko-fi affichée seulement pour un vrai lien ko-fi.com)
+  const KOFI_URL = 'https://ko-fi.com/sanarkor'; // page Ko-fi de Damien (vide = boutons masqués ; don-test.html reste dans le dépôt mais n'est plus utilisée)
+  const KOFI_NOTE = false; // mention légale « Dons » masquée tant que le paiement Ko-fi n'est pas connecté : passer à true pour la réafficher (#kofinote)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
   /* Encre réelle d'un glyphe (px, depuis l'origine) : rendu canvas puis balayage des pixels (robuste au gras synthétique, au zoom, aux polices de remplacement) */
@@ -623,7 +624,7 @@
   const kofiReal = (() => { try { const u = new URL(KOFI_URL); return u.protocol === 'https:' && u.hostname === 'ko-fi.com' && u.pathname.length > 1; } catch (e) { return false; } })();
   const kofiTest = KOFI_URL === 'don-test.html';
   const kofiOk = kofiReal || kofiTest;
-  { const k = $('#kofi'), k2 = $('#kofi2'), n = $('#kofinote'); if (k && kofiOk) k.href = KOFI_URL; if (k2 && kofiOk) { k2.href = KOFI_URL; k2.hidden = false; } if (n) n.hidden = !kofiReal; } /* bas de page : visible d'emblée */
+  { const k = $('#kofi'), k2 = $('#kofi2'), n = $('#kofinote'); if (k && kofiOk) k.href = KOFI_URL; if (k2 && kofiOk) { k2.href = KOFI_URL; k2.hidden = false; } if (n) n.hidden = !(kofiReal && KOFI_NOTE); } /* bas de page : visible d'emblée */
   const showKofi = () => { const k = $('#kofi'); if (k && kofiOk) k.hidden = false; };
   function savePdf() { showKofi();
     if (!pvBlob) return;
