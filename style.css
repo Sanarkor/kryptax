@@ -126,3 +126,4 @@ header h1{font-size:clamp(2.6rem,15vw,3.4rem);font-weight:900;line-height:1.05;l
 #peekbox{background:rgba(3,6,12,.96)}
 #peekbox .pk-t{table-layout:fixed}#peekbox .pk-t th{white-space:normal;text-transform:none;letter-spacing:0;line-height:1.15;vertical-align:middle}
 #peekbox .pk-t td{overflow:hidden;font-size:10.5px}#peekbox .pk-t th:nth-child(4){width:92px}#peekbox .pk-t th:nth-child(1){width:44px}
+details>summary{list-style:none}details>summary::-webkit-details-marker{display:none}details>summary::marker{content:""}
