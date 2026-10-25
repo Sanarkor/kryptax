@@ -6,20 +6,22 @@ const E = require('./engine.js'), X = require('./export.js'), fs = require('fs')
 const P = (a) => ({ AAA: 6, BBB: 7, CCC: 8, DDD: 9, EEE: 10 })[a];
 const r = E.compute(T, P), Y = E.byYear(r), S = {}; for (const y in Y) S[y] = E.summary(T, r, P, +y);
 const x = X.exportData(Y, S, () => [], T);
-fs.writeFileSync('/tmp/kryptax-test.pdf', Buffer.from(X.makePdf(jsPDF, x, 'Test').output('arraybuffer')));
+fs.writeFileSync('/tmp/kryptax-test.pdf', Buffer.from(X.makePdf(jsPDF, x, X.title(2026)).output('arraybuffer')));
 const txt = require('child_process').execSync('pdftotext -layout /tmp/kryptax-test.pdf -').toString(), pages = txt.split('\f');
 let ok = true; const chk = (c, m) => { ok = ok && c; console.log((c ? 'OK  ' : 'ÉCHEC ') + m); };
 const t = x.totals[0];
-chk(/Total global plus-value nette/.test(pages[0]) && /3AN|3BN|305/.test(pages[0]), 'Page 1 : total global, case 3AN/3BN, seuil 305 €');
-chk(/GLOBAL/.test(txt) && txt.includes(t.l213.toFixed(2)) && txt.includes(t.l218.toFixed(2)) && txt.includes(t.l224.toFixed(2)), 'Récapitulatif : ligne GLOBAL (213, 218, 224)');
-const tab = pages.slice(1).join('\n'), rows = tab.split('\n').filter(l => /^\s*\d+\s+[A-Z]{3}\s+[\d.]+\s+\d\d\/\d\d\/2026/.test(l));
+chk(pages.filter(p => p.trim()).length === 1, 'PDF 18 cessions : une seule page A4 paysage');
+chk(/Kryptax/.test(pages[0]) && /Formulaire 2086 pour la fiscalit/.test(pages[0]), 'En-tête : logo Kryptax et sous-titre');
+chk(/Total global plus-value nette/.test(pages[0]) && /3AN|3BN/.test(pages[0]) && /305/.test(pages[0]) && txt.indexOf('GLOBAL') < txt.indexOf('Total global plus-value'), 'Résumé (total, 3AN/3BN, 305 €) sous le tableau');
+chk(/GLOBAL/.test(txt) && txt.includes(X.fr(t.l213)) && txt.includes(X.fr(t.l218)) && txt.includes(X.fr(t.l224)), 'Récapitulatif : ligne GLOBAL (213, 218, 224)');
+const tab = txt, rows = tab.split('\n').filter(l => /^\s*\d+\s+[A-Z]{3}\s+[\d,]+\s+\d\d\/\d\d\/2026/.test(l));
 chk(rows.length === 18, 'Tableau 2086 : ' + rows.length + ' lignes de cession (attendu 18)');
 chk(['211', '212', '213', '214', '215', '216', '217', '218', '220', '221', '222', '223', '224'].every(n => tab.includes(n + ' ')), 'Tableau 2086 : colonnes 211 à 224 présentes');
-const bad = x.cessions.filter((c, i) => !['l212', 'l213', 'l214', 'l215', 'l216', 'l217', 'l218', 'l220', 'l221', 'l222', 'l223', 'l224'].every(k => (rows[i] || '').includes(c[k].toFixed(2))));
+const bad = x.cessions.filter((c, i) => !['l212', 'l213', 'l214', 'l215', 'l216', 'l217', 'l218', 'l220', 'l221', 'l222', 'l223', 'l224'].every(k => (rows[i] || '').includes(X.fr(c[k]))));
 chk(!bad.length, 'Tableau 2086 : chaque ligne porte les 12 valeurs 212-224' + (bad.length ? ' (KO: ' + bad.map(c => c.n) + ')' : ''));
 chk(/GLOBAL.*\d/.test(tab) && !/Cession 1 \(/.test(txt), 'Tableau 2086 : ligne GLOBAL en bas, pas de fiche par cession');
 chk(!/RENSEIGNER/.test(txt), 'Aucune ligne « À RENSEIGNER » (jeu fictif complet)');
-chk(!/Soldes|Revenus/.test(txt) && /exclus \(non imposables\)\s+4\s*$/m.test(txt), 'Pas de liste d’échanges, soldes ni revenus (simple compteur)');
+chk(!/Soldes|Revenus/.test(txt) && /exclus\s+4 \(non imposables\)/.test(txt), 'Pas de liste d’échanges, soldes ni revenus (simple compteur)');
 const csv = X.makeCsv(x);
 chk(/GLOBAL/.test(csv) && /TOTAL GLOBAL/.test(csv), 'CSV : ligne GLOBAL et total global');
 chk(!/revolut/i.test(txt + csv), 'PDF/CSV : aucune mention de la plateforme');
@@ -27,5 +29,13 @@ chk(!/revolut/i.test(txt + csv), 'PDF/CSV : aucune mention de la plateforme');
 { const xy = X.exportData(Y, S, () => [], T, 2026), ty = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xy, X.title(2026)).output('arraybuffer')) }).toString();
   chk(/Annee 2026 - declaration 2027|Année 2026 - déclaration 2027/.test(ty), 'PDF : titre « Année 2026 — déclaration 2027 »');
   const xe = X.exportData(Y, S, () => [], T, 2027), te = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xe, X.title(2027)).output('arraybuffer')) }).toString();
-  chk(/Aucune cession imposable en 2027/.test(te) && /GLOBAL/.test(te) && /2027 - d.claration 2028/.test(te), 'PDF année sans cession : message et GLOBAL à 0'); }
+  chk(/Aucune cession imposable en 2027/.test(te) && /GLOBAL/.test(te) && /0 cession/.test(te) && /2027 - d.claration 2028/.test(te), 'PDF année sans cession : message et GLOBAL à 0'); }
+// Beaucoup de cessions (fictif) : plusieurs pages, en-têtes répétés, GLOBAL sur la dernière
+{ const TT = [{ id: 0, date: Date.UTC(2026, 0, 2), type: 'BUY', asset: 'AAA', qty: 100, eur: 1000, fee: 0 }];
+  for (let i = 1; i <= 45; i++) TT.push({ id: i, date: Date.UTC(2026, 0, 3 + i * 6), type: 'SELL', asset: 'AAA', qty: 1, eur: 20 + i, fee: 0.1 });
+  const rr = E.compute(TT, () => 20), YY = E.byYear(rr), xm = X.exportData(YY, {}, () => [], TT, 2026);
+  const tm = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xm, X.title(2026)).output('arraybuffer')) }).toString(), pg = tm.split('\f').filter(p => p.trim());
+  chk(xm.cessions.length === 45 && pg.length > 1, 'PDF 45 cessions : ' + pg.length + ' pages (> 1)');
+  chk(pg.every(p => /224 Plus ou/.test(p) || !/^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : en-têtes de colonnes répétés');
+  const lastTab = pg.map((p, i) => /^\s*GLOBAL/m.test(p) ? i : -1).filter(i => i >= 0); chk(lastTab.length === 1 && !pg.slice(lastTab[0] + 1).some(p => /^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : GLOBAL après la dernière cession'); }
 process.exit(ok ? 0 : 1);
