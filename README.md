@@ -6,6 +6,8 @@ En ligne : https://sanarkor.github.io/kryptax/
 
 > ⚠️ Outil d'aide au calcul, **pas un conseil fiscal**. Vérifiez chaque ligne avec la notice officielle 2086 (impots.gouv.fr) avant de déclarer.
 
+Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
+
 ## Fonctionnement 100 % dans le navigateur
 - Page statique hébergée sur GitHub Pages : **aucun compte, aucune clé API, aucun serveur Kryptax**.
 - Vos relevés sont lus dans le navigateur ; **leur contenu n'est jamais envoyé** (ni montants, ni quantités, ni nom).
