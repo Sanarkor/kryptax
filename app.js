@@ -422,7 +422,7 @@
     const rows = x.cessions.map(c => `<tr><td class="c"><span class="m">00</span></td><td class="c b">${esc(c.asset)}</td><td class="c"><span class="m">0,00</span></td><td class="c">${esc(c.date.slice(0, 16))}</td>${'<td>' + F + '</td>'.repeat(1)}${Array(11).fill('<td>' + F + '</td>').join('')}</tr>`).join('');
     const glob = `<tr class="g"><td class="c">GLOBAL</td><td></td><td class="c"><span class="m">00 cessions</span></td><td></td>${Array(12).fill('<td>' + F + '</td>').join('')}</tr>`;
     const box = document.createElement('div'); box.id = 'peekbox'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
-    box.innerHTML = `<div class="pk-bar"><span>Aperçu du PDF — montants masqués</span><button class="small" id="pkclose" aria-label="Fermer">✕ Fermer</button></div><div class="pk-wrap"><div class="pk-page"><div class="pk-logo">${'Kryptax'}</div><div class="pk-sub">Formulaire 2086 pour la fiscalité française</div><div class="pk-year">${esc(X.title(fyear))}</div>
+    box.innerHTML = `<div class="pk-bar"><span>Aperçu du PDF — montants masqués</span><button class="small" id="pkclose" aria-label="Fermer">✕ Fermer</button></div><div class="pk-wrap"><div class="pk-page"><div class="pk-logo"><span class="pk-k" aria-hidden="true">K</span>${[...'Kryptax'].map((c, i) => `<span class="lc${i}">${c}</span>`).join('')}</div><div class="pk-sub">Formulaire 2086 pour la fiscalité française</div><div class="pk-year">${esc(X.title(fyear))}</div>
       <table class="pk-t"><tr>${heads.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${rows}${glob}</table>
       ${x.cessions.length ? '' : `<p class="pk-none">Aucune cession imposable en ${fyear}.</p>`}<p class="pk-sum"><b>Total global plus-value nette</b> ${F}</p><p class="pk-hint">Le PDF téléchargé est complet et lisible.</p></div></div>`;
     document.body.appendChild(box);
@@ -464,7 +464,7 @@
       try {
         if (e.target.id === 'csv') dl(new Blob([X.makeCsv(data)], { type: 'text/csv;charset=utf-8' }), `kryptax-2086-${stamp}.csv`);
         if (e.target.id === 'xlsx') dl(new Blob([XLSX.write(X.makeXlsx(XLSX, data), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `kryptax-2086-${stamp}.xlsx`);
-        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear), X.logoPng()).output('blob'), `kryptax-2086-${stamp}.pdf`);
+        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`);
       } catch (err) { alert('Export impossible, réessayez.'); }
     }
   });

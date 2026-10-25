@@ -71,33 +71,31 @@
   const qfmt = q => String(q).replace('.', ',');
   const GRAD = [[59, 130, 246], [245, 158, 11], [34, 197, 94]];
   const gradAt = t => { const s = t * (GRAD.length - 1), i = Math.min(GRAD.length - 2, Math.floor(s)), f = s - i; return GRAD[i].map((c, k) => Math.round(c + (GRAD[i + 1][k] - c) * f)); };
-  // Logo « Kryptax » : image PNG (canvas 3x, dégradé bleu → orange → vert) ; repli : lettres colorées une à une (jamais noir)
-  function logoPng(document_) {
-    try {
-      const d = document_ || (typeof document !== 'undefined' ? document : null); if (!d) return null;
-      const c = d.createElement('canvas'), g = c.getContext('2d'), px = 96, font = `800 ${px}px Helvetica, Arial, sans-serif`; if (!g) return null;
-      g.font = font; const w = Math.ceil(g.measureText('Kryptax').width) + 12; c.width = w; c.height = Math.round(px * 1.25);
-      const gr = g.createLinearGradient(0, 0, w, 0); GRAD.forEach((k, i) => gr.addColorStop(i / (GRAD.length - 1), `rgb(${k.join(',')})`));
-      g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height); // fond blanc opaque (visionneuses qui ignorent la transparence)
-      g.font = font; g.textBaseline = 'alphabetic'; g.fillStyle = gr; g.fillText('Kryptax', 6, Math.round(px * 0.95));
-      return { data: c.toDataURL('image/jpeg', 0.95), fmt: 'JPEG', ratio: c.width / c.height };
-    } catch (e) { return null; }
-  }
-  function logo(doc, x0, y0, size, img) {
-    if (img && img.data) {
-      try { const h = size * 0.3528 * 1.25, w = h * img.ratio; doc.addImage(img.data, img.fmt || 'PNG', x0 - 0.6, y0 - h * 0.76, w, h); return w; } catch (e) { /* repli texte */ }
-    }
-    const word = 'Kryptax'; doc.setFont('helvetica', 'bold'); doc.setFontSize(size);
-    const w = doc.getTextWidth(word); let x = x0;
-    [...word].forEach(ch => { const c = gradAt((x - x0 + doc.getTextWidth(ch) / 2) / w); doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0); x += doc.getTextWidth(ch); });
-    doc.setTextColor(20, 40, 70); return w;
+    /* Logo 100 % vectoriel (aucun canvas, aucune image) : pastille « K » en trois aplats bleu / orange / vert + « Kryptax » lettre par lettre en couleurs RVB explicites.
+     Tout est en remplissage (setFillColor / setTextColor) : rendu identique dans toutes les visionneuses, y compris en mode sombre. */
+  const LOGO_COLORS = [[37, 99, 235], [59, 130, 246], [234, 88, 12], [245, 158, 11], [217, 119, 6], [22, 163, 74], [34, 197, 94]];
+  function logo(doc, x0, y0, size) {
+    const h = size * 0.3528 * 0.95, top = y0 - h * 0.86, b = h; // pastille carrée alignée sur la hauteur des capitales
+    doc.setLineWidth(0);
+    doc.setFillColor(59, 130, 246); doc.roundedRect(x0, top, b, b, b * 0.22, b * 0.22, 'F');
+    doc.setFillColor(245, 158, 11); doc.triangle(x0 + b, top + b * 0.35, x0 + b, top + b, x0 + b * 0.35, top + b, 'F');
+    doc.setFillColor(34, 197, 94); doc.triangle(x0 + b, top + b * 0.68, x0 + b, top + b, x0 + b * 0.68, top + b, 'F');
+    // « K » blanc en tracés pleins (barres), pas de police
+    const u = b / 10; doc.setFillColor(255, 255, 255);
+    doc.rect(x0 + 2.6 * u, top + 2 * u, 1.5 * u, 6 * u, 'F');
+    doc.triangle(x0 + 4.1 * u, top + 5.3 * u, x0 + 6.4 * u, top + 2 * u, x0 + 7.9 * u, top + 2 * u, 'F'); doc.triangle(x0 + 4.1 * u, top + 5.3 * u, x0 + 4.1 * u, top + 4.3 * u, x0 + 6.4 * u, top + 2 * u, 'F');
+    doc.triangle(x0 + 4.4 * u, top + 4.6 * u, x0 + 7.9 * u, top + 8 * u, x0 + 6.2 * u, top + 8 * u, 'F'); doc.triangle(x0 + 4.4 * u, top + 4.6 * u, x0 + 5.3 * u, top + 3.9 * u, x0 + 7.9 * u, top + 8 * u, 'F');
+    // mot « Kryptax » : une couleur vive par lettre (jamais noir)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); let x = x0 + b + 1.6;
+    [...'Kryptax'].forEach((ch, i) => { const c = LOGO_COLORS[i]; doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0); x += doc.getTextWidth(ch); });
+    doc.setTextColor(20, 40, 70); return x - x0;
   }
   const LAW = 'Art. 150 VH bis CGI (plus-values sur crypto-actifs, seuil 305 €) · art. 200 C CGI (taux 12,8 %) · BOI-RPPM-PVBMC-30';
   function makePdf(jsPDF, x, title, img) {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }), A = r => r.map(v => ascii(v)), W = 297, H = 210, M = 8;
     const n = x.cessions.length, multi = x.totals.length > 1, fs = n <= 10 ? 8.4 : n <= 16 ? 7.6 : 7;
     // En-tête : logo à gauche, sous-titre et année
-    logo(doc, M, 15, 24, img);
+    logo(doc, M, 15, 24);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60, 70, 90);
     doc.text(ascii('Formulaire 2086 pour la fiscalité française'), M, 21);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(20, 40, 70);
@@ -144,6 +142,6 @@
   const selectable = (y, now) => y >= now - PAST && y <= now;
   function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => selectable(y.year, now) && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : now; }
   const title = y => `Année ${y} — déclaration ${y + 1}`;
-  const api = { logoPng, fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
+  const api = { fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);
