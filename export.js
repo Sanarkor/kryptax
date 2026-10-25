@@ -70,7 +70,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcu
   }
   const globalText = t => `${t.year} : total des cessions (213) ${t.l213.toFixed(2)} € ; frais (214) ${t.l214.toFixed(2)} € ; prix nets (218) ${t.l218.toFixed(2)} € ; plus-value nette globale (224) ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}. ` +
     (t.exonere ? `Total des cessions ≤ 305 € : exonéré, rien à reporter.` : `Total des cessions > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €. Les prélèvements sociaux s\'ajoutent à l\'impôt (17,2 % ou 18,6 % selon l\'année, soit 30 % ou 31,4 % au total). Taux à vérifier sur impots.gouv.fr.`);
-  const SHORT = ['211 Date de la cession (heure de Paris)', '212 Valeur globale du portefeuille', '213 Prix de cession', '214 Frais de cession', '215 Prix net des frais (213-214)', '216 Soulte', '217 Prix net des soultes (213-216)', '218 Prix net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions de capital initial', '222 Soultes antérieures', '223 Prix total d\'acquisition net (220-221-222)', '224 Plus ou moins-value'];
+  const SHORT = ['211 Date de la cession (heure de Paris)', '212 Valeur globale du portefeuille (€)', '213 Prix de cession (€)', '214 Frais de cession (€)', '215 Prix net des frais (213-214) (€)', '216 Soulte (€)', '217 Prix net des soultes (213-216) (€)', '218 Prix net frais et soultes (€)', '220 Prix total d\'acquisition (€)', '221 Fractions de capital initial (€)', '222 Soultes antérieures (€)', '223 Prix total d\'acquisition net (220-221-222) (€)', '224 Plus ou moins-value (€)'];
   // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
   const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);
@@ -95,7 +95,8 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcu
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(20, 40, 70);
     doc.text(ascii(title || (x.year ? `Année ${x.year} — déclaration ${x.year + 1}` : 'Déclaration 2086')), M, 27);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
-    doc.text(ascii('Cessions imposables d\'actifs numériques (cadre 2, lignes 211 à 224). Montants en euros. Outil d\'aide au calcul, pas un conseil fiscal.'), W - M, 27, { align: 'right' });
+    doc.text(ascii('Cessions imposables d\'actifs numériques (cadre 2, lignes 211 à 224). Outil d\'aide au calcul, pas un conseil fiscal.'), W - M, 27, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(30, 58, 138); doc.text(ascii('Montants en euros (€)'), W - M, 21, { align: 'right' }); doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
     // 1) Tableau des cessions
     const head = [A(['N°', 'Actif', 'Quantité', ...SHORT])];
