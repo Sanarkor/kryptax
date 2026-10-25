@@ -267,6 +267,7 @@
         ['Kraken', () => krakenSeries(a + 'EUR'), false],
         ['CoinGecko', () => opt.gecko === false ? null : geckoSeries(a, from, to), false],
         ['GeckoTerminal', () => opt.gecko === false ? null : gtSeries(a, from, to), true]];
+      if (opt.rotate) { const r = opt.rotate % tries.length; tries = tries.slice(r).concat(tries.slice(0, r)); }
       if (known) { const L = tries.find(t => t[0] === 'DefiLlama'); tries = tries.filter(t => t !== L); tries.splice(2, 0, L); } // id connu : DefiLlama avant Gate.io / OKX / Bitget
       let llama = null;
       for (const [name, fn, usd] of tries) {
@@ -415,6 +416,49 @@
     return { txs: kept.concat(add), added: add.length, dup: dup.length, replaced };
   }
   const fileList = txs => { const m = new Map(); txs.forEach(t => { const k = t.source || 'Saisie manuelle'; m.set(k, (m.get(k) || 0) + 1); }); return [...m].map(([name, n]) => ({ name, n })); };
-  const api = { mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
+  /* Titulaire du relevé (en-tête « Nom du compte », « Titulaire », colonne dédiée…) ; '' si le format n'en contient pas. */
+  const HOLD_RE = /^\s*(?:nom du compte|nom du titulaire|titulaire(?: du compte)?|account (?:name|holder)|account owner|nom complet|full name)\s*[:;]?\s+(.+?)\s*$/i;
+  const cleanName = s => String(s || '').replace(/[0-9@_*#]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function holderFromLines(lines) {
+    for (const l of (lines || []).slice(0, 80)) { const m = String(l).match(HOLD_RE); if (m) { const n = cleanName(m[1]); if (/[a-zA-Z\u00C0-\u024F]{2}/.test(n)) return n; } }
+    return '';
+  }
+  function holderFromRows(rows) {
+    if (!rows || !rows.length) return '';
+    const head = (rows[0] || []).map(x => String(x).trim().toLowerCase().replace(/\s*:$/, ''));
+    const i = head.findIndex(h => /^(titulaire|nom du compte|nom du titulaire|account (name|holder)|account owner|holder|nom complet|full name)$/.test(h));
+    if (i > -1) for (const r of rows.slice(1)) { const n = cleanName(r[i]); if (n) return n; }
+    return holderFromLines(rows.slice(0, 30).map(r => (r || []).map(String).join(' ').trim()));
+  }
+  const normName = s => cleanName(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(' ').filter(Boolean).sort().join(' ');
+  /* Nom masqué : initiales (« D. M. »), ou 2 lettres si les initiales ne suffisent pas à distinguer. */
+  const maskName = (s, long) => cleanName(s).split(' ').filter(Boolean).map(w => long ? w.slice(0, 2) + '…' : w[0].toUpperCase() + '.').join(' ');
+  /* holders : { nomDeFichier: titulaire|'' } -> { status: 'none'|'single'|'ok'|'conflict', n, bad:[fichiers], a, b } */
+  function checkHolders(holders, order) {
+    const files = (order || Object.keys(holders)).filter(f => holders[f]), g = {};
+    for (const f of files) (g[normName(holders[f])] = g[normName(holders[f])] || []).push(f);
+    const keys = Object.keys(g);
+    if (!files.length) return { status: 'none', n: 0, bad: [] };
+    if (keys.length === 1) return { status: files.length > 1 ? 'ok' : 'single', n: files.length, bad: [] };
+    const ref = keys.reduce((x, y) => g[y].length > g[x].length ? y : x, keys[0]); // groupe majoritaire (à égalité : le premier fichier)
+    const bad = files.filter(f => normName(holders[f]) !== ref), A = holders[g[ref][0]], B = holders[bad[0]];
+    const long = maskName(A) === maskName(B);
+    return { status: 'conflict', n: files.length, bad, a: maskName(A, long), b: maskName(B, long) };
+  }
+  /* Reprise automatique : relance prepare() pour les seuls actifs en échec réseau (le cache garde les cours trouvés ; « aucun cours existant » n'est jamais retenté),
+     attente progressive 2 s, 5 s, 10 s, 20 s, 30 s…, plafond 10 tentatives ou ~3 min, nouvelles sources à chaque tour (sources mortes réessayées, ordre tourné). */
+  const BACKOFF = [2, 5, 10, 20, 30];
+  async function prepareRetry(txs, mkSrc, cache, show, opt) {
+    opt = opt || {}; const max = opt.maxTries != null ? opt.maxTries : 10, budget = opt.budget != null ? opt.budget : 180e3, t0 = Date.now(), unit = opt.unit != null ? opt.unit : 1000;
+    let k = 0, src = mkSrc(0), fn = await prepare(txs, src, cache, show, opt);
+    while ((fn.failed.length || fn.fxMissing) && k < max && Date.now() - t0 < budget) {
+      const wait = BACKOFF[Math.min(k, BACKOFF.length - 1)] * unit; k++;
+      if (opt.onRetry) opt.onRetry(k, max, fn.failed);
+      await new Promise((res, rej) => { const tm = setTimeout(res, wait); if (opt.signal) opt.signal.addEventListener('abort', () => { clearTimeout(tm); rej(new Error('Annulé')); }, { once: true }); });
+      src = mkSrc(k); fn = await prepare(txs, src, cache, show, opt);
+    }
+    fn.tries = k; fn.src = src; return fn;
+  }
+  const api = { prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);
