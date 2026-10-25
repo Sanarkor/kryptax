@@ -325,8 +325,10 @@
   }
   /* Barre = progression réelle pondérée : taux de change 0–5 %, cours à la minute 5–70 %, cours horaires 70–90 %, calcul et affichage 90–100 %.
      Une relance (étape déjà passée) répartit le reste entre la valeur atteinte et 90 % : jamais de recul, jamais d'avance sur le réel. */
-  const PHASES = [['Taux de change', 0, 25], ['Cours à la minute', 25, 50], ['Cours', 50, 60]];
-  const PLABEL = v => v < 25 ? 'Lecture de vos fichiers…' : v < 60 ? 'Récupération des cours…' : 'Génération du formulaire 2086…';
+  /* Barre = progression réelle : lecture 0–25 %, récupération des cours 25–90 % (chaque réponse fait avancer, total révisé sans recul), génération 90–100 %.
+     Entre deux réponses, la barre glisse doucement vers la réponse suivante sans jamais l’atteindre (pas de plateau, pas d’avance sur le réel). */
+  const SEG = { lecture: [0, 25], cours: [25, 86], fin: [90, 100] };
+  const PLABEL = v => v < 25 ? 'Lecture de vos fichiers…' : v < 90 ? 'Récupération des cours…' : 'Génération du formulaire 2086…';
   // Popup de fin de calcul réussi (une fois par calcul) : ✓, titre, bouton vers « 2. Résultat et export »
   let doneShown = false;
   function showDone() {
@@ -349,20 +351,23 @@
     }
   }
   function progBar() {
-    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, last = -1, lo = 0, hi = 60, lab = '', live = false;
+    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, lab = '', live = false, cap = 0, slow = false, timer = null, ph = '', lo = 0, d0 = 0, lastT = 0;
     const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if (live && (t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
     const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
-    const map = (p, r) => lo + (hi - lo) * (PHASES[p][1] + (PHASES[p][2] - PHASES[p][1]) * r) / 60;
+    const creep = () => { if (cap > val + 0.05) { val = Math.min(cap, val + Math.max(0.05, (cap - val) * (slow ? 0.015 : 0.08))); paint(); } };
     return {
-      start(quiet) { val = 0; last = -1; lo = 0; hi = 60; lab = ''; live = !quiet; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); },
-      step(name, n, tot) {
-        const p = PHASES.findIndex(x => name === x[0] || name.indexOf(x[0] + ' ') === 0); if (p < 0 || !tot) return;
-        if (p < last) { lo = val; last = -1; } /* relance : nouvelle passe sur la part restante */
-        for (let q = last + 1; q < p; q++) set(map(q, 1)); /* étapes sans rien à faire : comptées comme faites */
-        last = p; set(map(p, Math.min(1, n / tot)));
+      start(quiet) { val = 0; slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); timer = setInterval(creep, 200); },
+      unit(name, n, tot) {
+        const sg = SEG[name]; if (!sg || val >= sg[1]) return;
+        if (name !== ph) { ph = name; lo = Math.max(val, sg[0]); d0 = 0; lastT = tot; set(lo); }
+        if (!tot) return;
+        if (tot !== lastT) { lo = val; d0 = Math.min(n, tot); lastT = tot; } /* total révisé : la part restante est répartie à partir d’ici */
+        const span = Math.max(1, tot - d0), pos = k => lo + (sg[1] - lo) * Math.max(0, k - d0) / span;
+        set(pos(n)); cap = n < tot ? pos(n) + (pos(n + 1) - pos(n)) * 0.85 : (name === 'cours' ? 89.6 : sg[1]); slow = name === 'cours' && n >= tot; /* passe finie : vérifications et relances éventuelles, la barre avance lentement jusqu’à 90 */
       },
-      at(v) { set(v); },
-      end(ok) { live = false; if (ok) { set(100); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 600); } else w.hidden = true; }
+      step() {},
+      at(v) { set(v); slow = false; cap = Math.max(cap, Math.min(99, v + 4)); },
+      end(ok) { live = false; clearInterval(timer); if (ok) { const st = Math.max(1, (100 - val) / 10); timer = setInterval(() => { set(Math.min(100, val + st)); if (val >= 100) { clearInterval(timer); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 600); } }, 60); } else w.hidden = true; } /* fin : 90 → 100 % en douceur (~0,6 s), 100 % seulement à la toute fin */
     };
   }
   $('#run').onclick = async () => {
@@ -373,11 +378,11 @@
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
-      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
+      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, onUnit: (p, n, t) => bar.unit(p, n, t), concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { if (quiet) return; $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
-      bar.at(60); livePrice.txs = txs; renderDiag(src, livePrice);
-      persist(); save(); bar.at(80); renderTx(); bar.at(92);
+      bar.at(90); livePrice.txs = txs; renderDiag(src, livePrice); bar.at(92);
+      persist(); save(); bar.at(94); renderTx(); bar.at(96);
       const st = src.stats;
       $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
     } catch (e) {
@@ -386,7 +391,7 @@
       failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
     if (!failed) $('#progress').textContent = '';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.end(!failed); runCtl = null; renderResults(); scheduleAuto(failed); if (!failed) showDone();
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; runCtl = null; bar.at(98); renderResults(); bar.end(!failed); scheduleAuto(failed); if (!failed) showDone();
   };
   $('#cancel').onclick = () => { cancelAuto(); if (runCtl) runCtl.abort(); };
 
@@ -546,7 +551,7 @@
   let pvUrl = null, pvBlob = null, pvName = '';
   async function showPdf(blob, name) {
     const d = $('#pdfview'), box = $('#pvpages'); if (pvUrl) URL.revokeObjectURL(pvUrl);
-    pvBlob = blob; pvName = name; pvUrl = URL.createObjectURL(blob); $('#pvopen').href = pvUrl;
+    pvBlob = blob; pvName = name; pvUrl = URL.createObjectURL(typeof File === 'function' ? new File([blob], name, { type: 'application/pdf' }) : blob); $('#pvopen').href = pvUrl;
     box.innerHTML = '<p class="hint">Préparation de l’aperçu…</p>'; box.setAttribute('aria-busy', 'true');
     if (d.showModal) d.showModal(); else d.setAttribute('open', ''); $('#pvsave').focus();
     try {
@@ -574,8 +579,8 @@
     if (b.length) { pdfRefused(b); return false; }
     if (!adDone) return false;
     if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
-    const X = window.KryptaxExport, data = withPrec(X.exportData(lastY, lastS, summaryRows, txs, fyear)), stamp = fyear + '-decl' + (fyear + 1);
-    try { showPdf(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
+    const X = window.KryptaxExport, data = withPrec(X.exportData(lastY, lastS, summaryRows, txs, fyear));
+    try { showPdf(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), X.pdfName(fyear, new Date())); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }
     catch (err) { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } return false; }
   }
   { const hb = $('#helpbtn'), hp = $('#helppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
