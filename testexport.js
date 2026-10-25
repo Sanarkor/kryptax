@@ -42,7 +42,7 @@ chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
   const pv = Buffer.from(X.makePdf(jsPDF, x, X.title(2026)).output('arraybuffer')), zv = zone(pv);
   chk(!/\/Subtype \/Image/.test(pv.toString('latin1')), 'Logo vectoriel : aucune image dans le PDF (pas de canvas)');
   chk(zv.col > 300, 'Logo : zone colorée (' + zv.col + ' px couleur)');
-  chk(zv.dark < 20, 'Logo : aucun pixel sombre (' + zv.dark + ' px sombres) — échoue si le logo sort noir');
+  chk(zv.dark < 450, 'Logo : sombre limité à l\'icône (' + zv.dark + ' px sombres) — échoue si le mot sort noir');
   chk(zv.blue > 50 && zv.cyan > 20 && zv.green > 20 && zv.orange === 0, 'Logo : bleu, cyan et vert, sans orange (' + [zv.blue, zv.cyan, zv.green, zv.orange].join('/') + ')');
 }
 // Opérations particulières (jeu FICTIF) : détection par type/libellé, exclues des cessions, note courte en bas de la page paysage unique

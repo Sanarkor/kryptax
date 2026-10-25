@@ -74,23 +74,27 @@
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
   const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);
   const qfmt = q => String(q).replace('.', ',');
-    /* Logo 100 % vectoriel (aucun canvas, aucune image) : pastille « K » en trois aplats bleu / cyan / vert + « Kryptax » lettre par lettre en couleurs RVB explicites.
-     Tout est en remplissage (setFillColor / setTextColor) : rendu identique dans toutes les visionneuses, y compris en mode sombre. */
-  const LOGO_COLORS = [[37, 99, 235], [59, 130, 246], [14, 165, 233], [6, 182, 212], [20, 184, 166], [16, 185, 129], [22, 163, 74]];
+    /* Logo 100 % vectoriel (aucune image) : icône de l'appli (carré sombre #070b14, « K » dégradé bleu → cyan → vert avec halo bleu)
+     + mot « Kryptax » en dégradé bleu → cyan → vert, lettre par lettre, entouré d'un halo doux bleu/vert (couches semi-transparentes). */
+  const LOGO_COLORS = [[59, 130, 246], [45, 160, 240], [34, 190, 238], [34, 211, 238], [24, 200, 190], [18, 192, 155], [16, 185, 129]];
   function logo(doc, x0, y0, size) {
-    const h = size * 0.3528 * 0.95, top = y0 - h * 0.86, b = h; // pastille carrée alignée sur la hauteur des capitales
+    const h = size * 0.3528 * 0.95, top = y0 - h * 0.86, b = h, GS = o => { try { doc.setGState(new doc.GState({ opacity: o })); } catch (e) {} };
     doc.setLineWidth(0);
-    doc.setFillColor(59, 130, 246); doc.roundedRect(x0, top, b, b, b * 0.22, b * 0.22, 'F');
-    doc.setFillColor(34, 211, 238); doc.triangle(x0 + b, top + b * 0.35, x0 + b, top + b, x0 + b * 0.35, top + b, 'F');
-    doc.setFillColor(16, 185, 129); doc.triangle(x0 + b, top + b * 0.68, x0 + b, top + b, x0 + b * 0.68, top + b, 'F');
-    // « K » blanc en tracés pleins (barres), pas de police
-    const u = b / 10; doc.setFillColor(255, 255, 255);
-    doc.rect(x0 + 2.6 * u, top + 2 * u, 1.5 * u, 6 * u, 'F');
-    doc.triangle(x0 + 4.1 * u, top + 5.3 * u, x0 + 6.4 * u, top + 2 * u, x0 + 7.9 * u, top + 2 * u, 'F'); doc.triangle(x0 + 4.1 * u, top + 5.3 * u, x0 + 4.1 * u, top + 4.3 * u, x0 + 6.4 * u, top + 2 * u, 'F');
-    doc.triangle(x0 + 4.4 * u, top + 4.6 * u, x0 + 7.9 * u, top + 8 * u, x0 + 6.2 * u, top + 8 * u, 'F'); doc.triangle(x0 + 4.4 * u, top + 4.6 * u, x0 + 5.3 * u, top + 3.9 * u, x0 + 7.9 * u, top + 8 * u, 'F');
-    // mot « Kryptax » : une couleur vive par lettre (jamais noir)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); let x = x0 + b + 1.6;
-    [...'Kryptax'].forEach((ch, i) => { const c = LOGO_COLORS[i]; doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0); x += doc.getTextWidth(ch); });
+    doc.setFillColor(7, 11, 20); doc.roundedRect(x0, top, b, b, b * 0.22, b * 0.22, 'F');
+    const u = b / 10, K = (dx, dy, c) => { doc.setFillColor(c[0], c[1], c[2]);
+      doc.rect(x0 + 2.4 * u + dx, top + 1.8 * u + dy, 1.6 * u, 6.4 * u, 'F');
+      doc.triangle(x0 + 4 * u + dx, top + 5.4 * u + dy, x0 + 6.4 * u + dx, top + 1.8 * u + dy, x0 + 8 * u + dx, top + 1.8 * u + dy, 'F'); doc.triangle(x0 + 4 * u + dx, top + 5.4 * u + dy, x0 + 4 * u + dx, top + 4.3 * u + dy, x0 + 6.4 * u + dx, top + 1.8 * u + dy, 'F');
+      doc.triangle(x0 + 4.3 * u + dx, top + 4.6 * u + dy, x0 + 8 * u + dx, top + 8.2 * u + dy, x0 + 6.2 * u + dx, top + 8.2 * u + dy, 'F'); doc.triangle(x0 + 4.3 * u + dx, top + 4.6 * u + dy, x0 + 5.3 * u + dx, top + 3.8 * u + dy, x0 + 8 * u + dx, top + 8.2 * u + dy, 'F'); };
+    // halo bleu du « K »
+    GS(0.18); for (const [dx, dy] of [[-.5, 0], [.5, 0], [0, -.5], [0, .5], [-.35, -.35], [.35, .35], [-.35, .35], [.35, -.35]]) K(dx * u, dy * u, [59, 130, 246]); GS(1);
+    // « K » : jambe bleue, bras haut cyan, bras bas vert (dégradé de l'icône)
+    K(0, 0, [34, 211, 238]); doc.setFillColor(59, 130, 246); doc.rect(x0 + 2.4 * u, top + 1.8 * u, 1.6 * u, 6.4 * u, 'F');
+    doc.setFillColor(16, 185, 129); doc.triangle(x0 + 4.3 * u, top + 4.6 * u, x0 + 8 * u, top + 8.2 * u, x0 + 6.2 * u, top + 8.2 * u, 'F'); doc.triangle(x0 + 4.3 * u, top + 4.6 * u, x0 + 5.3 * u, top + 3.8 * u, x0 + 8 * u, top + 8.2 * u, 'F');
+    // mot « Kryptax » : halo doux (couches décalées semi-transparentes) puis lettres en dégradé
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(size); const xs = x0 + b + 1.8, word = (dx, dy, col) => { let x = xs + dx; [...'Kryptax'].forEach((ch, i) => { const c = col || LOGO_COLORS[i]; doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0 + dy); x += doc.getTextWidth(ch); }); return x; };
+    const ring = (r, o) => { GS(o); for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; word(Math.cos(a) * r, Math.sin(a) * r, null); } };
+    ring(1.2, 0.035); ring(0.8, 0.05); GS(1);
+    const x = word(0, 0, null);
     doc.setTextColor(20, 40, 70); return x - x0;
   }
   const LAW = 'Art. 150 VH bis CGI (plus-values sur crypto-actifs, seuil 305 €) · art. 200 C CGI (taux 12,8 %) · BOI-RPPM-PVBMC-30';
