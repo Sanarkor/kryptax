@@ -190,6 +190,29 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(r && r.src === 'DefiLlama' && r.suspect ? 1 : 0, 1, 'Écart > 30 % : DefiLlama retenu et actif « à vérifier »');
   f = mock(100, 105); S = P.makeSources(f, { gap: 0 }); r = await S.series('XMR', t0 - 48 * H, t0);
   eq(r && r.partial && S.assetDiag.XMR.some(x => /partiel, complété/.test(x)) && r.s[Math.floor(t0 / H)] > 0 ? 1 : 0, 1, 'Série partielle (paire listée tard) : complétée par les sources suivantes, pas acceptée telle quelle');
+  { // cours à la minute / à la seconde (sources simulées, aucune donnée réelle)
+    const M0 = Date.UTC(2025, 2, 3, 14, 27), calls = [];
+    const fm = async u => { calls.push(u); const R = (j, st = 200) => ({ status: st, json: async () => j }), st = +((u.match(/startTime=(\d+)/) || [])[1] || 0);
+      if (/aggTrades\?symbol=AAAEUR/.test(u)) return R([{ p: '12.5', T: st + 300 }]);
+      if (/klines\?symbol=AAAEUR&interval=1m/.test(u)) return R([[st, '12', '12', '12', '12']]);
+      if (/klines\?symbol=EURUSDT&interval=1m/.test(u)) return R([[st, '1.25']]);
+      if (/klines\?symbol=BBBUSDT&interval=1m/.test(u)) return R([[st + 86400e3, '9']]); // paire listée plus tard : bougie d'une autre minute, refusée
+      if (/klines|aggTrades/.test(u)) return R({ code: -1121 }, 400);
+      if (/okx\.com.*BBB-USDT&bar=1m/.test(u)) return R({ code: '0', data: [[String(M0), '5']] });
+      return R({ code: '51001', data: [] });
+    };
+    const S2 = P.makeSources(fm, { gap: 0 });
+    let q = await S2.minute('AAA', M0 + 7000); eq(q && q.k === 'seconde' && q.p === 12.5 && q.src === 'Binance' ? 1 : 0, 1, 'Minute : relevé avec secondes → cours à la seconde (Binance aggTrades)');
+    q = await S2.minute('AAA', M0); eq(q && q.k === 'minute' && q.p === 12 ? 1 : 0, 1, 'Minute : bougie Binance 1 min de la minute exacte');
+    q = await S2.minute('BBB', M0 + 20e3); eq(q && q.k === 'minute' && q.src === 'OKX' && q.p === 4 ? 1 : 0, 1, 'Minute : bougie d’une autre minute refusée, repli OKX 1 min converti en € (USDT → €)');
+    q = await S2.minute('CCC', M0); eq(q, null, 'Minute : aucune source → null (repli sur le cours horaire)');
+    eq(P.hasTime(M0 + 7000) && !P.hasTime(Date.UTC(2025, 2, 3)) ? 1 : 0, 1, 'Heure présente détectée ; date seule → cours journalier');
+    const cache = { ['AAA|m' + Math.floor(M0 / 60e3)]: 12, ['AAA|m' + Math.floor(M0 / 60e3) + 's']: 'minute|Binance', ['BBB|h' + Math.floor(M0 / 36e5)]: 4, 'BBB|src': 'OKX' };
+    const fn = P.priceLookup([], cache, {}, { zeroIfUnknown: true }); fn('AAA', M0); fn('BBB', M0); fn('ZZZ', M0);
+    const cp = P.cessionPrec(fn, { date: M0, detail212: [{ asset: 'AAA' }, { asset: 'BBB' }] });
+    eq(cp.n === 2 && cp.nMin === 1 && cp.k === 'horaire' && P.precLabel(cp) === 'cours horaire (OKX)' && P.precLabel(fn.prec.get('AAA|' + M0)) === 'cours à la minute (Binance)' ? 1 : 0, 1, 'Précision par cession : la moins précise l’emporte, 1 opération à la minute sur 2');
+    eq(P.cessionPrec(fn, { date: M0, detail212: [{ asset: 'ZZZ' }] }).k === 'estimé' ? 1 : 0, 1, 'Précision : cours introuvable → « cours estimé »');
+  }
   f = mock(2000, 2000); S = P.makeSources(f, { gap: 0 }); r = await S.series('ETH2.S', t0, t0);
   eq(r && f.calls.some(u => /symbol=ETHUSDT/.test(u)) ? 1 : 0, 1, 'Alias Kraken ETH2.S → ETH');
   f = mock(0, 0.5); S = P.makeSources(f, { gap: 0 }); r = await S.series('MATIC', t0, t0);
@@ -239,6 +262,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;/.test(A) && /k <= 5 \? RETRY_DELAY_MS : RETRY_DELAY_MS \* Math\.min\(2 \*\* \(k - 5\), 10\)/.test(A) && /Nouvelle tentative \$\{k\}\/\$\{AUTO_MAX\} dans/.test(A) && /après \$\{AUTO_MAX\} tentatives automatiques/.test(A) ? 1 : 0, 1, 'Relance auto : 1 s, plafond 10, backoff après la 5e, message final');
     eq(['fyear = +e.target.value', 'dirty = true; window.__kxDone', "data-del')) return; cancelAuto()", 'cancelAuto(); txs = []', 'cancelAuto(); save(); dirty = !!txs.length', 'seront effacés.\')) return; cancelAuto();'].filter(x => { const i = A.indexOf(x); return i > 0 && A.slice(Math.max(0, i - 60), i + x.length + 20).includes('cancelAuto()'); }).length, 6, 'Relance auto annulée : année, import, retrait de fichier, effacement, réinitialisation');
     eq(/renderResults\(\); scheduleAuto\(failed\);/.test(A) && /lastEst = new Set\(est\)/.test(A) ? 1 : 0, 1, 'Relance auto : déclenchée après chaque calcul tant qu’un cours est estimé');
+    const XP = require('fs').readFileSync(__dirname + '/export.js', 'utf8');
+    eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} opération/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
     eq(/window\.KryptaxAd = \{ img: IMG \}/.test(require('fs').readFileSync(__dirname + '/ad.js', 'utf8')) ? 1 : 0, 1, 'Pub export : image réutilisée depuis ad.js');
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
