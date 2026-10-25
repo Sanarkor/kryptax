@@ -24,7 +24,9 @@
     const zoom = h.getBoundingClientRect().width / (h.offsetWidth || 1) || 1; /* transform/zoom éventuel : coordonnées écran → CSS */
     const adv = (rg(3).right - rg(0).left) / zoom - 4 * lsH, font = canvasFont(h, 'ptax', adv, px);
     const hr = h.getBoundingClientRect(), base = hr.left + h.clientLeft * zoom, ip = inkX('p', font, px), ix = inkX('x', font, px);
-    const L = (rg(0).left - base) / zoom + ip[0], R = (rg(3).left - base) / zoom + ix[1]; /* hampe du p → bord droit du x */
+    const L0 = (rg(0).left - base) / zoom + ip[0], R = (rg(3).left - base) / zoom + ix[1]; /* hampe du p → bord droit du x */
+    const PC = window.matchMedia && matchMedia('(min-width: 768px)').matches && !matchMedia('(pointer: coarse)').matches; /* PC : départ décalé vers la droite (~0,16 em du logo ≈ 14 px), fin toujours au bord du x ; mobile inchangé */
+    const L = L0 + (PC ? 0.16 * px : 0);
     if (!(R > L)) return;
     const r0r = rg(0), lh = parseFloat(cs.lineHeight) || px * 1.2; /* bas de la ligne du logo (= ancien bloc « ptax »), indépendant du moteur */
     const nl = Math.max(0, Math.round(((r0r.top + r0r.bottom) / 2 - hr.top) / zoom / lh - 0.5)); s.style.top = (parseFloat(cs.paddingTop) || 0) + (nl + 1) * lh - 0.014 * px + 'px';
@@ -40,7 +42,7 @@
     window.addEventListener('resize', run); window.addEventListener('load', run); window.addEventListener('pageshow', run);
     if (document.fonts) { if (document.fonts.ready) document.fonts.ready.then(run); if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', run); }
     if (window.ResizeObserver) { const ro = new ResizeObserver(run), h = document.querySelector('header h1'); if (h) { ro.observe(h); if (h.parentElement) ro.observe(h.parentElement); } const hd = document.querySelector('header'); if (hd) ro.observe(hd); }
-    if (window.matchMedia) { try { matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)').addEventListener('change', run); } catch (e) {} } }
+    if (window.matchMedia) { try { matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)').addEventListener('change', run); matchMedia('(min-width: 768px)').addEventListener('change', run); matchMedia('(pointer: coarse)').addEventListener('change', run); } catch (e) {} } }
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   let lastIgn = []; // récompenses sans cours (valeur non incluse à la 212)
@@ -621,7 +623,7 @@
   const kofiReal = (() => { try { const u = new URL(KOFI_URL); return u.protocol === 'https:' && u.hostname === 'ko-fi.com' && u.pathname.length > 1; } catch (e) { return false; } })();
   const kofiTest = KOFI_URL === 'don-test.html';
   const kofiOk = kofiReal || kofiTest;
-  { const k = $('#kofi'), n = $('#kofinote'); if (k && kofiOk) k.href = KOFI_URL; if (n) n.hidden = !kofiReal; }
+  { const k = $('#kofi'), k2 = $('#kofi2'), n = $('#kofinote'); if (k && kofiOk) k.href = KOFI_URL; if (k2 && kofiOk) { k2.href = KOFI_URL; k2.hidden = false; } if (n) n.hidden = !kofiReal; } /* bas de page : visible d'emblée */
   const showKofi = () => { const k = $('#kofi'); if (k && kofiOk) k.hidden = false; };
   function savePdf() { showKofi();
     if (!pvBlob) return;
