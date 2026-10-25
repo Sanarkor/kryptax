@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kryptax — Formulaire 2086 pour la fiscalité française</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.binance.com https://data-api.binance.vision https://api.gateio.ws https://www.okx.com https://coins.llama.fi https://api.bitget.com https://www.bitstamp.net https://api.crypto.com https://api.exchange.coinbase.com https://api.kraken.com https://api.coingecko.com https://api.geckoterminal.com https://api.frankfurter.dev https://min-api.cryptocompare.com; style-src 'self'; script-src 'self'; img-src 'self' data:">
-<meta name="theme-color" content="#070b14"><link rel="icon" href="favicon.svg?v=20261025zb" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest?v=20261025zb"><link rel="stylesheet" href="style.css?v=20261025zb"></head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.binance.com https://data-api.binance.vision https://api.gateio.ws https://www.okx.com https://coins.llama.fi https://api.bitget.com https://www.bitstamp.net https://api.crypto.com https://api.exchange.coinbase.com https://api.kraken.com https://api.coingecko.com https://api.geckoterminal.com https://api.frankfurter.dev; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta name="theme-color" content="#070b14"><link rel="icon" href="favicon.svg?v=20261025zc" type="image/svg+xml"><link rel="manifest" href="manifest.webmanifest?v=20261025zc"><link rel="stylesheet" href="style.css?v=20261025zc"></head>
 <body>
 <header><div class="topbar"><h1>Kryptax</h1></div><p class="sub">Formulaire 2086 pour la fiscalité française</p></header>
 <main>
@@ -47,10 +47,20 @@
  <p class="hint" id="txnote2"></p>
  <button id="run" class="small ghost" hidden>↻ Relancer</button> <button id="cancel" class="ghost" hidden>Annuler</button> <progress id="bar" hidden></progress> <span id="progress"></span>
 <div id="diag" hidden></div>
- <details hidden><summary class="hint">Option : clé CryptoCompare gratuite (plus de jetons, à la minute)</summary><input id="cckey" placeholder="clé API (gardée dans ce navigateur)" size="40"></details>
 </section>
 <section id="results"></section>
 </main>
 <footer>Kryptax — Formulaire 2086<br><span class="law">Art. 150 VH bis CGI (plus-values sur crypto-actifs, seuil 305 €) · art. 200 C CGI (taux 12,8 %) · BOI-RPPM-PVBMC-30</span></footer>
-<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025zb"></script><script src="ids.js?v=20261025zb"></script><script src="pipeline.js?v=20261025zb"></script><script src="jspdf.umd.min.js"></script><script src="jspdf.plugin.autotable.min.js"></script><script src="export.js?v=20261025zb"></script><script src="app.js?v=20261025zb"></script>
+<p class="privlink"><a href="#vie-privee" id="privopen">Mentions légales et vie privée</a></p>
+<dialog id="privacy" aria-labelledby="privtitle"><div class="pv-in">
+<h2 id="privtitle">Mentions légales et vie privée</h2>
+<h3>Vos fichiers restent chez vous</h3><p>Tout le calcul se fait dans votre navigateur. Aucun fichier, aucune transaction, aucun montant n'est envoyé à un serveur de Kryptax : Kryptax n'a pas de serveur, c'est une simple page.</p>
+<h3>Cours des cryptos</h3><p>Pour connaître la valeur de vos cryptos à une date, votre navigateur interroge directement des sources publiques de cours, sans compte ni clé : Binance, Gate.io, OKX, DefiLlama, Bitget, Bitstamp, Crypto.com, Coinbase, Kraken, CoinGecko, GeckoTerminal, et Frankfurter (taux de change de la BCE). Seuls le nom de la crypto ou de la devise et la période demandée leur sont transmis, jamais vos montants, vos quantités ni votre nom. Comme tout site, ces services voient l'adresse IP de votre connexion.</p>
+<h3>Données gardées dans ce navigateur</h3><p>Vos transactions, vos saisies et les cours déjà trouvés sont enregistrés dans le stockage local de ce navigateur, sur cet appareil uniquement. Le bouton « ↺ Réinitialiser » efface tout.</p>
+<h3>Pas de compte, pas de pistage</h3><p>Pas de compte, pas de cookie, pas de publicité, pas de mesure d'audience.</p>
+<h3>Responsabilité</h3><p>Kryptax est un outil d'aide au calcul du formulaire 2086, pas un conseil fiscal. Vérifiez les montants : vous restez responsable de votre déclaration.</p>
+<h3>Éditeur et hébergement</h3><p>Éditeur : Kryptax. Hébergement : GitHub Pages (GitHub, Inc.).</p>
+<p class="pv-close"><button id="privclose" class="btn">Fermer</button></p>
+</div></dialog>
+<script src="xlsx.mini.min.js"></script><script src="pdf.min.js"></script><script src="engine.js?v=20261025zc"></script><script src="ids.js?v=20261025zc"></script><script src="pipeline.js?v=20261025zc"></script><script src="jspdf.umd.min.js"></script><script src="jspdf.plugin.autotable.min.js"></script><script src="export.js?v=20261025zc"></script><script src="app.js?v=20261025zc"></script>
 </body></html>

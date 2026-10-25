@@ -130,7 +130,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(A.includes('✅ Aucune erreur') ? 1 : 0, 1, 'Message « ✅ Aucune erreur » présent'); eq(/textContent = 'Calcul terminé|transactions importées, dont/.test(A) ? 1 : 0, 0, 'Pas de « Calcul terminé » ni de compteur de transactions'); }
 // Page : plus de bandeau « conseil fiscal », pas d'icône ℹ️, aperçu 👁 sans vraies valeurs
 { const fs = require('fs'), H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
-  eq(/pas un conseil fiscal|class="banner/.test(H) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes("<summary>Mode d'emploi et aide</summary>") ? 1 : 0, 1, 'Mode d’emploi et aide conservé (replié)');
+  eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes("<summary>Mode d'emploi et aide</summary>") ? 1 : 0, 1, 'Mode d’emploi et aide conservé (replié)');
   const pk = A.slice(A.indexOf('function showPeek'), A.indexOf('function cmpBlock')); eq(/c\.l2\d\d|t\.l2\d\d|c\.qty|fr\(/.test(pk) ? 1 : 0, 0, 'Aperçu 👁 : aucun montant réel injecté (valeurs factices floutées)'); }
 // Multi-import (fictif) : cumul, remplacement du même fichier, dédoublonnage des relevés qui se chevauchent
 { const KP = require('./pipeline.js'), D = (m, d) => Date.UTC(2026, m, d, 10);
@@ -148,6 +148,18 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 {
   const fs = require('fs'), html = fs.readFileSync(__dirname + '/index.html', 'utf8'), csp = (html.match(/connect-src ([^;"]*)/) || [])[1] || '';
   const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github/.test(h));
+  { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), D = (H.match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0], A = fs.readFileSync(__dirname + '/app.js', 'utf8'), P = fs.readFileSync(__dirname + '/pipeline.js', 'utf8');
+    eq(D ? 1 : 0, 1, 'Panneau vie privée présent');
+    eq(H.includes('<footer>Kryptax — Formulaire 2086<br><span class="law">Art. 150 VH bis CGI') ? 1 : 0, 1, 'Pied de page inchangé');
+    eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page');
+    eq(/revolut|code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni Revolut ni « code ouvert »');
+    eq(/style="/.test(H + A) ? 1 : 0, 0, 'Aucun style inline (CSP)');
+    eq(/goatcounter|gtag|plausible|analytics|document\.cookie|cryptocompare|cckey/i.test(H + A + P) ? 1 : 0, 0, 'Pas de mesure d’audience, cookie ni clé API');
+    const names = {'api.binance.com':'Binance','data-api.binance.vision':'Binance','api.gateio.ws':'Gate.io','www.okx.com':'OKX','coins.llama.fi':'DefiLlama','api.bitget.com':'Bitget','www.bitstamp.net':'Bitstamp','api.crypto.com':'Crypto.com','api.exchange.coinbase.com':'Coinbase','api.kraken.com':'Kraken','api.coingecko.com':'CoinGecko','api.geckoterminal.com':'GeckoTerminal','api.frankfurter.dev':'Frankfurter'};
+    const used = [...new Set((P + A).match(/https:\/\/[a-z0-9.-]+/g).map(u => u.slice(8)))];
+    eq(used.filter(h => !names[h] || !D.includes(names[h])).length, 0, 'Chaque source appelée est citée');
+    eq(Object.keys(names).filter(h => !used.includes(h)).length, 0, 'Aucune source citée non appelée');
+    eq(D.includes('Réinitialiser') && D.includes('pas un conseil fiscal') ? 1 : 0, 1, 'Réinitialiser + aide au calcul cités'); }
   const miss = hosts.filter(h => !csp.split(/\s+/).includes(h)); eq(miss.length, 0, 'CSP connect-src couvre tous les hôtes appelés' + (miss.length ? ' (manque ' + miss.join(', ') + ')' : ''));
 }
 
