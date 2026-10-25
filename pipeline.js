@@ -369,7 +369,19 @@
       if (r2.err) net = true; else { const c = r2.j && Array.isArray(r2.j.data) && r2.j.data.find(x => +x[0] === m); if (c && +c[5] > 0) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'Bitget', k: 'minute' }; } }
       return net ? undefined : null;
     }
-    return { fxRange, series, minute, diag, stats, assetDiag };
+    /* Crypto identifiée : présente dans la table d'identifiants ou cotée sur Binance (liste des paires). Sinon : aucun appel. */
+    async function known(a0) {
+      const a = baseSym(a0); if (geckoIds[a] != null && geckoIds[a] !== '') return true;
+      const set = await binSyms(); return !set || set.has(a + 'EUR') || set.has(a + 'USDT');
+    }
+    async function checkPts(a0, pts) { // rapport médian cours minute / DefiLlama journalier (point le plus proche, ±24 h)
+      const a = baseSym(a0); if (!geckoIds[a] || !pts.length) return null;
+      const ts = pts.map(p => p.ts), lo = Math.min(...ts), hi = Math.max(...ts), l = await llamaDaily(a, lo, hi); if (!l || !Object.keys(l).length) return null;
+      const le = await toEur(l, lo, hi); if (!le) return null; const ks = Object.keys(le).map(Number), r = [];
+      for (const p of pts) { const h = p.ts / HOUR; let b = null; for (const k of ks) if (Math.abs(k - h) <= 24 && (b == null || Math.abs(k - h) < Math.abs(b - h))) b = k; if (b != null && le[b] > 0) r.push(p.p / le[b]); }
+      r.sort((u, v) => u - v); return r.length ? r[r.length >> 1] : null;
+    }
+    return { fxRange, series, minute, known, checkPts, diag, stats, assetDiag };
   }
   /* Exécute des tâches avec au plus n en parallèle. */
   async function pool(items, n, fn, signal) {
@@ -427,12 +439,31 @@
       }
       log('Taux de change ' + cur, ++k, curs.length);
     }
-    // 2. cours : une série horaire par actif sur la plage utile
+    // 2. cours : uniquement les cryptos identifiées des imports, aux dates utiles à l'année choisie
+    //    (valeur globale du portefeuille à chaque cession jusqu'à opt.until, toutes les cryptos détenues à ce moment ; quantités tronquées à reconstruire)
+    const until = opt.until || Infinity, unknown = new Set(), idc = {};
+    const known = async a => idc[a] != null ? idc[a] : (idc[a] = src.known ? await src.known(a) : true);
     const rec = txs.filter(t => t.qtyStatus === 'à reconstruire' && t.qtyRaw && !t.qtyManual);
-    const inc = txs.filter(t => ['INTEREST', 'STAKING', 'AIRDROP', 'SEND'].includes(t.type) && !(t.eur > 0)).map(t => ({ asset: t.asset, ts: t.date }));
-    const last = Math.max(...txs.map(t => t.date)), fin = isFinite(last) ? Object.keys(E.holdingsAt(txs, last)).filter(a => !E.FIATS.includes(a)).map(a => ({ asset: a, ts: last })) : []; // revenus et soldes de clôture (synthèse)
-    const need = E.neededPrices(txs).concat(rec.map(t => ({ asset: t.asset, ts: t.date })), inc, fin)
-      .filter(n => typeof cache[n.asset + '|h' + Math.floor(n.ts / HOUR)] !== 'number' && cache[n.asset + '|none'] == null);
+    const base = [];
+    for (const n of E.neededPrices(txs).filter(n => n.ts < until).concat(rec.map(t => ({ asset: t.asset, ts: t.date, rec: 1 })))) { if (await known(n.asset)) base.push(n); else unknown.add(n.asset); }
+    // 2 a. à la minute (ou à la seconde) d'abord quand le relevé donne l'heure
+    if (src.minute && opt.minute !== false) {
+      const seen = new Set(), todo = base.filter(n => !n.rec && hasTime(n.ts)).map(n => ({ asset: n.asset, ts: n.ts, k: minKey(n.asset, n.ts) }))
+        .filter(n => typeof cache[n.k] !== 'number' && cache[n.k + 'x'] == null && !seen.has(n.k) && seen.add(n.k)).slice(0, opt.maxMinute != null ? opt.maxMinute : 400);
+      let dm = 0; const got = {};
+      await pool(todo, opt.minuteConcurrency || 4, async n => {
+        const r = await src.minute(n.asset, n.ts);
+        if (r) { cache[n.k] = r.p; cache[n.k + 's'] = r.k + '|' + r.src; (got[n.asset] = got[n.asset] || []).push({ ts: n.ts, p: r.p, k: n.k }); } else if (r === null) cache[n.k + 'x'] = 1; // undefined (réseau) : réessayé au prochain calcul
+        log('Cours à la minute', ++dm, todo.length); if (dm % 20 === 0) save();
+      }, signal);
+      // contrôle croisé des cours minute avec DefiLlama (points journaliers, 1 appel / actif) : écart > 30 % -> minute écartée, cours horaire contrôlé
+      if (src.checkPts && opt.check !== false) await pool(Object.keys(got), 2, async a => {
+        const g = await src.checkPts(a, got[a]);
+        if (g && (g > 1.3 || g < 1 / 1.3)) { for (const x of got[a]) { delete cache[x.k]; delete cache[x.k + 's']; cache[x.k + 'x'] = 1; } }
+      }, signal);
+    }
+    // 2 b. cours horaire seulement pour ce qui n'a pas de cours à la minute (date seule, paire sans bougie minute, quantités à reconstruire)
+    const need = base.filter(n => (n.rec || typeof cache[minKey(n.asset, n.ts)] !== 'number') && typeof cache[n.asset + '|h' + Math.floor(n.ts / HOUR)] !== 'number' && cache[n.asset + '|none'] == null);
     const by = {}; for (const n of need) (by[n.asset] = by[n.asset] || []).push(n.ts);
     const assets = Object.keys(by), failed = []; let done = 0;
     await pool(assets, opt.concurrency || 4, async a => {
@@ -442,17 +473,6 @@
       else { cache[a + '|src'] = r.src; if (r.suspect) cache[a + '|suspect'] = 1; else delete cache[a + '|suspect']; for (const t of ts) { const h = Math.floor(t / HOUR); for (const d of [0, -1, 1, -2, 2]) if (r.s[h + d] != null) { cache[a + '|h' + h] = r.s[h + d]; break; } } }
       log('Cours', ++done, assets.length); save();
     }, signal);
-    // 2 bis. cours à la minute pour la valeur du portefeuille (l. 212) quand le relevé donne l'heure ; repli horaire sinon
-    if (src.minute && opt.minute !== false) {
-      const seen = new Set(), todo = E.neededPrices(txs).filter(n => hasTime(n.ts)).map(n => ({ asset: n.asset, ts: n.ts, k: minKey(n.asset, n.ts) }))
-        .filter(n => typeof cache[n.k] !== 'number' && cache[n.k + 'x'] == null && !seen.has(n.k) && seen.add(n.k)).slice(0, opt.maxMinute != null ? opt.maxMinute : 400);
-      let dm = 0;
-      await pool(todo, opt.minuteConcurrency || 4, async n => {
-        const r = await src.minute(n.asset, n.ts);
-        if (r) { cache[n.k] = r.p; cache[n.k + 's'] = r.k + '|' + r.src; } else if (r === null) cache[n.k + 'x'] = 1; // undefined (réseau) : réessayé au prochain calcul
-        log('Cours à la minute', ++dm, todo.length); if (dm % 20 === 0) save();
-      }, signal);
-    }
     // 3. quantités tronquées (xlsx)
     const fn = priceLookup(txs, cache, opt.manual, { zeroIfUnknown: true }), obs0 = observed(txs);
     for (const t of rec) {
@@ -462,7 +482,7 @@
       else t.qtyStatus = 'à vérifier (aucun cours)';
     }
     save();
-    fn.failed = failed; fn.fxMissing = txs.filter(t => t.fxPending).length; fn.missing = failed.length; fn.suspect = [...new Set(txs.map(t => t.asset))].filter(x => cache[x + '|suspect']); return fn;
+    fn.unknown = [...unknown]; fn.failed = failed; fn.fxMissing = txs.filter(t => t.fxPending).length; fn.missing = failed.length; fn.suspect = [...new Set(txs.map(t => t.asset))].filter(x => cache[x + '|suspect']); return fn;
   }
   /* Relevé PDF Revolut : lignes de texte -> lignes à 7 colonnes (Symbole, Type, Quantité, Prix, Valeur, Frais, Date)
      + lignes des relevés en devises (« Vente de X » / « Achat de X ») pour la contre-vérification. */
