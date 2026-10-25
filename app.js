@@ -315,11 +315,22 @@
     tick(); autoTick = setInterval(tick, 250);
     autoTimer = setTimeout(() => { clearInterval(autoTick); autoTimer = autoTick = null; if (runCtl) return; autoFire = true; $('#run').click(); }, retryDelay(k));
   }
+  /* Barre lissée : la valeur affichée rattrape la vraie, ne recule jamais, plafonne à 97 % avant la fin ; brillance si rien ne bouge. */
+  function progBar() {
+    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let shown = 0, target = 0, last = Date.now(), tm = null;
+    const paint = () => { f.style.transform = 'scaleX(' + (shown / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.round(shown))); };
+    const step = () => { if (target > shown) { shown = Math.min(target, shown + Math.max(0.4, (target - shown) * 0.25)); last = Date.now(); paint(); } w.classList.toggle('stall', Date.now() - last > 1500); };
+    return {
+      start() { clearInterval(tm); shown = target = 0; last = Date.now(); w.classList.remove('stall', 'done'); w.hidden = false; paint(); tm = setInterval(step, 120); },
+      to(r) { const v = Math.min(97, Math.max(0, r * 100)); if (v > target) target = v; },
+      end(ok) { clearInterval(tm); w.classList.remove('stall'); if (ok) { shown = target = 100; paint(); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 500); } else w.hidden = true; }
+    };
+  }
   $('#run').onclick = async () => {
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
-    const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + (tot ? (/^Cours/.test(step) ? `Cours récupérés : ${n} sur ${tot}` + (step === 'Cours à la minute' ? ' (à la minute)' : ' (horaires)') : step + ` : ${n} sur ${tot}`) : 'Calcul en cours…'); $('#progress').className = ''; } };
+    const bar = progBar(), t0 = Date.now(); bar.start();
+    const show = (step, n, tot) => { if (tot) bar.to(n / tot); if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + 'Calcul de vos plus-values en cours…'; $('#progress').className = ''; } };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
@@ -336,7 +347,7 @@
       failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
     if (!failed) $('#progress').textContent = '';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults(); scheduleAuto(failed);
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.end(!failed); runCtl = null; renderResults(); scheduleAuto(failed);
   };
   $('#cancel').onclick = () => { cancelAuto(); if (runCtl) runCtl.abort(); };
 
