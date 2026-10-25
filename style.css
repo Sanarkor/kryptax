@@ -125,14 +125,6 @@ footer .law{display:block;margin-top:4px;font-size:.9em;overflow-wrap:anywhere}
 .pdfmsg button{margin-top:6px}
 footer .footline{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;text-align:left}
 footer .fiscfr{margin-left:auto}
-/* Encart publicitaire (remplaçable par une régie : seul le contenu de .adslot change) */
-.adslot{margin:14px 0 4px;padding:6px 8px 8px;border:1px solid var(--line);border-radius:12px;background:#0b1220;max-width:100%;box-sizing:border-box;overflow:hidden;}
-.adhead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 8px;margin:0 0 4px;font-size:.66em;line-height:1.4;color:var(--muted)}
-.adlabel{letter-spacing:.06em;text-transform:uppercase}
-.adhit{display:block;width:100%;padding:0;border:0;border-radius:8px;background:#000;cursor:pointer;overflow:hidden}
-.adimg{display:block;width:100%;height:auto;aspect-ratio:640/278;object-fit:cover}
-.admsg{margin:6px 0 0;font-size:.8em;color:var(--warn);text-align:center}
-.adnote{opacity:.85}
 /* Pub de démonstration avant le PDF */
 #adgate{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;padding:0;border:0;background:var(--bg);color:var(--text);box-sizing:border-box}
 #adgate::backdrop{background:#000c}
@@ -156,25 +148,14 @@ header .sub{font-size:1.04em;font-weight:700;line-height:1.3;letter-spacing:.02e
 @media print{header .sub{color:#000;text-shadow:none;-webkit-text-stroke:0}}
 
 /* Pub mobile : alternance en fondu */
-.adimg{transition:opacity .45s ease}.adimg.adfade{opacity:0}
-@media (prefers-reduced-motion:reduce){.adimg{transition:none}}
-/* Bandeaux verticaux : PC seulement */
-.adrail{display:none}
 @media (min-width:1024px){
 html{font-size:100%}
 body{font-size:15.2px}
-header,main{max-width:min(768px,calc(100vw - 2*clamp(180px,14vw,220px) - 64px));box-sizing:border-box}
+header,main{max-width:768px;box-sizing:border-box}
 header h1{font-size:5.4rem}
 header .sub{font-size:1.7em}
-.adrail{font-size:19px}
 #reset,#helpbtn{font-size:.85rem;padding:.35em .8em}
-.adslot{display:none}
-.adrail{display:block;position:fixed;top:24px;width:clamp(180px,14vw,220px);padding:6px 8px 8px;border:1px solid var(--line);border-radius:12px;background:#0b1220;box-sizing:border-box;z-index:1}
-.adrail-l{left:16px}.adrail-r{right:16px}
-.adrail .adhead{flex-direction:column}
-.adrimg{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:8px;object-fit:cover}
 }
-@media print{.adrail{display:none!important}}
 
 /* Logo : place pour les jambages (y, p) au-dessus du sous-titre */
 header h1{line-height:1.22;padding-bottom:.06em}
@@ -239,9 +220,9 @@ section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;to
 
 .signature{text-align:center;margin:-6px auto 18px;padding:0 12px;font-size:.68em;color:var(--muted);opacity:.6;letter-spacing:.02em;overflow-wrap:break-word}
 
-/* Signature sous « ptax » : du jambage du p jusqu'au x, centrée, fine */
-header h1{padding-bottom:.2em}
+/* Signature sous « ptax » : du jambage du p jusqu'au x, en gras, dégradé du logo ; taille ajustée en JS (fitSig) pour tout afficher */
+header h1{padding-bottom:.24em}
 .ptax{position:relative;display:inline-block}
-.hsig{position:absolute;left:0;right:0;top:calc(100% - .2em);display:block;text-align:center;white-space:nowrap;overflow:visible;
-  font-size:.116em;font-weight:500;letter-spacing:.05em;line-height:1.2;font-family:inherit;
-  background:linear-gradient(90deg,#94a3b8,#7dd3fc,#94a3b8);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;opacity:.75;pointer-events:none;animation:none}
+.hsig{position:absolute;left:2%;top:calc(100% - .16em);display:block;white-space:nowrap;overflow:visible;
+  font-size:.11em;font-weight:800;letter-spacing:.03em;line-height:1.25;font-family:inherit;
+  background:linear-gradient(90deg,#3b82f6,#22d3ee,#10b981);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;pointer-events:none;animation:none}

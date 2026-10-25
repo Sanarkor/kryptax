@@ -2,6 +2,11 @@
 (function () {
   'use strict';
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
+  /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
+  function fitSig() { const p = document.querySelector('.ptax'), s = document.querySelector('.hsig'); if (!p || !s) return;
+    s.style.fontSize = '20px'; const w = s.scrollWidth, target = p.getBoundingClientRect().width * 0.98; if (!w || !target) return;
+    s.style.fontSize = Math.max(6, Math.min(16, 20 * target / w)).toFixed(2) + 'px'; }
+  fitSig(); window.addEventListener('resize', fitSig); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSig);
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
   let lastIgn = []; // récompenses sans cours (valeur non incluse à la 212)
@@ -570,12 +575,12 @@
     if (s1 && !s1.src && sl[0]) s1.src = sl[0]; if (s2 && !s2.src && sl[1]) s2.src = sl[1];
     const go = $('#adgatego'), cnt = $('#adgatecount'), bar = $('#adgatebar'), hook = $('#avhook');
     adDone = false; clearInterval(adTimer); go.hidden = true; go.textContent = 'Passer la pub ▸'; cnt.hidden = false;
-    s1.classList.add('on'); s2.classList.remove('on'); hook.textContent = 'Partez à l’aventure avec Barthyl le Moine';
+    s1.classList.add('on'); s2.classList.remove('on'); hook.textContent = 'Espace publicitaire — exemple fictif';
     const t0 = Date.now(); let lastN = -1, half = false;
     const tick = () => {
       const el = (Date.now() - t0) / 1000;
       bar.style.transform = 'scaleX(' + Math.min(1, el / AD_VIDEO_S).toFixed(4) + ')';
-      if (!half && el >= AD_VIDEO_S / 2) { half = true; s1.classList.remove('on'); s2.classList.add('on'); hook.textContent = 'CHOC : le magazine qui fait parler'; }
+      if (!half && el >= AD_VIDEO_S / 2) { half = true; s1.classList.remove('on'); s2.classList.add('on'); hook.textContent = 'Votre annonce ici — exemple fictif'; }
       if (el < AD_SKIP_S) { const n = Math.ceil(AD_SKIP_S - el); if (n !== lastN) { lastN = n; cnt.textContent = `Vous pourrez passer la pub dans ${n}…`; } return; }
       if (!adDone) { adDone = true; cnt.textContent = 'Vous pouvez passer la pub.'; cnt.classList.add('sr'); go.hidden = false; go.focus(); }
       if (el >= AD_VIDEO_S) { clearInterval(adTimer); adSeen = true; go.textContent = 'Voir mon PDF'; cnt.textContent = 'Pub terminée : votre PDF est prêt.'; }
