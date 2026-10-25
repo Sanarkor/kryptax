@@ -68,7 +68,7 @@
     return out;
   }
   const globalText = t => `${t.year} : total des cessions (213) ${t.l213.toFixed(2)} € ; frais (214) ${t.l214.toFixed(2)} € ; prix nets (218) ${t.l218.toFixed(2)} € ; plus-value nette globale (224) ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}. ` +
-    (t.exonere ? `Total des cessions ≤ 305 € : exonéré, rien à reporter.` : `Total des cessions > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €.`);
+    (t.exonere ? `Total des cessions ≤ 305 € : exonéré, rien à reporter.` : `Total des cessions > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €. Les prélèvements sociaux s\'ajoutent à l\'impôt (17,2 % ou 18,6 % selon l\'année, soit 30 % ou 31,4 % au total). Taux à vérifier sur impots.gouv.fr.`);
   const SHORT = ['211 Date de la cession (heure de Paris)', '212 Valeur globale du portefeuille', '213 Prix de cession', '214 Frais de cession', '215 Prix net des frais (213-214)', '216 Soulte', '217 Prix net des soultes (213-216)', '218 Prix net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions de capital initial', '222 Soultes antérieures', '223 Prix total d\'acquisition net (220-221-222)', '224 Plus ou moins-value'];
   // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
@@ -127,6 +127,7 @@
       lines.push([`Total global plus-value nette${multi ? ' ' + t.year : ''}`, frs(t.l224) + ' €' + (t.incomplete ? ' (incomplet)' : '')]);
       lines.push(['Total des prix de cession (213)', fr(t.l213) + ' €' + (t.exonere ? ' : ≤ 305 €, cessions exonérées' : ' : > 305 €, imposable')]);
       lines.push(['Case 2042-C', t.exonere ? 'aucune (seuil de 305 € non dépassé)' : `${t.box} = ${t.report} €`]);
+      if (!t.exonere) lines.push(['Prélèvements sociaux', 'Les prélèvements sociaux s\'ajoutent à l\'impôt (17,2 % ou 18,6 % selon l\'année, soit 30 % ou 31,4 % au total). Taux à vérifier sur impots.gouv.fr.']);
     }
     if (!n) lines.unshift(['Cessions', `Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`]);
     if (x.prec) lines.push(['Précision des cours', x.prec]);
