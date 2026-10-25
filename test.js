@@ -150,7 +150,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github/.test(h));
   { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), D = (H.match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0], A = fs.readFileSync(__dirname + '/app.js', 'utf8'), P = fs.readFileSync(__dirname + '/pipeline.js', 'utf8');
     eq(D ? 1 : 0, 1, 'Panneau vie privée présent');
-    eq(H.includes('<footer><div class="footline"><span>Kryptax — Formulaire 2086</span><span class="fiscfr">Fiscalité Française</span></div><span class="law">Art. 150 VH bis CGI') ? 1 : 0, 1, 'Pied de page inchangé');
+    eq(H.includes('<footer><span class="law">Art. 150 VH bis CGI') && !/footline|Fiscalité Française<\/span>/.test(H) ? 1 : 0, 1, 'Pied de page sans répétition du titre');
     eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page');
     eq(/revolut|code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni Revolut ni « code ouvert »');
     eq(/style="/.test(H + A) ? 1 : 0, 0, 'Aucun style inline (CSP)');
@@ -306,7 +306,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/window\.KryptaxAd = \{ img: IMG \}/.test(require('fs').readFileSync(__dirname + '/ad.js', 'utf8')) ? 1 : 0, 1, 'Pub export : image réutilisée depuis ad.js');
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
-    eq(/footer \.footline\{display:flex;flex-wrap:wrap;justify-content:space-between/.test(C) ? 1 : 0, 1, 'Pied de page : Fiscalité Française à droite, retour à la ligne propre'); }
+    }
   { const pv = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0];
     eq(!/pas de publicité/i.test(pv) && /publicités fictives de démonstration/.test(pv) && /aucune régie publicitaire/.test(pv) && /consentement aux cookies/.test(pv) && !/revolut/i.test(pv) ? 1 : 0, 1, 'Vie privée : publicité fictive décrite honnêtement, consentement prévu'); }
   { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8'), ad = (ih.match(/<aside class="adslot" aria-label="Publicité">[\s\S]*?<\/aside>/) || [''])[0];
@@ -318,7 +318,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(m && Buffer.from(m[1], 'base64').slice(0, 3).toString('hex') === 'ffd8ff' && m[1].length * 3 / 4 < 80000 && AJ.length < 80000 ? 1 : 0, 1, 'Pub : visuel JPEG intégré (< 80 Ko) dans ad.js');
     eq(ad.includes('width="640" height="278"') && /aspect-ratio:640\/278/.test(C) && ih.includes('Exemple de pub fictive : ce jeu n’existe pas, l’encart ne mène nulle part.') ? 1 : 0, 1, 'Pub : bandeau 2,3:1 (≈ 146 px à 360 px) + message au tap');
     eq(ad.includes('alt="Exemple de publicité fictive pour un jeu vidéo médiéval fantastique"') && /<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && !/https?:\/\//.test(AJ) ? 1 : 0, 1, 'Pub : alt, script local, aucun lien externe'); }
-  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><div class="footline"><span>Kryptax — Formulaire 2086<\/span><span class="fiscfr">Fiscalité Française<\/span><\/div><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   { // Fuseaux (données fictives) : relevés en UTC, affichage et année fiscale en heure de Paris
     const u = (s, tz) => E.parseDate(s, 'DMY', tz);
     eq(E.fmtParis(u('27 sept. 2026, 00:13:00', 'UTC')) === '27/09/2026 02:13' ? 1 : 0, 1, 'Relevé UTC 27/09 00:13 → 02:13 heure de Paris (été, UTC+2)');
