@@ -221,3 +221,8 @@ header h1{line-height:1.22;padding-bottom:.06em}
 .av-bar{position:absolute;left:0;right:0;bottom:0;height:4px;background:#ffffff26}
 .av-fill{height:100%;background:linear-gradient(90deg,#22d3ee,#10b981);transform-origin:0 50%;transform:scaleX(0);transition:transform .2s linear}
 @media (prefers-reduced-motion:reduce){.av-slide.on{animation:none}.av-slide{transition:opacity .4s}.av-fill{transition:none}}
+
+/* Glisser-déposer (PC) */
+section.dropover{position:relative;border:1.5px dashed #22d3ee;box-shadow:0 0 0 3px rgba(34,211,238,.12),0 0 22px rgba(34,211,238,.22),0 8px 24px #0006}
+section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;top:6px;right:14px;font-size:.78rem;color:#67e8f9;background:#0b1220cc;padding:2px 8px;border-radius:999px;pointer-events:none}
+@media (max-width:480px){section.dropover::after{top:auto;bottom:6px}}

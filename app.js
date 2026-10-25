@@ -36,10 +36,10 @@
       d.addEventListener('close', () => o.focus());
     } }
   const showErr = m => { const n = $('#err'); if (n) { n.textContent = m || ''; n.hidden = !m; } };
-  $('#files').addEventListener('change', async e => {
+  async function handleFiles(files) {
     showErr('');
     holdInfo = '';
-    for (const file of e.target.files) { try {
+    for (const file of files) { try {
       if (KP.fileList(txs).some(f => f.name === file.name)) { holdInfo = 'Fichier déjà ajouté, ignoré : ' + file.name; renderFiles(); continue; }
       if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') { await importPdf(file); continue; }
       if (/\.xlsx?$/i.test(file.name)) {
@@ -52,8 +52,16 @@
         showMapping(file.name, ok[0] || sh[0] || [], true);
       } else showMapping(file.name, parseCSV(await file.text()), false);
     } catch (err) { showErr(file.name + ' : fichier illisible. Vérifiez qu\'il s\'agit bien d\'un relevé PDF, CSV ou Excel.'); } }
-    e.target.value = '';
-  });
+  }
+  $('#files').addEventListener('change', async e => { await handleFiles(Array.from(e.target.files)); e.target.value = ''; });
+  /* Glisser-déposer (PC) : même chemin que « Choisir des fichiers » ; la page ne s'ouvre jamais sur le fichier */
+  { const zone = $('#files').closest('section'); let depth = 0;
+    const off = () => { depth = 0; zone.classList.remove('dropover'); };
+    ['dragover', 'drop'].forEach(t => window.addEventListener(t, e => { if (KP.hasFileDrag(e.dataTransfer)) { e.preventDefault(); if (t === 'dragover' && !zone.contains(e.target)) e.dataTransfer.dropEffect = 'none'; } if (t === 'drop') off(); }));
+    zone.addEventListener('dragenter', e => { if (!KP.hasFileDrag(e.dataTransfer)) return; depth++; zone.classList.add('dropover'); });
+    zone.addEventListener('dragover', e => { if (KP.hasFileDrag(e.dataTransfer)) e.dataTransfer.dropEffect = 'copy'; });
+    zone.addEventListener('dragleave', () => { if (--depth <= 0) off(); });
+    zone.addEventListener('drop', e => { const f = KP.droppedFiles(e.dataTransfer); off(); if (f.length) { e.preventDefault(); e.stopPropagation(); handleFiles(f); } }); }
   /* ---------- PDF Revolut (pdf.js local, rien n'est envoyé) ---------- */
   async function importPdf(file) {
     if (!window.pdfjsLib) return showErr('Lecture PDF indisponible, rechargez la page.');
