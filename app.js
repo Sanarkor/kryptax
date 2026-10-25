@@ -375,6 +375,8 @@
       d.addEventListener('click', e => { if (e.target === d) close(); });
     }
   }
+  /* Laisse l'interface peindre la barre avant un gros calcul synchrone (une image + tâche suivante) */
+  const breathe = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
   function progBar() {
     const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, lab = '', live = false, cap = 0, slow = false, timer = null, ph = '', lo = 0, d0 = 0, lastT = 0, tgt = 0, ts = 0, raf = 0, hold = false;
     const READ_MIN_MS = 2000; /* « Lecture de vos fichiers… » reste affichée au moins 2 s (montée fluide 0 → 25 %), seule phase avec une durée minimale */
@@ -383,7 +385,7 @@
     const rmo = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
     /* Animation requestAnimationFrame : la valeur affichée rattrape la valeur réelle (tgt) par interpolation exponentielle, sans jamais reculer.
        Entre deux réponses, glissement asymptotique lent vers ceil (= position de la prochaine réponse attendue) : jamais atteint, donc jamais d'avance sur le réel, mais pas de blocage visible. */
-    const CATCH_MS = 160, CREEP_MS = 1400; let ceil = 0, lastF = 0;
+    const CATCH_MS = 160, CREEP_MS = 1400, FIN_MS = 400; let ceil = 0, lastF = 0, fin0 = 0, finV = 0; /* fin : glissement de FIN_MS vers 100 %, sans saut */
     const tick = now => { raf = 0; const dt = lastF ? Math.min(100, now - lastF) : 16; lastF = now;
       const el = Date.now() - ts; if (hold && el >= READ_MIN_MS) hold = false;
       const lim = hold ? Math.min(25, rmo() ? 25 : 25 * el / READ_MIN_MS) : 100; /* lecture : au moins 2 s, jamais avant */
@@ -391,10 +393,11 @@
         if (tgt > v) v += Math.max(0.05, (tgt - v) * (1 - Math.exp(-dt / CATCH_MS)));
         if (v > tgt) v = Math.max(val, tgt);
         if (ceil > v && v >= tgt - 0.5) v = Math.max(v, v + (ceil - v) * (1 - Math.exp(-dt / CREEP_MS))); }
-      raw(Math.min(v, lim)); if (live && val < 100) raf = requestAnimationFrame(tick); };
+      if (fin0) { const k = Math.min(1, (now - fin0) / FIN_MS); v = Math.max(val, finV + (100 - finV) * (1 - Math.pow(1 - k, 3))); if (k >= 1) v = 100; }
+      raw(Math.min(v, fin0 ? 100 : lim)); if (fin0 && val >= 100) live = false; if (live && val < 100) raf = requestAnimationFrame(tick); };
     const set = (v, c) => { if (v > tgt) tgt = Math.min(100, v); ceil = Math.max(tgt, Math.min(100, c == null ? tgt : c)); if (!raf && live) { lastF = 0; raf = requestAnimationFrame(tick); } else if (!live) raw(tgt); };
     return {
-      start(quiet) { val = 0; tgt = 0; ceil = 0; lastF = 0; ts = Date.now(); hold = !quiet; if (raf) { cancelAnimationFrame(raf); raf = 0; } slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
+      start(quiet) { val = 0; tgt = 0; ceil = 0; lastF = 0; fin0 = 0; ts = Date.now(); hold = !quiet; if (raf) { cancelAnimationFrame(raf); raf = 0; } slow = false; lab = ''; live = !quiet; cap = 0; ph = ''; w.classList.remove('done'); if (!quiet) w.hidden = false; paint(); clearInterval(timer); },
       unit(name, n, tot) {
         const sg = SEG[name]; if (!sg || val >= sg[1]) return;
         if (name !== ph) { ph = name; lo = Math.max(val, sg[0]); d0 = 0; lastT = tot; set(lo); }
@@ -404,9 +407,9 @@
         set(pos(n), Math.min(sg[1] - 0.5, pos(Math.min(tot, n + 1)))); /* réel = unités terminées ; plafond du glissement = prochaine réponse */
       },
       step() {},
-      at(v) { set(v); },
+      at(v) { set(v, v >= 90 ? 98 : v); }, /* génération : glissement asymptotique vers 98 %, jamais figé */
       end(ok) { clearInterval(timer); if (!ok) { live = false; hold = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } w.hidden = true; return; }
-        const fin = () => { live = false; tgt = 100; raw(100); w.classList.add('done'); timer = setTimeout(() => { w.hidden = true; }, 600); };
+        const fin = () => { fin0 = performance.now(); finV = val; tgt = ceil = 100; if (rmo()) { raw(100); live = false; } else if (!raf) { lastF = 0; raf = requestAnimationFrame(tick); } w.classList.add('done'); timer = setTimeout(() => { live = false; raw(100); w.hidden = true; }, FIN_MS + 600); };
         const rest = hold ? READ_MIN_MS - (Date.now() - ts) : 0; if (rest > 0) { set(100); }; if (rest > 0) timer = setTimeout(fin, rest); else fin(); } /* 100 % dès que le formulaire est prêt, sans animation d’attente */
     };
   }
@@ -421,8 +424,8 @@
       livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, onUnit: (p, n, t) => bar.unit(p, n, t), concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { if (quiet) return; $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
-      bar.at(90); livePrice.txs = txs; renderDiag(src, livePrice); bar.at(92);
-      persist(); save(); bar.at(94); renderTx(); bar.at(96);
+      bar.at(90); await breathe(); livePrice.txs = txs; renderDiag(src, livePrice); bar.at(92); await breathe();
+      persist(); save(); bar.at(94); await breathe(); renderTx(); bar.at(96); await breathe();
       const st = src.stats;
       $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
     } catch (e) {
@@ -431,7 +434,7 @@
       failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
     if (!failed) $('#progress').textContent = '';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; runCtl = null; bar.at(98); renderResults(); bar.end(!failed); scheduleAuto(failed); if (!failed) showDone();
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; runCtl = null; bar.at(98); await breathe(); renderResults(); bar.end(!failed); scheduleAuto(failed); if (!failed) showDone();
   };
   $('#cancel').onclick = () => { cancelAuto(); if (runCtl) runCtl.abort(); };
 
