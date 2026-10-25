@@ -3,7 +3,7 @@
    exportData() est pur (testé dans test.js) ; makePdf/makeXlsx/makeCsv utilisent les bibliothèques locales. */
 (function (root) {
   const d = t => new Date(t).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'medium' });
-  const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
+  const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/—/g, '-').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
   const e2 = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (+v).toFixed(2);
   /* Lignes et libellés de la déclaration n° 2086 (cadre 2, déclarant 1) */
   const FORM = [
@@ -25,9 +25,11 @@
     `${e2(c.l218)} - [${e2(c.l223)} x (${e2(c.l217)} / ${e2(c.l212)})] = ${e2(c.l218)} - ${e2(c.l223 * c.l217 / c.l212)} = ${c.l224 >= 0 ? '+' : ''}${e2(c.l224)}`;
   const frac = c => c.l224 == null ? '' : `Fraction de capital initial cédée (ajoutée à la l. 221 des cessions suivantes) : l. 223 x l. 217 / l. 212 = ${e2(c.l223 * c.l217 / c.l212)}`;
   /* years: E.byYear(res) ; sums/summaryRows : conservés pour compatibilité (non exportés) ; txs : seulement pour compter les échanges exclus */
-  function exportData(years, sums, summaryRows, txs) {
-    const out = { cessions: [], totals: [], swapCount: (txs || []).filter(t => t.type === 'EXCH_OUT').length };
-    for (const y of Object.values(years).sort((a, b) => a.year - b.year)) {
+  function exportData(years, sums, summaryRows, txs, year) {
+    const out = { cessions: [], totals: [], year: year || null, swapCount: (txs || []).filter(t => t.type === 'EXCH_OUT').length };
+    // year : seules les cessions de cette année (le calcul 2086 reste cumulatif depuis le premier achat : l. 220/221/212 viennent de tout l'historique)
+    const list = year ? [years[year] || { year, cessions: [] }] : Object.values(years).sort((a, b) => a.year - b.year);
+    for (const y of list) {
       y.cessions.forEach((c, i) => { const o = { year: y.year, n: i + 1, date: d(c.date), asset: c.asset, qty: +c.qty.toPrecision(10), status: c.status };
         NUM.forEach(k => o[k] = c[k] == null || !isFinite(c[k]) ? null : +c[k].toFixed(2)); o.calc = calc224(c); o.frac = frac(c); out.cessions.push(o); });
       const sum = k => +y.cessions.reduce((a, c) => a + (c[k] || 0), 0).toFixed(2), net = sum('l224'), l213 = sum('l213');
@@ -49,7 +51,7 @@
   function makeCsv(x) {
     const q = v => { const s = typeof v === 'number' ? String(v).replace('.', ',') : String(v == null ? '' : v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const L = r => r.map(q).join(';');
-    return '\ufeff' + ['SYNTHESE 2086', L(['Année', 'Rubrique', 'Valeur']), ...synth(x).map(L), ...x.totals.map(t => q('TOTAL GLOBAL ' + globalText(t))), '',
+    return '\ufeff' + [q('SYNTHESE 2086' + (x.year ? ' - ' + title(x.year) : '')), L(['Année', 'Rubrique', 'Valeur']), ...synth(x).map(L), ...x.totals.map(t => q('TOTAL GLOBAL ' + globalText(t))), '',
       'CESSIONS (2086)', L(HEAD), ...x.cessions.map(c => L(row(c))), ...x.totals.map(t => L(globalRow(t))), ''].join('\n');
   }
   /* Détail type formulaire : une colonne par cession, une ligne par numéro de la 2086 */
@@ -57,7 +59,7 @@
     ['211', FORM[0][1], ...x.cessions.map(c => c.date)], ...FORM.slice(1).map((f, i) => [f[0], f[1], ...x.cessions.map(c => c[NUM[i]] == null ? 'À RENSEIGNER' : c[NUM[i]])]), ['', 'Calcul de la ligne 224', ...x.cessions.map(c => c.calc)]];
   function makeXlsx(XLSX, x) {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Année', 'Rubrique', 'Valeur'], ...synth(x), [], ...x.totals.map(t => ['TOTAL GLOBAL', globalText(t)])]), 'Synthèse');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...(x.year ? [[title(x.year)], []] : []), ['Année', 'Rubrique', 'Valeur'], ...synth(x), [], ...x.totals.map(t => ['TOTAL GLOBAL', globalText(t)])]), 'Synthèse');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEAD, ...x.cessions.map(row), ...x.totals.map(globalRow)]), 'Cessions 2086');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(formSheet(x)), 'Formulaire 2086');
     return wb;
@@ -79,6 +81,7 @@
     doc.autoTable(Object.assign({}, opt, { startY: y, tableWidth: 150, styles: { fontSize: 8, cellPadding: 1.2 }, head: [['Année', 'Synthèse', 'Valeur']],
       body: synth(x).map(r => A([r[0], r[1], typeof r[2] === 'number' && !Number.isInteger(r[2]) ? r[2].toFixed(2) : r[2]])) }));
     // Tableau 2086 : une ligne par cession imposable, colonnes 211 à 224 dans l'ordre de la déclaration, ligne GLOBAL en bas
+    if (!x.cessions.length) { doc.setFontSize(10); doc.text(ascii(`Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`), 8, doc.lastAutoTable.finalY + 8); }
     doc.addPage(); doc.setFontSize(11); doc.text(ascii(`Cessions imposables - déclaration 2086, lignes 211 à 224 (${x.cessions.length} cessions)`), 8, 11);
     const head = [A(['N°', 'Actif', 'Quantité', ...SHORT])];
     const body = x.cessions.map(c => A([c.n + (x.totals.length > 1 ? ' (' + c.year + ')' : ''), c.asset, c.qty, c.date, ...NUM.map(k => e2(c[k]))]))
@@ -89,6 +92,11 @@
     const n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.text('Page ' + i + ' / ' + n, 289, 205, { align: 'right' }); }
     return doc;
   }
-  const api = { FORM, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
+  const FIRST = 2026;
+  // Années fiscales proposées : de 2026 à max(année en cours + 1, dernière année des données)
+  function yearOptions(years, now) { const ks = Object.keys(years || {}).map(Number), hi = Math.max(now + 1, ...ks, FIRST), r = []; for (let y = FIRST; y <= hi; y++) r.push(y); return r; }
+  function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => y.year >= FIRST && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : Math.max(FIRST, now); }
+  const title = y => `Année ${y} — déclaration ${y + 1}`;
+  const api = { FORM, FIRST, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);

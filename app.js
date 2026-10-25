@@ -41,21 +41,23 @@
     for (const f in FIELDS) { for (const cand of FIELDS[f]) { const i = h.indexOf(cand); if (i > -1 && !Object.values(m).includes(i)) { m[f] = i; break; } } if (m[f] == null) { const i = h.findIndex((x, j) => FIELDS[f].some(c => x.includes(c)) && !Object.values(m).includes(j)); if (i > -1) m[f] = i; } }
     return m;
   }
+  const showErr = m => { const n = $('#err'); if (n) { n.textContent = m || ''; n.hidden = !m; } };
   $('#files').addEventListener('change', async e => {
-    for (const file of e.target.files) {
+    showErr('');
+    for (const file of e.target.files) { try {
       if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') { await importPdf(file); continue; }
       if (/\.xlsx?$/i.test(file.name)) {
-        if (!window.XLSX) { alert('Lecteur Excel indisponible.'); continue; }
+        if (!window.XLSX) { showErr('Lecture Excel indisponible, rechargez la page.'); continue; }
         const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
         showMapping(file.name, rows, true);
       } else showMapping(file.name, parseCSV(await file.text()), false);
-    }
+    } catch (err) { showErr(file.name + ' : fichier illisible. Vérifiez qu\'il s\'agit bien d\'un relevé PDF, CSV ou Excel.'); } }
     e.target.value = '';
   });
   /* ---------- PDF Revolut (pdf.js local, rien n'est envoyé) ---------- */
   async function importPdf(file) {
-    if (!window.pdfjsLib) return alert('Lecteur PDF indisponible.');
+    if (!window.pdfjsLib) return showErr('Lecture PDF indisponible, rechargez la page.');
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
     $('#progress').textContent = 'Lecture du PDF…';
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
@@ -63,7 +65,7 @@
     for (let i = 1; i <= doc.numPages; i++) { const c = await (await doc.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
     $('#progress').textContent = '';
     const r = KP.parsePdfLines(lines);
-    if (!r.rows.length && !r.fiat.length) return alert(file.name + ' : aucune transaction reconnue dans ce PDF.');
+    if (!r.rows.length && !r.fiat.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.');
     const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR' }, uid);
     txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
@@ -75,7 +77,7 @@
   }
   let fiatText = localStorage.getItem('kryptax.fiat') || '';
   function showMapping(name, rows, isXlsx) {
-    if (rows.length < 2) return alert(name + ' : fichier vide ?');
+    if (rows.length < 2) return showErr(name + ' : fichier vide.');
     if (rows[0].some(h => /sent amount|received amount|montant envoy|montant re/i.test(h))) return showMapping2(name, rows);
     rows[0] = rows[0].map(x => E.fixText(String(x)));
     const head = rows[0], m = guessMap(head), box = document.createElement('div'); box.className = 'note';
@@ -98,7 +100,7 @@
       const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); } save(); box.remove(); renderTx(); autoRun();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
-      return alert(res.txs.length + ' transactions importées' + (res.bad.length ? ', ' + res.bad.length + ' lignes ignorées' : '') + (sus ? '. ' + sus + ' quantités reconstruites ou à vérifier' : '') + (usd ? '. ' + usd + ' lignes en devise étrangère, converties en € au calcul (taux BCE)' : '') + (nsw ? '. ' + nsw + ' échanges crypto→crypto détectés (non imposables, voir le tableau)' : '') + '. Vérifiez les types !');
+      if (res.bad.length) showErr(res.bad.length + ' lignes de ' + name + ' n\'ont pas pu être lues.'); return;
       let n = 0, bad = 0;
       rows.slice(1).forEach((r, i) => {
         const g = f => mp[f] == null ? '' : r[mp[f]];
@@ -111,7 +113,7 @@
         txs.push({ id: uid(), seq: i, date, type, rawType: g('type'), asset: String(g('asset')).trim().toUpperCase(), qty: Math.abs(qty), eur: isFinite(val) ? val : 0, fee: isFinite(fee) ? fee : 0, platform: o.platform, source: name });
         n++;
       });
-      save(); box.remove(); renderTx(); if (bad) alert(bad + ' lignes ignorées (date ou quantité illisible).'); autoRun();
+      save(); box.remove(); renderTx(); if (bad) showErr(bad + ' lignes de ' + name + ' n\'ont pas pu être lues.'); autoRun();
     };
   }
 
@@ -162,7 +164,7 @@
         }
       });
       saveCache(); save(); box.remove(); renderTx(); autoRun();
-      alert(n + ' transactions importées, ' + np + ' cours repris de Coinly' + (bad ? ', ' + bad + ' lignes ignorées' : '') + '. Vérifiez les types !');
+      if (bad) showErr(bad + ' lignes de ' + name + ' n\'ont pas pu être lues.');
     };
   }
 
@@ -212,7 +214,7 @@
     renderSwaps();
     const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
     $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
-    $('#calc').hidden = !all.length; $('#txnote2').textContent = $('#txnote').textContent = all.length ? `${all.length} transactions importées, dont ${sales.length} ventes. Calcul lancé automatiquement après l'import.` : 'Aucune transaction importée.';
+    $('#calc').hidden = !all.length; $('#txnote2').textContent = '';
     $('#txinfo').textContent = all.length ? (showAll ? `${all.length} transactions affichées (dont ${sales.length} ventes)` : `${sales.length} ventes affichées sur ${all.length} transactions`) : '';
     $('#txall').hidden = !all.length; $('#txall').textContent = showAll ? 'Afficher seulement les ventes' : 'Afficher toutes les transactions';
     renderBalances(); renderOpening();
@@ -284,7 +286,7 @@
   $('#run').onclick = async () => {
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); let failed = false;
     const bar = $('#bar'), t0 = Date.now(); bar.hidden = false; bar.value = 0;
-    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = 'Calcul en cours…'; };
+    const show = (step, n, tot) => { if (tot) { bar.max = tot; bar.value = n; } $('#progress').textContent = 'Calcul en cours…'; $('#progress').className = ''; };
     let src;
     try {
       src = KP.makeSources((u, o) => fetch(u, o), { signal: runCtl.signal, geckoIds: load('kryptax.gecko', {}) });
@@ -297,10 +299,10 @@
     } catch (e) {
       try { saveCache(); } catch (x) {}
       if (src) renderDiag(src, { failed: [], fxMissing: txs.filter(t => t.fxPending).length });
-      failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Calcul interrompu, relancez.';
+      failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
-    if (!failed) $('#progress').textContent = 'Calcul terminé.';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = false; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
+    if (!failed) $('#progress').textContent = '';
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
   };
   $('#cancel').onclick = () => runCtl && runCtl.abort();
   $('#cckey').value = localStorage.getItem('kryptax.cckey') || '';
@@ -370,10 +372,22 @@
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
     const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="print" class="ghost" hidden>Imprimer</button></p>';
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
-    if (window.KryptaxExport) h = '<h2>2. Résultat et export</h2>' + KryptaxExport.exportData(Y, {}, () => [], []).totals.map(t => `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cessions)<br>${esc(KryptaxExport.globalText(t))}</div>`).join('') + h;
+    const X = window.KryptaxExport;
+    if (X) {
+      const yrs = X.yearOptions(Y, new Date().getFullYear()); if (!yrs.includes(fyear)) fyear = X.defaultYear(Y, new Date().getFullYear());
+      const t = X.exportData(Y, {}, () => [], [], fyear).totals[0], yc = (Y[fyear] || { cessions: [] }).cessions;
+      const est = new Set(); yc.forEach(c => (c.detail212 || []).forEach(d => { if (livePrice && livePrice.approx && livePrice.approx.has(d.asset + '|' + c.date)) est.add(d.asset); }));
+      (livePrice && livePrice.unvalued ? [...livePrice.unvalued] : []).filter(x => manual[x] == null).forEach(x => est.add(x));
+      const errs = [];
+      if (t.incomplete) errs.push('Certains cours sont introuvables : le résultat est incomplet. Relancez le calcul plus tard.');
+      else if (est.size) errs.push('Cours estimé (≈) pour ' + [...est].map(esc).join(', ') + ' : vérifiez le montant ou relancez plus tard.');
+      const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
+      const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
+      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + tot + h;
+    }
     $('#results').innerHTML = h; lastOut = out; lastY = Y;
   }
-  let lastOut = null, lastY = null;
+  let lastOut = null, lastY = null, fyear = null;
   function cmpBlock(Y) {
     const ys = Object.keys(Y).sort().reverse(); if (!ys.length) return '';
     const d = (k, v) => { const c = manual[k]; if (c == null || v == null) return ''; const x = v - c; return ` <span class="${Math.abs(x) < 1 ? '' : 'warn'}">écart ${x >= 0 ? '+' : ''}${eur(x)}</span>`; };
@@ -388,6 +402,7 @@
     return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening);
   }
   $('#results').addEventListener('change', e => {
+    if (e.target.id === 'fyear') { fyear = +e.target.value; renderResults(); return; }
     if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
     const k = e.target.dataset.cmp; if (k) { const v = E.parseNum(e.target.value); if (isFinite(v)) manual[k] = v; else delete manual[k]; save(); renderResults(); return; }
     const m = e.target.dataset.man, o = e.target.dataset.o212, v = E.parseNum(e.target.value);
@@ -397,14 +412,15 @@
   });
   $('#results').addEventListener('click', e => {
     if (e.target.id === 'print') window.print();
+    if (e.target.id === 'rerun') $('#run').click();
     if (['csv', 'xlsx', 'pdfx'].includes(e.target.id)) {
-      const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs), stamp = new Date().toLocaleDateString('sv-SE');
+      const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs, fyear), stamp = fyear + '-decl' + (fyear + 1);
       const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
       try {
         if (e.target.id === 'csv') dl(new Blob([X.makeCsv(data)], { type: 'text/csv;charset=utf-8' }), `kryptax-2086-${stamp}.csv`);
         if (e.target.id === 'xlsx') dl(new Blob([XLSX.write(X.makeXlsx(XLSX, data), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `kryptax-2086-${stamp}.xlsx`);
-        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, 'Kryptax - formulaire 2086 (' + data.cessions.length + ' cessions)').output('blob'), `kryptax-2086-${stamp}.pdf`);
-      } catch (err) { alert('Export impossible : ' + err.message); }
+        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`);
+      } catch (err) { alert('Export impossible, réessayez.'); }
     }
   });
 
