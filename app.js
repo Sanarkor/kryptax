@@ -511,24 +511,27 @@
     m.hidden = false;
   }
   /* ---------- Pub de démonstration avant le PDF (fictive) ---------- */
-  const AD_DELAY_S = 6; // durée de la pub avant le PDF, en secondes
-  let adDone = false, adTimer = null, adSeen = false; // adSeen : pub vue jusqu’au bout (mémoire seulement, jusqu’au rechargement)
+  let adDone = false, adTimer = null, adSeen = false; // adSeen : pub passée ou terminée (mémoire seulement, jusqu’au rechargement)
   function openAdGate() {
     const b = currentBlockers(); pdfState();
     if (b.length) { pdfRefused(b); return; }
     const d = $('#adgate'); if (!d) return;
-    const img = $('#adgateimg'); if (img && !img.src && window.KryptaxAd) img.src = window.KryptaxAd.img;
-    const go = $('#adgatego'), cnt = $('#adgatecount'), bar = $('#adgatebar');
-    adDone = false; clearInterval(adTimer);
-    go.disabled = true; go.setAttribute('aria-disabled', 'true'); go.textContent = 'Voir mon PDF';
-    let left = AD_DELAY_S; const t0 = Date.now();
+    const KA = window.KryptaxAd || {}, AD_VIDEO_S = KA.videoS || 15, AD_SKIP_S = KA.skipS || 5; // réglages en haut de ad.js
+    const s1 = $('#avs1'), s2 = $('#avs2'), sl = KA.slides || [];
+    if (s1 && !s1.src && sl[0]) s1.src = sl[0]; if (s2 && !s2.src && sl[1]) s2.src = sl[1];
+    const go = $('#adgatego'), cnt = $('#adgatecount'), bar = $('#adgatebar'), hook = $('#avhook');
+    adDone = false; clearInterval(adTimer); go.hidden = true; go.textContent = 'Passer la pub ▸'; cnt.hidden = false;
+    s1.classList.add('on'); s2.classList.remove('on'); hook.textContent = 'Partez à l’aventure avec Barthyl le Moine';
+    const t0 = Date.now(); let lastN = -1, half = false;
     const tick = () => {
-      left = Math.max(0, AD_DELAY_S - Math.floor((Date.now() - t0) / 1000));
-      cnt.textContent = left > 0 ? `Votre PDF sera prêt dans ${left} s` : 'Votre PDF est prêt';
-      bar.value = Math.min(AD_DELAY_S, (Date.now() - t0) / 1000);
-      if (left <= 0) { clearInterval(adTimer); adDone = true; adSeen = true; go.disabled = false; go.setAttribute('aria-disabled', 'false'); go.focus(); }
+      const el = (Date.now() - t0) / 1000;
+      bar.style.transform = 'scaleX(' + Math.min(1, el / AD_VIDEO_S).toFixed(4) + ')';
+      if (!half && el >= AD_VIDEO_S / 2) { half = true; s1.classList.remove('on'); s2.classList.add('on'); hook.textContent = 'ChatCoquin : discutez, c’est gratuit'; }
+      if (el < AD_SKIP_S) { const n = Math.ceil(AD_SKIP_S - el); if (n !== lastN) { lastN = n; cnt.textContent = `Vous pourrez passer la pub dans ${n}…`; } return; }
+      if (!adDone) { adDone = true; cnt.textContent = 'Vous pouvez passer la pub.'; cnt.classList.add('sr'); go.hidden = false; go.focus(); }
+      if (el >= AD_VIDEO_S) { clearInterval(adTimer); adSeen = true; go.textContent = 'Voir mon PDF'; cnt.textContent = 'Pub terminée : votre PDF est prêt.'; }
     };
-    bar.max = AD_DELAY_S; tick(); adTimer = setInterval(tick, 200);
+    cnt.classList.remove('sr'); tick(); adTimer = setInterval(tick, 200);
     if (d.showModal) d.showModal(); else d.setAttribute('open', '');
     $('#adgateclose').focus();
   }
@@ -537,7 +540,7 @@
     if (d) {
       d.addEventListener('close', () => { clearInterval(adTimer); adDone = false; });
       $('#adgateclose').onclick = closeAdGate;
-      $('#adgatego').onclick = () => { if (!adDone) return; if (downloadPdf()) closeAdGate(); };
+      $('#adgatego').onclick = () => { if (!adDone) return; adSeen = true; if (downloadPdf()) closeAdGate(); }; // passer ou terminer = pub vue
     } }
   /* Aperçu : pages rendues en images (pdf.js local, fonctionne sur iOS/Android), puis « Enregistrer le PDF ». */
   let pvUrl = null, pvBlob = null, pvName = '';
