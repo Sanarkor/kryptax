@@ -161,3 +161,23 @@ footer .fiscfr{margin-left:auto}
 header .sub{font-size:1.04em;font-weight:700;line-height:1.3;letter-spacing:.02em;color:#fff;max-width:100%;overflow-wrap:anywhere;
   -webkit-text-stroke:.3px rgba(148,163,184,.55);text-shadow:0 0 1px rgba(148,163,184,.9),1px 0 0 rgba(100,116,139,.45),-1px 0 0 rgba(100,116,139,.45),0 1px 0 rgba(100,116,139,.45),0 -1px 0 rgba(100,116,139,.45)}
 @media print{header .sub{color:#000;text-shadow:none;-webkit-text-stroke:0}}
+
+/* Pub mobile : alternance en fondu */
+.adimg{transition:opacity .45s ease}.adimg.adfade{opacity:0}
+@media (prefers-reduced-motion:reduce){.adimg{transition:none}}
+/* Bandeaux verticaux : PC seulement */
+.adrail{display:none}
+@media (min-width:1024px){
+html{font-size:125%}
+body{font-size:19px}
+header,main{max-width:min(960px,calc(100vw - 2*clamp(180px,14vw,220px) - 64px));box-sizing:border-box}
+header h1{font-size:5.4rem}
+header .sub{font-size:1.7em}
+#reset,#helpbtn{font-size:.85rem;padding:.35em .8em}
+.adslot{display:none}
+.adrail{display:block;position:fixed;top:24px;width:clamp(180px,14vw,220px);padding:6px 8px 8px;border:1px solid var(--line);border-radius:12px;background:#0b1220;box-sizing:border-box;z-index:1}
+.adrail-l{left:16px}.adrail-r{right:16px}
+.adrail .adhead{flex-direction:column}
+.adrimg{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:8px;object-fit:cover}
+}
+@media print{.adrail{display:none!important}}
