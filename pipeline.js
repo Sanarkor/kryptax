@@ -413,6 +413,7 @@
       if (o == null) { // cours du même actif le plus proche dans le cache (autre heure)
         let best = null, bd = Infinity; const pre = a + '|h';
         for (const k in cache) if (k.startsWith(pre) && typeof cache[k] === 'number') { const dd = Math.abs(+k.slice(pre.length) - h); if (dd < bd) { bd = dd; best = cache[k]; } }
+        const pm = a + '|m'; for (const k in cache) if (k.startsWith(pm) && typeof cache[k] === 'number') { const dd = Math.abs(+k.slice(pm.length) * MIN / HOUR - h); if (dd < bd) { bd = dd; best = cache[k]; } } // cours à la minute aussi
         o = best;
       }
       if (o == null) o = obs(a, ts, true);
@@ -573,6 +574,16 @@
     }
     fn.tries = k; fn.src = src; return fn;
   }
-  const api = { hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
+  /* Cryptos qui comptent pour l'alerte ≈ et la relance : cédées dans l'année ou détenues à une cession avec un cours estimé.
+     Une crypto reçue seulement en récompense (intérêts, staking, airdrop) sans cours : ignorée (valeur 0 documentée), ni alerte ni relance.
+     Une crypto « inexistante » (aucune source) : alerte mais pas de relance. */
+  function alertAssets(txs, cessions, fn, cache, manual) {
+    manual = manual || {}; cache = cache || {};
+    const rewardOnly = a => { const L = txs.filter(t => t.asset === a); return L.length > 0 && L.every(t => ['INTEREST', 'STAKING', 'AIRDROP'].includes(t.type)); };
+    const est = new Set(), ign = new Set();
+    for (const c of cessions) for (const d of (c.detail212 || [])) if (fn && fn.approx && fn.approx.has(d.asset + '|' + c.date) && manual[d.asset] == null) (rewardOnly(d.asset) ? ign : est).add(d.asset);
+    return { est: [...est], ign: [...ign].filter(a => fn.unvalued && fn.unvalued.has(a)), retry: [...est].filter(a => cache[a + '|none'] == null) };
+  }
+  const api = { alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);
