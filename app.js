@@ -16,7 +16,6 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const typeOpts = sel => Object.entries(E.TYPES).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
-  $('#addtype').innerHTML = typeOpts('BUY');
 
   /* ---------- CSV ---------- */
   function parseCSV(text) {
@@ -181,12 +180,6 @@
     };
   }
 
-  /* ---------- Saisie manuelle ---------- */
-  $('#addform').addEventListener('submit', e => {
-    e.preventDefault(); const f = new FormData(e.target);
-    txs.push({ id: uid(), date: new Date(f.get('date')).getTime(), type: f.get('type'), asset: f.get('asset').trim().toUpperCase(), qty: Math.abs(E.parseNum(f.get('qty'))), eur: Math.abs(E.parseNum(f.get('eur'))) || 0, fee: Math.abs(E.parseNum(f.get('fee'))) || 0, platform: f.get('platform') || 'manuel', source: 'saisie' });
-    save(); renderTx(); e.target.reset();
-  });
 
   /* ---------- Tableau des transactions ---------- */
   /* Mobile : chaque cellule reçoit le libellé de sa colonne (data-l) pour l'affichage empilé en CSS. */
@@ -415,11 +408,20 @@
       if (sus.length) errs.push('Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.');
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})<br>${esc(X.globalText(t))}</div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
-      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + tot + h;
+      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + h;
     }
     $('#results').innerHTML = h; lastOut = out; lastY = Y;
   }
   { const hb = document.querySelector('details.help'); if (hb) hb.addEventListener('click', e => { if (!hb.open || e.target.closest('a, summary, input, button, select, label')) return; hb.open = false; }); }
+  // Opérations particulières (staking, airdrop…) : un seul message replié, discret, jamais bloquant
+  function specialNote(sp) {
+    if (!sp || (!sp.n && !sp.pay)) return '';
+    const ex = sp.cats.filter(x => x.key !== 'paiements'), pl = (n, s, p) => n + ' ' + (n > 1 ? p : s);
+    const head = sp.n ? `ℹ️ ${pl(sp.n, 'opération particulière détectée', 'opérations particulières détectées')} (${ex.slice(0, 2).map(x => x.label.split(' ')[0]).join(', ')}${ex.length > 2 ? '…' : ''}) : non ${sp.n > 1 ? 'traitées' : 'traitée'} comme des cessions. Voir le PDF`
+      : `ℹ️ ${pl(sp.pay, 'paiement en crypto détecté', 'paiements en crypto détectés')} : à vérifier. Voir le PDF`;
+    const li = sp.cats.map(x => `<li>${esc(x.label[0].toUpperCase() + x.label.slice(1))} : ${x.n}${x.key === 'paiements' ? ' — compté comme une vente, à vérifier' : ''}</li>`).join('');
+    return `<details class="note spec" id="special"><summary>${esc(head)}</summary><ul>${li}</ul><p>Kryptax ne calcule pas leur imposition propre (revenus, etc.).</p></details>`;
+  }
   let lastOut = null, lastY = null, fyear = null;
   // Aperçu à l'écran du PDF : seules la date et la crypto sont en clair ; les montants sont des valeurs factices floutées (le vrai texte n'est pas dans le DOM)
   function showPeek() {
@@ -464,13 +466,11 @@
     if (e.target.id === 'print') window.print();
     if (e.target.id === 'rerun') $('#run').click();
     if (e.target.closest && e.target.closest('#peek')) showPeek();
-    if (['csv', 'xlsx', 'pdfx'].includes(e.target.id)) {
+    if (e.target.id === 'pdfx') {
       const X = window.KryptaxExport, data = X.exportData(lastY, lastS, summaryRows, txs, fyear), stamp = fyear + '-decl' + (fyear + 1);
       const dl = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
       try {
-        if (e.target.id === 'csv') dl(new Blob([X.makeCsv(data)], { type: 'text/csv;charset=utf-8' }), `kryptax-2086-${stamp}.csv`);
-        if (e.target.id === 'xlsx') dl(new Blob([XLSX.write(X.makeXlsx(XLSX, data), { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `kryptax-2086-${stamp}.xlsx`);
-        if (e.target.id === 'pdfx') dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`);
+        dl(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), `kryptax-2086-${stamp}.pdf`);
       } catch (err) { alert('Export impossible, réessayez.'); }
     }
   });
