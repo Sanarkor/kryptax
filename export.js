@@ -125,7 +125,7 @@
       didParseCell: h => { if (h.row.index === (n ? 0 : 1)) { h.cell.styles.fontSize = 11; h.cell.styles.fontStyle = 'bold'; } } });
     // 3) Libellés officiels en note de bas de page, seulement s'il reste de la place
     doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 110);
-    const note = doc.splitTextToSize(ascii('Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
+    const note = doc.splitTextToSize(ascii('L\'utilisateur reste seul responsable de sa déclaration auprès de l\'administration fiscale. Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
     let yn = doc.lastAutoTable.finalY + 3;
     // 3) Opérations particulières : courte note, prioritaire sur les libellés officiels (reste sur la même page)
     const st = specialText(x.special, x.year);

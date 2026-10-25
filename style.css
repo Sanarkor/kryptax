@@ -234,3 +234,4 @@ section.dropover::after{content:"Déposez vos fichiers ici";position:absolute;to
 .xlist li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}
 .xwhat{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}
 .xlist select{flex:1 1 180px;min-width:0;max-width:100%}
+.disclaim{display:block;text-align:center;margin:6px auto 0;max-width:640px;padding:0 12px;font-size:.7em;color:var(--muted);opacity:.8;overflow-wrap:anywhere}
