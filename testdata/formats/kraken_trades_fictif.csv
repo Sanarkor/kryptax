@@ -1,0 +1,4 @@
+"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"
+"TAAAAA-00001","OAAAAA-00001","XXBTZEUR","2026-01-04 10:00:00.1234","buy","limit",50000.0,400.00000,1.04000,0.00800000,0.00000,"","LAAAAA-00002,LAAAAA-00003"
+"TAAAAA-00003","OAAAAA-00003","XETHXXBT","2026-02-04 10:00:00.0000","sell","market",0.05,0.00500000,0.00001000,0.10000000,0.00000,"",""
+"TAAAAA-00002","OAAAAA-00002","BTC/EUR","2026-03-04 10:00:00.0000","sell","market",65000.0,130.00000,0.34000,0.00200000,0.00000,"",""
