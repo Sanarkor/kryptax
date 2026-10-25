@@ -202,3 +202,13 @@ header h1{line-height:1.22;padding-bottom:.06em}
 @keyframes dpv{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.dp-in,.dp-v{animation:none}}
 @media print{.donepop{display:none!important}}
+
+/* Relance discrète des cours manquants */
+.autoind{display:flex;align-items:center;gap:8px;margin:6px 4px 0;font-size:.8em;color:var(--muted)}
+.autoind[hidden]{display:none}
+.autoind .spin{width:12px;height:12px;border-radius:50%;border:2px solid rgba(34,211,238,.25);border-top-color:#22d3ee;animation:kxspin .9s linear infinite;flex:none}
+@keyframes kxspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.autoind .spin{animation:none;border-color:#22d3ee}}
+@media print{.autoind{display:none!important}}
+/* Cadre de calcul masqué quand il n'a rien à montrer */
+#calc:not(:has(#barwrap:not([hidden]))):not(:has(#progress:not(:empty))):not(:has(#run:not([hidden]))):not(:has(#txnote2:not(:empty))):not(:has(#diag:not([hidden]))){display:none}
