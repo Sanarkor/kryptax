@@ -327,13 +327,27 @@
      Une relance (étape déjà passée) répartit le reste entre la valeur atteinte et 90 % : jamais de recul, jamais d'avance sur le réel. */
   const PHASES = [['Taux de change', 0, 25], ['Cours à la minute', 25, 50], ['Cours', 50, 60]];
   const PLABEL = v => v < 25 ? 'Lecture de vos fichiers…' : v < 60 ? 'Récupération des cours…' : 'Génération du formulaire 2086…';
+  // Popup de fin de calcul réussi (une fois par calcul) : ✓, titre, bouton vers « 2. Résultat et export »
+  let doneShown = false;
+  function showDone() {
+    const d = $('#donepop'); if (!d || d.open || doneShown || ($('#adgate') && $('#adgate').open)) return;
+    doneShown = true; d.showModal(); $('#donego').focus();
+  }
+  { const d = $('#donepop');
+    if (d) {
+      const close = () => { if (d.open) d.close(); };
+      $('#donego').addEventListener('click', () => { close(); const r = $('#results'); if (r) { const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; r.scrollIntoView({ behavior: rm ? 'auto' : 'smooth', block: 'start' }); const h = r.querySelector('h2'); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); } } });
+      $('#doneclose').addEventListener('click', close);
+      d.addEventListener('click', e => { if (e.target === d) close(); });
+    }
+  }
   function progBar() {
-    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, last = -1, lo = 0, hi = 60, lab = '';
-    const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if ((t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
+    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, last = -1, lo = 0, hi = 60, lab = '', live = false;
+    const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); const t = PLABEL(val), pg = $('#progress'); if (live && (t !== lab || !pg.textContent) && !/^Nouvelle/.test(pg.textContent)) { lab = t; pg.textContent = t; pg.className = ''; } };
     const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
     const map = (p, r) => lo + (hi - lo) * (PHASES[p][1] + (PHASES[p][2] - PHASES[p][1]) * r) / 60;
     return {
-      start() { val = 0; last = -1; lo = 0; hi = 60; lab = ''; w.classList.remove('done'); w.hidden = false; paint(); },
+      start() { val = 0; last = -1; lo = 0; hi = 60; lab = ''; live = true; w.classList.remove('done'); w.hidden = false; paint(); },
       step(name, n, tot) {
         const p = PHASES.findIndex(x => name === x[0] || name.indexOf(x[0] + ' ') === 0); if (p < 0 || !tot) return;
         if (p < last) { lo = val; last = -1; } /* relance : nouvelle passe sur la part restante */
@@ -341,13 +355,13 @@
         last = p; set(map(p, Math.min(1, n / tot)));
       },
       at(v) { set(v); },
-      end(ok) { if (ok) { set(100); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 600); } else w.hidden = true; }
+      end(ok) { live = false; if (ok) { set(100); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 600); } else w.hidden = true; }
     };
   }
   $('#run').onclick = async () => {
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
-    const bar = progBar(), t0 = Date.now(); bar.start();
+    const bar = progBar(), t0 = Date.now(); bar.start(); if (!autoTry) doneShown = false; /* relances auto = même calcul */
     const show = (step, n, tot) => { if (/^Nouvelle/.test($('#progress').textContent)) $('#progress').textContent = ''; bar.step(step, n, tot); };
     let src;
     try {
@@ -365,7 +379,7 @@
       failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
     if (!failed) $('#progress').textContent = '';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.end(!failed); runCtl = null; renderResults(); scheduleAuto(failed);
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; bar.end(!failed); runCtl = null; renderResults(); scheduleAuto(failed); if (!failed) showDone();
   };
   $('#cancel').onclick = () => { cancelAuto(); if (runCtl) runCtl.abort(); };
 

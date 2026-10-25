@@ -185,3 +185,20 @@ header .sub{font-size:1.7em}
 
 /* Logo : place pour les jambages (y, p) au-dessus du sous-titre */
 header h1{line-height:1.22;padding-bottom:.06em}
+
+/* Popup de fin de calcul */
+.donepop{border:0;padding:0;background:transparent;color:var(--text);max-width:calc(100vw - 32px);width:340px;overflow:visible}
+.donepop::backdrop{background:rgba(3,6,12,.72)}
+.dp-in{position:relative;text-align:center;padding:26px 20px 18px;border-radius:18px;background:linear-gradient(180deg,#111a2b,#0b1220) padding-box,linear-gradient(135deg,#22d3ee,#10b981) border-box;border:1.5px solid transparent;box-shadow:0 0 28px rgba(34,211,238,.25),0 12px 40px #000a;animation:dpin .35s ease-out}
+.dp-x{position:absolute;top:10px;right:10px}
+.dp-ok{display:inline-block;border-radius:50%;background:linear-gradient(135deg,#22d3ee,#10b981);padding:2px;margin-bottom:10px}
+.dp-ok{box-shadow:0 0 16px rgba(34,211,238,.45)}
+.dp-ok svg{display:block;margin:0;background:#0b1220;border-radius:50%}
+.dp-c{stroke:none;fill:none}
+.dp-v{fill:none;stroke:#10b981;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:0;animation:dpv .5s .15s ease-out both}
+.dp-t{margin:4px 0 6px;font-size:1.15rem;line-height:1.3}
+.dp-s{margin:0 0 16px;color:var(--muted);font-size:.92em}
+@keyframes dpin{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes dpv{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.dp-in,.dp-v{animation:none}}
+@media print{.donepop{display:none!important}}
