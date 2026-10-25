@@ -132,10 +132,58 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 { const fs = require('fs'), H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   eq(/pas un conseil fiscal|class="banner/.test(H) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes("<summary>Mode d'emploi et aide</summary>") ? 1 : 0, 1, 'Mode d’emploi et aide conservé (replié)');
   const pk = A.slice(A.indexOf('function showPeek'), A.indexOf('function cmpBlock')); eq(/c\.l2\d\d|t\.l2\d\d|c\.qty|fr\(/.test(pk) ? 1 : 0, 0, 'Aperçu 👁 : aucun montant réel injecté (valeurs factices floutées)'); }
+// Multi-import (fictif) : cumul, remplacement du même fichier, dédoublonnage des relevés qui se chevauchent
+{ const KP = require('./pipeline.js'), D = (m, d) => Date.UTC(2026, m, d, 10);
+  const f1 = [{ source: 'a.pdf', type: 'BUY', asset: 'AAA', date: D(0, 5), qty: 2, eur: 100 }, { source: 'a.pdf', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }];
+  const f2 = [{ source: 'b.csv', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }, { source: 'b.csv', type: 'BUY', asset: 'BBB', date: D(2, 1), qty: 5, eur: 50 }];
+  let m = KP.mergeImport([], f1); eq(m.txs.length, 2, 'Import 1 : 2 transactions');
+  m = KP.mergeImport(m.txs, f2); eq(m.txs.length, 3, 'Import 2 : cumulé sans écraser (3)'); eq(m.dup, 1, 'Chevauchement : vente commune ignorée (1 doublon)');
+  m = KP.mergeImport(m.txs, f1.map(t => Object.assign({}, t))); eq(m.txs.length, 3, 'Même fichier ré-importé : pas de doublon'); eq(m.replaced, 2, 'Même fichier ré-importé : remplace l’ancien');
+  const f3 = [{ source: 'c.pdf', type: 'SELL', asset: 'AAA', date: D(3, 1), qty: 1, eur: 80 }, { source: 'c.pdf', type: 'SELL', asset: 'AAA', date: D(3, 1), qty: 1, eur: 80 }];
+  m = KP.mergeImport(m.txs, f3); eq(m.txs.length, 5, 'Deux opérations identiques dans un même fichier : conservées');
+  const L = KP.fileList(m.txs); eq(L.length, 3, 'Liste des fichiers : 3'); eq(L.map(f => f.name).sort().join(',') === 'a.pdf,b.csv,c.pdf' ? 1 : 0, 1, 'Liste des fichiers : noms');
+  const after = m.txs.filter(t => t.source !== 'b.csv'); eq(KP.fileList(after).length, 2, 'Retirer un fichier (✕)');
+  const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'); eq(/function autoRun\(\)[^]*?\$\('#run'\)\.click\(\)[^]*?function renderFiles/.test(A) ? 1 : 0, 0, 'L’import ne lance plus le calcul'); }
 // CSP : chaque hôte appelé par le code doit figurer dans connect-src
 {
   const fs = require('fs'), html = fs.readFileSync(__dirname + '/index.html', 'utf8'), csp = (html.match(/connect-src ([^;"]*)/) || [])[1] || '';
   const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github/.test(h));
   const miss = hosts.filter(h => !csp.split(/\s+/).includes(h)); eq(miss.length, 0, 'CSP connect-src couvre tous les hôtes appelés' + (miss.length ? ' (manque ' + miss.join(', ') + ')' : ''));
 }
-process.exit(ok ? 0 : 1);
+
+/* Cours : table d'identifiants, alias, ordre DefiLlama, contrôle croisé > 30 % (sources simulées, données fictives) */
+(async () => {
+  const P = require('./pipeline.js'), IDS = require('./ids.js'), H = 3600000, t0 = Date.UTC(2025, 0, 10, 12);
+  eq(Object.keys(IDS.ids).length > 900 ? 1 : 0, 1, 'Table symbole→id embarquée (top 1000)');
+  eq(IDS.ids.BTC === 'bitcoin' ? 1 : 0, 1, 'Table : BTC → bitcoin');
+  function mock(binPrice, llamaPrice) {
+    const calls = [];
+    const f = async u => { calls.push(u); const R = (j, st = 200) => ({ status: st, json: async () => j });
+      if (/coingecko\.com\/api\/v3\/search/.test(u)) return R({ coins: [] });
+      if (/klines\?symbol=EURUSDT/.test(u)) { const st = +u.match(/startTime=(\d+)/)[1]; return R(st > t0 + 5 * H ? [] : Array.from({ length: 12 }, (_, i) => [t0 - 5 * H + i * H, '1'])); }
+      const m = u.match(/klines\?symbol=([A-Z0-9]+)&.*startTime=(\d+)/);
+      if (m) { if (!binPrice || !/USDT$/.test(m[1]) || !/^(XMR|ETH|ONE)USDT$/.test(m[1])) return R({ code: -1121 }); const st = +m[2]; return R(st > t0 + 5 * H ? [] : Array.from({ length: 12 }, (_, i) => [t0 - 5 * H + i * H, String(binPrice)])); }
+      const l = u.match(/coins\.llama\.fi\/chart\/coingecko:([a-z0-9-]+)/);
+      if (l) return R({ coins: llamaPrice ? { ['coingecko:' + l[1]]: { prices: Array.from({ length: 12 }, (_, i) => ({ timestamp: (t0 - 5 * H + i * H) / 1000, price: llamaPrice })) } } : {} });
+      return R({ code: '51001', label: 'INVALID', error: 'x' }, 400);
+    }; f.calls = calls; return f;
+  }
+  let f = mock(0, 150), S = P.makeSources(f, { gap: 0 }), r = await S.series('XMR', t0, t0);
+  eq(r && r.src === 'DefiLlama' ? 1 : 0, 1, 'XMR (absent de Binance) : DefiLlama via id monero');
+  eq(f.calls.some(u => /gateio|okx\.com|bitget/.test(u)) ? 1 : 0, 0, 'Id connu : DefiLlama essayé avant Gate.io / OKX / Bitget');
+  eq(f.calls.some(u => /coingecko\.com\/api\/v3\/search/.test(u)) ? 1 : 0, 0, 'Aucune recherche CoinGecko à l’exécution');
+  f = mock(100, 105); S = P.makeSources(f, { gap: 0 }); r = await S.series('XMR', t0, t0);
+  eq(r && r.src === 'Binance USDT' && !r.suspect ? 1 : 0, 1, 'Écart < 30 % : Binance gardé, pas d’alerte');
+  f = mock(100, 300); S = P.makeSources(f, { gap: 0 }); r = await S.series('XMR', t0, t0);
+  eq(r && r.src === 'DefiLlama' && r.suspect ? 1 : 0, 1, 'Écart > 30 % : DefiLlama retenu et actif « à vérifier »');
+  f = mock(2000, 2000); S = P.makeSources(f, { gap: 0 }); r = await S.series('ETH2.S', t0, t0);
+  eq(r && f.calls.some(u => /symbol=ETHUSDT/.test(u)) ? 1 : 0, 1, 'Alias Kraken ETH2.S → ETH');
+  f = mock(0, 0.5); S = P.makeSources(f, { gap: 0 }); r = await S.series('MATIC', t0, t0);
+  eq(f.calls.some(u => /coingecko:matic-network/.test(u)) ? 1 : 0, 1, 'MATIC → id matic-network (renommé POL)');
+  f = mock(0, 0.5); S = P.makeSources(f, { gap: 0 }); await S.series('ONE', t0, t0); await S.series('MKR', t0, t0); await S.series('FXS', t0, t0);
+  eq(['coingecko:harmony', 'coingecko:maker', 'coingecko:frax-share'].every(x => f.calls.some(u => u.includes(x))) ? 1 : 0, 1, 'Homonymes corrigés : ONE→harmony, MKR→maker, FXS→frax-share');
+  const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+  eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
+  eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');
+  process.exit(ok ? 0 : 1);
+})();
