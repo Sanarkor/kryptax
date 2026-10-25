@@ -3,7 +3,7 @@
    exportData() est pur (testé dans test.js) ; makePdf/makeXlsx/makeCsv utilisent les bibliothèques locales. */
 (function (root) {
   const d = t => new Date(t).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'medium' });
-  const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/—/g, '-').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
+  const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/—/g, '-').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
   const e2 = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (+v).toFixed(2);
   /* Lignes et libellés de la déclaration n° 2086 (cadre 2, déclarant 1) */
   const FORM = [
@@ -65,38 +65,71 @@
     return wb;
   }
   const SHORT = ['211 Date de la cession', '212 Valeur globale du portefeuille', '213 Prix de cession', '214 Frais de cession', '215 Prix net des frais (213-214)', '216 Soulte', '217 Prix net des soultes (213-216)', '218 Prix net frais et soultes', '220 Prix total d\'acquisition', '221 Fractions de capital initial', '222 Soultes antérieures', '223 Prix total d\'acquisition net (220-221-222)', '224 Plus ou moins-value'];
+  // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
+  const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
+  const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);
+  const qfmt = q => String(q).replace('.', ',');
+  const GRAD = [[59, 130, 246], [245, 158, 11], [34, 197, 94]];
+  const gradAt = t => { const s = t * (GRAD.length - 1), i = Math.min(GRAD.length - 2, Math.floor(s)), f = s - i; return GRAD[i].map((c, k) => Math.round(c + (GRAD[i + 1][k] - c) * f)); };
+  // Logo « Kryptax » : lettres grasses colorées le long du dégradé bleu → orange → vert, halo bleu léger
+  function logo(doc, x0, y0, size) {
+    const word = 'Kryptax'; doc.setFont('helvetica', 'bold'); doc.setFontSize(size);
+    const w = doc.getTextWidth(word); let x = x0;
+    doc.setTextColor(200, 220, 255); for (const [dx, dy] of [[-.25, 0], [.25, 0], [0, -.25], [0, .25]]) doc.text(word, x0 + dx, y0 + dy);
+    [...word].forEach(ch => { const c = gradAt((x - x0 + doc.getTextWidth(ch) / 2) / w); doc.setTextColor(c[0], c[1], c[2]); doc.text(ch, x, y0); x += doc.getTextWidth(ch); });
+    doc.setTextColor(0, 0, 0); return w;
+  }
   function makePdf(jsPDF, x, title) {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }), A = r => r.map(v => ascii(v));
-    const opt = { styles: { fontSize: 6.8, cellPadding: 1, overflow: 'linebreak', halign: 'right' }, headStyles: { fillColor: [20, 40, 70], fontSize: 6.3, halign: 'center', valign: 'middle' }, margin: { left: 6, right: 6 } };
-    const boldG = { didParseCell: h => { if (h.section === 'body' && h.row.raw && h.row.raw[0] === 'GLOBAL') { h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [225, 235, 250]; } } };
-    doc.setFontSize(15); doc.text(ascii(title || 'Kryptax - déclaration 2086'), 8, 13); doc.setFontSize(8);
-    doc.text(ascii('Plus ou moins-values de cessions d\'actifs numériques (déclaration 2086, cadre 2). Outil d\'aide au calcul, pas un conseil fiscal. Montants en euros.'), 8, 18);
-    let y = 26;
-    for (const t of x.totals) {
-      doc.setFontSize(12); doc.setFont(undefined, 'bold');
-      doc.text(ascii(`Total global plus-value nette ${t.year} : ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}`), 8, y); y += 6;
-      doc.setFontSize(9); doc.setFont(undefined, 'normal');
-      const L = doc.splitTextToSize(ascii(globalText(t)), 280); doc.text(L, 8, y); y += 4.5 * L.length + 2;
-    }
-    doc.autoTable(Object.assign({}, opt, { startY: y, tableWidth: 150, styles: { fontSize: 8, cellPadding: 1.2 }, head: [['Année', 'Synthèse', 'Valeur']],
-      body: synth(x).map(r => A([r[0], r[1], typeof r[2] === 'number' && !Number.isInteger(r[2]) ? r[2].toFixed(2) : r[2]])) }));
-    // Tableau 2086 : une ligne par cession imposable, colonnes 211 à 224 dans l'ordre de la déclaration, ligne GLOBAL en bas
-    if (!x.cessions.length) { doc.setFontSize(10); doc.text(ascii(`Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`), 8, doc.lastAutoTable.finalY + 8); }
-    doc.addPage(); doc.setFontSize(11); doc.text(ascii(`Cessions imposables - déclaration 2086, lignes 211 à 224 (${x.cessions.length} cessions)`), 8, 11);
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }), A = r => r.map(v => ascii(v)), W = 297, H = 210, M = 8;
+    const n = x.cessions.length, multi = x.totals.length > 1, fs = n <= 10 ? 8.4 : n <= 16 ? 7.6 : 7;
+    // En-tête : logo à gauche, sous-titre et année
+    logo(doc, M, 15, 24);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60, 70, 90);
+    doc.text(ascii('Formulaire 2086 pour la fiscalité française'), M, 21);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(20, 40, 70);
+    doc.text(ascii(title || (x.year ? `Année ${x.year} — déclaration ${x.year + 1}` : 'Déclaration 2086')), M, 27);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
+    doc.text(ascii('Cessions imposables d\'actifs numériques (cadre 2, lignes 211 à 224). Montants en euros. Outil d\'aide au calcul, pas un conseil fiscal.'), W - M, 27, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    // 1) Tableau des cessions
     const head = [A(['N°', 'Actif', 'Quantité', ...SHORT])];
-    const body = x.cessions.map(c => A([c.n + (x.totals.length > 1 ? ' (' + c.year + ')' : ''), c.asset, c.qty, c.date, ...NUM.map(k => e2(c[k]))]))
-      .concat(x.totals.map(t => A(['GLOBAL', t.year, t.n + ' cessions', '', '', t.l213.toFixed(2), t.l214.toFixed(2), '', '', '', t.l218.toFixed(2), '', '', '', '', (t.l224 >= 0 ? '+' : '') + t.l224.toFixed(2)])));
-    doc.autoTable(Object.assign({}, opt, boldG, { startY: 14, head, body, columnStyles: { 0: { halign: 'left', cellWidth: 14 }, 1: { halign: 'left', cellWidth: 12 }, 3: { halign: 'left', cellWidth: 25 }, 15: { fontStyle: 'bold' } } }));
-    y = doc.lastAutoTable.finalY + 5; if (y > 185) { doc.addPage(); y = 12; }
-    doc.setFontSize(7); doc.text(doc.splitTextToSize(ascii('Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures. Les échanges crypto -> crypto sans soulte ne sont pas des cessions imposables et ne figurent pas dans ce tableau.'), 282), 8, y);
-    const n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.text('Page ' + i + ' / ' + n, 289, 205, { align: 'right' }); }
+    const body = x.cessions.map(c => A([c.n + (multi ? ' (' + c.year + ')' : ''), c.asset, qfmt(c.qty), c.date.slice(0, 16), ...NUM.map(k => fr(c[k]))]));
+    const gl = x.totals.map(t => A(['GLOBAL', multi ? String(t.year) : '', t.n + ' cession' + (t.n > 1 ? 's' : ''), '', '', fr(t.l213), fr(t.l214), '', '', '', fr(t.l218), '', '', '', '', frs(t.l224)]));
+    const center = { halign: 'center' };
+    doc.autoTable({ startY: 31, head, body: body.concat(gl), theme: 'grid', margin: { left: M, right: M, top: 12, bottom: 10 }, showHead: 'everyPage', rowPageBreak: 'avoid',
+      styles: { font: 'helvetica', fontSize: fs, cellPadding: { top: 1, bottom: 1, left: 1, right: 1 }, halign: 'right', valign: 'middle', overflow: 'linebreak', lineColor: [205, 212, 225], lineWidth: .15, textColor: [20, 20, 30] },
+      headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: fs - .9, halign: 'center', valign: 'middle' },
+      alternateRowStyles: { fillColor: [243, 246, 251] },
+      columnStyles: { 0: { halign: 'center', cellWidth: multi ? 17 : 15 }, 1: { halign: 'center', fontStyle: 'bold', cellWidth: 13 }, 2: { halign: 'center', cellWidth: 18 }, 3: { halign: 'center', cellWidth: 25 }, 15: { fontStyle: 'bold' } },
+      didParseCell: h => { if (h.section === 'body' && h.row.raw && h.row.raw[0] === 'GLOBAL') { h.cell.styles.fontStyle = 'bold'; h.cell.styles.fillColor = [214, 228, 248]; h.cell.styles.fontSize = fs + .3; if (h.column.index < 3) h.cell.styles.halign = 'center'; } } });
+    // 2) Résumé court sous le tableau (nouvelle page seulement si la place manque)
+    const lines = [];
+    for (const t of x.totals) {
+      lines.push([`Total global plus-value nette${multi ? ' ' + t.year : ''}`, frs(t.l224) + ' €' + (t.incomplete ? ' (incomplet)' : '')]);
+      lines.push(['Total des prix de cession (213)', fr(t.l213) + ' €' + (t.exonere ? ' : ≤ 305 €, cessions exonérées' : ' : > 305 €, imposable')]);
+      lines.push(['Case 2042-C', t.exonere ? 'aucune (seuil de 305 € non dépassé)' : `${t.box} = ${t.report} €`]);
+    }
+    if (!n) lines.unshift(['Cessions', `Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`]);
+    lines.push(['Échanges crypto -> crypto exclus', `${x.swapCount} (non imposables)`]);
+    let y = doc.lastAutoTable.finalY + 4; const need = lines.length * 5.2 + 4;
+    if (y + need > H - 10) { doc.addPage(); y = 14; }
+    doc.autoTable({ startY: y, body: lines.map(A), theme: 'plain', tableWidth: 170, margin: { left: M },
+      styles: { fontSize: 9.5, cellPadding: .9, textColor: [20, 20, 30] }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 70 }, 1: { halign: 'left' } },
+      didParseCell: h => { if (h.row.index === (n ? 0 : 1)) { h.cell.styles.fontSize = 11; h.cell.styles.fontStyle = 'bold'; } } });
+    // 3) Libellés officiels en note de bas de page, seulement s'il reste de la place
+    doc.setFontSize(5.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(110, 110, 110);
+    const note = doc.splitTextToSize(ascii('Libellés officiels : ' + FORM.map(f => f[0] + ' ' + f[1]).join(' ; ') + '. La ligne 221 de chaque cession cumule les fractions l. 223 x l. 217 / l. 212 des cessions antérieures (calcul depuis le premier achat).'), W - 2 * M);
+    const yn = doc.lastAutoTable.finalY + 3; if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
+    const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); }
+    doc.setTextColor(0, 0, 0);
     return doc;
   }
-  const FIRST = 2026;
-  // Années fiscales proposées : de 2026 à max(année en cours + 1, dernière année des données)
-  function yearOptions(years, now) { const ks = Object.keys(years || {}).map(Number), hi = Math.max(now + 1, ...ks, FIRST), r = []; for (let y = FIRST; y <= hi; y++) r.push(y); return r; }
-  function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => y.year >= FIRST && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : Math.max(FIRST, now); }
+  const PAST = 5, FUTURE = 0;
+  // Années fiscales proposées : de l'année en cours − 5 à l'année en cours (6 années, aucune année future)
+  function yearOptions(years, now) { const r = []; for (let y = now - PAST; y <= now + FUTURE; y++) r.push(y); return r; }
+  const selectable = (y, now) => y >= now - PAST && y <= now;
+  function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => selectable(y.year, now) && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : now; }
   const title = y => `Année ${y} — déclaration ${y + 1}`;
-  const api = { FORM, FIRST, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
+  const api = { fr, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalRow, globalText, exportData, makeCsv, makeXlsx, makePdf, HEAD };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);

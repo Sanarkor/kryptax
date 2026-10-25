@@ -374,7 +374,7 @@
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
     const X = window.KryptaxExport;
     if (X) {
-      const yrs = X.yearOptions(Y, new Date().getFullYear()); if (!yrs.includes(fyear)) fyear = X.defaultYear(Y, new Date().getFullYear());
+      const now = new Date().getFullYear(), yrs = X.yearOptions(Y, now); if (!X.selectable(fyear, now)) fyear = X.defaultYear(Y, now);
       const t = X.exportData(Y, {}, () => [], [], fyear).totals[0], yc = (Y[fyear] || { cessions: [] }).cessions;
       const est = new Set(); yc.forEach(c => (c.detail212 || []).forEach(d => { if (livePrice && livePrice.approx && livePrice.approx.has(d.asset + '|' + c.date)) est.add(d.asset); }));
       (livePrice && livePrice.unvalued ? [...livePrice.unvalued] : []).filter(x => manual[x] == null).forEach(x => est.add(x));
