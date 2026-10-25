@@ -97,3 +97,10 @@ header h1{font-size:clamp(2.6rem,15vw,3.4rem);font-weight:900;line-height:1.05;l
 @keyframes kxglow{0%{background-position:0% 50%;filter:drop-shadow(0 0 10px rgba(59,130,246,.6))}33%{filter:drop-shadow(0 0 12px rgba(245,158,11,.6))}66%{filter:drop-shadow(0 0 12px rgba(34,197,94,.6))}100%{background-position:300% 50%;filter:drop-shadow(0 0 10px rgba(59,130,246,.6))}}
 @media (prefers-reduced-motion:reduce){header h1{animation:none}}
 @media print{header h1{animation:none;filter:none;color:#000;background:none}}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:0 0 .2em}
+.topbar h1{margin:0;min-width:0}
+#reset{flex:none}
+.banner.foot{margin:1.5em 0 .5em;font-size:.85em}
+.sechead{display:flex;align-items:center;justify-content:space-between;gap:.5em}
+.sechead h2{margin:0}

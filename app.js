@@ -212,7 +212,7 @@
     renderSwaps();
     const all = E.sortTx(txs), sales = all.filter(t => t.type === 'SELL' || t.type === 'PAY'), s = showAll ? all : sales;
     $('#txcount').textContent = all.length ? '(' + all.length + ')' : '';
-    $('#txnote2').textContent = $('#txnote').textContent = all.length ? `${all.length} transactions importées, dont ${sales.length} ventes. Calcul lancé automatiquement après l'import.` : 'Aucune transaction importée.';
+    $('#calc').hidden = !all.length; $('#txnote2').textContent = $('#txnote').textContent = all.length ? `${all.length} transactions importées, dont ${sales.length} ventes. Calcul lancé automatiquement après l'import.` : 'Aucune transaction importée.';
     $('#txinfo').textContent = all.length ? (showAll ? `${all.length} transactions affichées (dont ${sales.length} ventes)` : `${sales.length} ventes affichées sur ${all.length} transactions`) : '';
     $('#txall').hidden = !all.length; $('#txall').textContent = showAll ? 'Afficher seulement les ventes' : 'Afficher toutes les transactions';
     renderBalances(); renderOpening();
@@ -276,10 +276,9 @@
   }
   function renderDiag(src, fnr) {
     const rows = Object.entries(src.diag).map(([k, d]) => `<tr><td>${k}</td><td class="${d.fail ? 'neg' : 'pos'}">${d.fail ? (d.ok ? 'partiel' : 'échec') : 'OK'}</td><td class="num">${d.calls}</td><td>${d.last || ''}</td></tr>`).join('');
-    $('#diag').innerHTML = `<details><summary class="hint">Sources de prix : ${Object.values(src.diag).filter(d => d.fail && !d.ok).length ? '⚠ certaines injoignables' : 'OK'} (${Object.values(src.diag).reduce((x, d) => x + d.calls, 0)} appels)</summary><table><tr><th>Source</th><th>État</th><th>Appels</th><th>Dernière erreur</th></tr>${rows}</table></details>` +
-      (src.assetDiag && Object.keys(src.assetDiag).length ? `<details><summary class="hint">Par actif : source utilisée / erreurs</summary><ul class="hint">${Object.entries(src.assetDiag).map(([a, l]) => `<li><b>${esc(a)}</b> — ${l.map(esc).join(' · ')}</li>`).join('')}</ul></details>` : '') +
-      (fnr.failed.length ? `<p class="warn">Aucune source joignable pour : ${fnr.failed.join(', ')} → cours observé le plus proche (≈) ; relancez plus tard pour réessayer (les échecs ne sont pas mémorisés).</p>` : '') +
-      (fnr.fxMissing ? `<p class="warn">${fnr.fxMissing} lignes en $ sans taux de change : relancez.</p>` : '');
+    const est = (fnr.failed || []).length + ((fnr.unvalued && fnr.unvalued.size) || 0);
+    $('#diag').innerHTML = `<details><summary class="hint">Sources de prix : ${est ? est + ' actif' + (est > 1 ? 's' : '') + ' estimé' + (est > 1 ? 's' : '') + ' (≈)' : 'tous les cours trouvés'}</summary><table><tr><th>Source</th><th>État</th><th>Appels</th></tr>${Object.entries(src.diag).map(([k, d]) => `<tr><td>${esc(k)}</td><td>${d.ok ? 'OK' : '—'}</td><td class="num">${d.calls}</td></tr>`).join('')}</table>` +
+      (src.assetDiag && Object.keys(src.assetDiag).length ? `<p class="hint">${Object.entries(src.assetDiag).map(([a, l]) => { const ok = l.find(x => / : OK$/.test(x)); return `<b>${esc(a)}</b> : ${ok ? esc(ok.replace(/ : OK$/, '')) : '≈ relevés'}`; }).join(' · ')}</p>` : '') + '</details>';
   }
   let runCtl = null;
   $('#run').onclick = async () => {
@@ -294,14 +293,14 @@
       livePrice.txs = txs; renderDiag(src, livePrice);
       persist(); save(); renderTx();
       const st = src.stats;
-      failed = livePrice.failed.length > 0; $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
+      $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
     } catch (e) {
       try { saveCache(); } catch (x) {}
       if (src) renderDiag(src, { failed: [], fxMissing: txs.filter(t => t.fxPending).length });
-      failed = true; $('#progress').textContent = (/Annul/.test(e.message) ? 'Calcul annulé.' : 'Erreur : ' + e.message + '.') + ' Les cours déjà récupérés sont gardés ; relancez pour reprendre. Les cours manquants restent « à renseigner ».';
+      failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Calcul interrompu, relancez.';
     }
-    if (!failed) $('#progress').textContent = 'Calcul terminé.'; else if (!$('#progress').textContent.startsWith('Calcul annulé') && !$('#progress').textContent.startsWith('Erreur')) $('#progress').textContent = 'Certains cours sont introuvables (valeurs ≈ utilisées).';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = !failed; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
+    if (!failed) $('#progress').textContent = 'Calcul terminé.';
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = false; $('#cancel').hidden = true; bar.hidden = true; runCtl = null; renderResults();
   };
   $('#cancel').onclick = () => runCtl && runCtl.abort();
   $('#cckey').value = localStorage.getItem('kryptax.cckey') || '';
@@ -347,7 +346,7 @@
   }
   function renderResults() {
     const out = computeWithPrices(); const Y = E.byYear(out);
-    let h = '<h2>4. Résultats</h2>';
+    let h = '';
     if (!out.cessions.length) h += '<p>Aucune cession imposable (vente contre € ou paiement en crypto).</p>';
     for (const y of Object.values(Y).sort((a, b) => b.year - a.year)) {
       const S = E.summary(txs, out, (a, ts) => priceFn(a, ts), y.year, opening, (a, ts) => !!(livePrice && livePrice.approx && livePrice.approx.has(a + '|' + ts))); lastS[y.year] = S;
@@ -369,8 +368,9 @@
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
-    h += '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="print" class="ghost">Imprimer</button></p>';
-    if (window.KryptaxExport) h = KryptaxExport.exportData(Y, {}, () => [], []).totals.map(t => `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cessions)<br>${esc(KryptaxExport.globalText(t))}</div>`).join('') + h;
+    const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Télécharger le PDF</button> <button id="xlsx" class="ghost">Tableur (.xlsx)</button> <button id="csv" class="ghost">CSV</button> <button id="print" class="ghost" hidden>Imprimer</button></p>';
+    h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
+    if (window.KryptaxExport) h = '<h2>2. Résultat et export</h2>' + KryptaxExport.exportData(Y, {}, () => [], []).totals.map(t => `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cessions)<br>${esc(KryptaxExport.globalText(t))}</div>`).join('') + h;
     $('#results').innerHTML = h; lastOut = out; lastY = Y;
   }
   let lastOut = null, lastY = null;
@@ -409,24 +409,5 @@
   });
 
   /* ---------- Exemple fictif ---------- */
-  $('#example').onclick = () => {
-    if (txs.length && !confirm('Ajouter l’exemple fictif à vos transactions ? (Effacez-le ensuite avec « Tout effacer »)')) return;
-    const d = s => new Date(s).getTime(), X = (o) => Object.assign({ id: uid(), example: true, platform: 'Exemple', source: 'exemple', fee: 0 }, o);
-    const ex = [
-      X({ date: d('2024-01-10T10:00'), type: 'BUY', asset: 'BTC', qty: 0.05, eur: 1980, fee: 20 }),
-      X({ date: d('2024-02-01T09:00'), type: 'BUY', asset: 'ETH', qty: 1, eur: 2000 }),
-      X({ date: d('2024-03-15T12:00'), type: 'STAKING', asset: 'ETH', qty: 0.01 }),
-      X({ date: d('2024-04-02T18:00'), type: 'EXCH_OUT', asset: 'ETH', qty: 0.2 }),
-      X({ date: d('2024-04-02T18:00'), type: 'EXCH_IN', asset: 'LLAMA', qty: 5000, seq: 1 }),
-      X({ date: d('2024-06-20T14:30'), type: 'SELL', asset: 'BTC', qty: 0.02, eur: 1200, fee: 12 }),
-      X({ date: d('2025-03-05T11:00'), type: 'SELL', asset: 'ETH', qty: 0.5, eur: 1500, fee: 10 }),
-      X({ date: d('2025-09-12T16:00'), type: 'PAY', asset: 'BTC', qty: 0.005, eur: 450 })
-    ];
-    txs = txs.concat(ex);
-    // cours fictifs pré-remplis (pas d'appel réseau) ; LLAMA est volontairement absent → « à renseigner »
-    manual['ETH@' + ex[5].id] = 3100; manual['BTC@' + ex[6].id] = 80000; manual['ETH@' + ex[7].id] = 3800; manual['LLAMA@' + ex[6].id] = 0.04; manual['LLAMA@' + ex[7].id] = 0.06;
-    save(); renderTx(); renderResults(); autoRun();
-    if (0) alert('Exemple fictif chargé. Le jeton LLAMA n’a pas de cours : la cession de 2024 passe « à renseigner » (essayez 0,05 €).');
-  };
   renderTx(); if (txs.length) renderResults();
 })();
