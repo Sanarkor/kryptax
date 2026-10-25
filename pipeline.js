@@ -16,31 +16,78 @@
     return w ? Object.assign({ n, nMin }, w) : { k: '', src: '', n, nMin };
   }
 
-  /* rows : tableaux (valeurs brutes, nombres conservés). mp : index des colonnes. */
+  /* ---- Lecture CSV/Excel fiable : formats déduits par COLONNE (jamais cellule par cellule), sinon refus clair ---- */
+  const cellTxt = v => String(E.fixText(v == null ? '' : String(v))).replace(/[\s\u00a0\u202f€$£]|[A-Za-z]{3}$/g, '').replace(/^[(-]+|\)$/g, '');
+  /* Format des nombres d'une colonne : 'FR' (1 234,56), 'EN' (1,234.56), '' (indécidable : entiers, 1,234…), 'X' (les deux : incohérent). */
+  function numMode(vals) {
+    let fr = 0, en = 0;
+    for (const v of vals) { if (typeof v !== 'string') continue; const s = cellTxt(v); if (!/^\d[\d.,]*$/.test(s)) continue;
+      const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
+      if (c > -1 && d > -1) { if (c > d) fr++; else en++; }
+      else if (c > -1) { if (!/^\d{1,3}(,\d{3})+$/.test(s)) fr++; }
+      else if (d > -1) { if (!/^\d{1,3}(\.\d{3})+$/.test(s)) en++; } }
+    return fr && en ? 'X' : fr ? 'FR' : en ? 'EN' : '';
+  }
+  /* Ordre jour/mois d'une colonne de dates JJ/MM ou MM/JJ : 'DMY', 'MDY', '' (indécidable) ou 'X' (les deux). */
+  function dateMode(vals) {
+    let dmy = 0, mdy = 0;
+    for (const v of vals) { if (typeof v !== 'string') continue; const m = v.trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-]\d{2,4}/); if (!m) continue; if (+m[1] > 12) dmy++; if (+m[2] > 12) mdy++; }
+    return dmy && mdy ? 'X' : dmy ? 'DMY' : mdy ? 'MDY' : '';
+  }
+  /* Date de cellule Excel : objet Date (heure affichée dans la cellule) ou numéro de série (jours depuis 1899-12-30). */
+  function cellDate(v, tz) {
+    const mk = (y, mo, d, h, mi, s) => tz === 'UTC' ? Date.UTC(y, mo, d, h, mi, s) : E.fromParis(y, mo, d, h, mi, s);
+    if (v instanceof Date) { if (isNaN(v)) return NaN; const r = new Date(Math.round(v.getTime() / 1000) * 1000); return mk(r.getFullYear(), r.getMonth(), r.getDate(), r.getHours(), r.getMinutes(), r.getSeconds()); }
+    if (typeof v === 'number' && v > 1 && v < 2958466) { const ms = Math.round((v - 25569) * 864e5 / 1000) * 1000, r = new Date(ms); return mk(r.getUTCFullYear(), r.getUTCMonth(), r.getUTCDate(), r.getUTCHours(), r.getUTCMinutes(), r.getUTCSeconds()); }
+    return null;
+  }
+  const isTotalRow = r => r.some(x => /^\s*(sous[- ]?)?totaux?\b|^\s*total\b|^\s*somme\b|^\s*grand total/i.test(String(x == null ? '' : x)));
+  /* rows : tableaux (valeurs brutes, nombres conservés). mp : index des colonnes. o.strict : fichier CSV/Excel (refus plutôt que deviner). */
   function importRows(rows, mp, o, uid) {
-    const out = [], bad = [];
+    const out = [], bad = [], why = [], strict = !!o.strict, col = f => mp[f] == null ? [] : rows.map(r => r[mp[f]]);
+    const nm = {}, fatal = [];
+    for (const f of ['qty', 'eur', 'price', 'fee']) { const k = o.nmode || numMode(col(f)); if (k === 'X') fatal.push('colonne « ' + (o.head ? o.head[mp[f]] : f) + ' » : nombres écrits de deux façons (1 234,56 et 1,234.56)'); nm[f] = k === 'X' ? '' : k; }
+    if (strict && !o.nmode) { const all = Object.values(nm).filter(Boolean); const one = all.length && all.every(x => x === all[0]) ? all[0] : ''; for (const f in nm) if (!nm[f]) nm[f] = one; }
+    let dmode = o.dmode; if (!dmode) { const k = dateMode(col('date')); if (k === 'X') fatal.push('colonne de dates : jour/mois et mois/jour mélangés'); else dmode = k || undefined; }
+    if (strict && mp.type == null) {
+      const q = col('qty').map(v => E.parseNum(v, nm.qty)); if (!(q.some(x => x < 0) && q.some(x => x > 0))) fatal.push('colonne Type (achat/vente) manquante : impossible de distinguer achats et ventes');
+    }
+    if (fatal.length) return { txs: [], bad: [], why: [], fatal: fatal.join(' ; ') };
     rows.forEach((r, i) => {
       const g = f => mp[f] == null ? '' : r[mp[f]];
-      const date = E.parseDate(g('date'), o.dmode, o.tz);
+      if (strict && (!r.some(x => String(x == null ? '' : x).trim() !== '') || (isTotalRow(r) && !(g('date') instanceof Date) && !isFinite(E.parseDate(g('date'), dmode, o.tz))))) return; // lignes vides / totaux
+      const cd = cellDate(g('date'), o.tz), date = cd != null ? cd : E.parseDate(g('date'), dmode, o.tz);
       const asset = String(E.fixText(g('asset')) || '').trim().toUpperCase();
-      if (!isFinite(date) || !asset) { bad.push(i); return; }
+      if (!isFinite(date)) { bad.push(i); why.push('date illisible'); return; }
+      if (!asset) { bad.push(i); why.push('crypto manquante'); return; }
       const rawQ = g('qty'), vRaw = g('eur'), pRaw = g('price'), fRaw = g('fee');
       const curTxt = E.fixText(String(vRaw || pRaw || fRaw || '')), cur = /[$£€]|USD|GBP|EUR/.test(curTxt) ? E.currencyOf(curTxt) : (o.cur || 'EUR');
-      const val = Math.abs(E.parseNum(vRaw, o.nmode)), price = Math.abs(E.parseNum(pRaw, o.nmode)), fee = Math.abs(E.parseNum(fRaw, o.nmode)) || 0;
-      let type = E.guessType(g('type'), g('desc'));
+      const val = Math.abs(E.parseNum(vRaw, nm.eur || o.nmode)), price = Math.abs(E.parseNum(pRaw, nm.price || o.nmode)), fee = Math.abs(E.parseNum(fRaw, nm.fee || o.nmode)) || 0;
+      let type;
+      if (strict && mp.type == null) type = E.parseNum(rawQ, nm.qty) < 0 ? 'SELL' : 'BUY';
+      else type = E.guessType(g('type'), g('desc'), strict);
       if (E.FIATS.includes(asset)) type = 'IGNORE'; // lignes « Autre » : dépôts / change de devises
+      if (!type) { bad.push(i); why.push('type inconnu « ' + String(E.fixText(g('type')) || '').slice(0, 30) + ' »'); return; }
       let qty, qtyStatus = 'ok', qtyRaw;
       if (typeof rawQ === 'number' && Number.isInteger(rawQ) && o.xlsx) {
         const f = E.fixQty(rawQ, price, val); qty = f.qty; qtyStatus = f.status; qtyRaw = rawQ;
         if (!(price > 0 && val > 0)) qtyStatus = 'à reconstruire';
-      } else qty = Math.abs(E.parseNum(rawQ, o.nmode));
-      if (!isFinite(qty)) { if (type === 'IGNORE') qty = 0; else { bad.push(i); return; } }
+      } else qty = Math.abs(E.parseNum(rawQ, nm.qty || o.nmode));
+      if (!isFinite(qty)) { if (type === 'IGNORE') qty = 0; else { bad.push(i); why.push('quantité illisible'); return; } }
+      if (strict && (type === 'BUY' || type === 'SELL') && !(isFinite(val) && val > 0) && !(price > 0)) { bad.push(i); why.push('montant en € manquant pour un achat/une vente'); return; }
       let v = isFinite(val) ? val : (price > 0 ? price * qty : 0);
       const t = { id: uid(), seq: i, date, type, feeInKind: o.feeInKind != null ? !!o.feeInKind : /revolut|^relev/i.test(o.platform || ''), rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || undefined };
       if (cur === 'EUR') { t.eur = v || 0; t.fee = fee; } else { t.cur = cur; t.valCur = v || 0; t.feeCur = fee; t.unitPriceCur = price || undefined; t.eur = 0; t.fee = 0; t.unitPrice = undefined; t.fxPending = true; }
       out.push(t);
     });
-    return { txs: out, bad };
+    return { txs: out, bad, why };
+  }
+  /* Résumé court des lignes refusées : « 3 lignes non lues : type inconnu « Staking X » (ligne 5), date illisible (ligne 9)… » (n° de ligne du fichier) */
+  function badSummary(res, first) {
+    if (!res.bad.length) return '';
+    const parts = []; const seen = new Set();
+    res.bad.forEach((i, k) => { const w = (res.why && res.why[k]) || 'ligne illisible'; if (!seen.has(w) && parts.length < 3) { seen.add(w); parts.push(w + ' (ligne ' + (i + (first || 2)) + ')'); } });
+    return res.bad.length + ' ligne' + (res.bad.length > 1 ? 's' : '') + ' non lue' + (res.bad.length > 1 ? 's' : '') + ' : ' + parts.join(', ') + (seen.size < new Set(res.why).size ? '…' : '') + '.';
   }
 
   /* ---- Sources publiques ---- */
@@ -601,6 +648,6 @@
     for (const c of cessions) for (const d of (c.detail212 || [])) if (fn && fn.approx && fn.approx.has(d.asset + '|' + c.date) && manual[d.asset] == null) (rewardOnly(d.asset) ? ign : est).add(d.asset);
     return { est: [...est], ign: [...ign].filter(a => fn.unvalued && fn.unvalued.has(a)), retry: [...est].filter(a => cache[a + '|none'] == null) };
   }
-  const api = { alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
+  const api = { numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);

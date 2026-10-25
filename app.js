@@ -45,8 +45,11 @@
       if (/\.xlsx?$/i.test(file.name)) {
         if (!window.XLSX) { showErr('Lecture Excel indisponible, rechargez la page.'); continue; }
         const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
-        showMapping(file.name, rows, true);
+        /* feuille utile : la première dont l'en-tête est reconnu (date + crypto/quantité), sinon la première non vide */
+        const sh = wb.SheetNames.map(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' })).filter(r => r.length);
+        const ok = sh.filter(r => KF.detect(r) || (() => { const m = guessMap((r[KF.headerRow(r)] || []).map(String)); return m.date != null && (m.qty != null || m.asset != null); })());
+        if (ok.length > 1) holdInfo = file.name + ' : ' + ok.length + ' feuilles lisibles, seule la première est importée.';
+        showMapping(file.name, ok[0] || sh[0] || [], true);
       } else showMapping(file.name, parseCSV(await file.text()), false);
     } catch (err) { showErr(file.name + ' : fichier illisible. Vérifiez qu\'il s\'agit bien d\'un relevé PDF, CSV ou Excel.'); } }
     e.target.value = '';
@@ -84,9 +87,11 @@
       if (res.bad.length) showErr(res.bad.length + ' ligne' + (res.bad.length > 1 ? 's' : '') + ' de ' + name + ' non lue' + (res.bad.length > 1 ? 's' : '') + ' (type d’opération inconnu ou valeur manquante) : vérifiez ce fichier.');
       return;
     }
-    { const hi = KF.headerRow(rows); if (hi > 0) rows = rows.slice(hi); }
+    let hi0 = 0; { const hi = KF.headerRow(rows); if (hi > 0) { rows = rows.slice(hi); hi0 = hi; } }
     if (rows[0].some(h => /sent amount|received amount|montant envoy|montant re/i.test(h))) return showMapping2(name, rows);
     rows[0] = rows[0].map(x => E.fixText(String(x)));
+    { const n = rows[0].length, sh = rows.slice(1).filter(r => r.slice(n).some(x => String(x).trim() !== '')).length;
+      if (sh) return showErr(name + ' : colonnes décalées (' + sh + ' ligne' + (sh > 1 ? 's ont' : ' a') + ' plus de valeurs que d’en-têtes, souvent une virgule décimale dans un CSV séparé par des virgules). Exportez avec « ; » comme séparateur.'); }
     const head = rows[0], m = guessMap(head), box = document.createElement('div'); box.className = 'note';
     const sel = f => `<label>${LABELS[f]}<select data-f="${f}"><option value="">—</option>${head.map((h, i) => `<option value="${i}"${m[f] === i ? ' selected' : ''}>${esc(h)}</option>`).join('')}</select></label>`;
     box.innerHTML = `<b>${esc(name)}</b> — ${rows.length - 1} lignes. ${m.date == null || m.asset == null || m.qty == null ? '<span class="warn">Format non reconnu automatiquement : indiquez les colonnes ci-dessous.</span>' : 'Vérifiez les colonnes :'}
@@ -105,11 +110,14 @@
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Format non reconnu : choisissez au moins les colonnes Date, Crypto et Quantité.');
       if (mp.eur == null && mp.price == null) return alert('Choisissez la colonne du montant en € (ou du prix) : sans elle, les achats et ventes seraient comptés à 0 €.');
       o.cur = mp.eur != null ? KF.headCur(head[mp.eur]) : mp.price != null ? KF.headCur(head[mp.price]) : 'EUR';
-      o.xlsx = isXlsx; o.source = name; holders[name] = KP.holderFromRows(rows); saveHolders();
-      const res = KP.importRows(rows.slice(1), mp, o, uid); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
+      o.xlsx = isXlsx; o.source = name; o.strict = true; o.head = head;
+      const res = KP.importRows(rows.slice(1), mp, o, uid);
+      if (res.fatal) { box.remove(); return showErr(name + ' : fichier refusé, ' + res.fatal + '. Corrigez les colonnes puis réimportez.'); }
+      if (!res.txs.length) { box.remove(); return showErr(name + ' : aucune opération lisible. ' + KP.badSummary(res, hi0 + 2)); }
+      holders[name] = KP.holderFromRows(rows); saveHolders(); txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
       save(); box.remove(); renderTx(); autoRun();
       const sus = res.txs.filter(t => t.qtyStatus !== 'ok').length, usd = res.txs.filter(t => t.fxPending).length;
-      if (res.bad.length) showErr(res.bad.length + ' lignes de ' + name + ' n\'ont pas pu être lues.');
+      if (res.bad.length) showErr(name + ' : ' + KP.badSummary(res, hi0 + 2) + ' Corrigez ces lignes ou saisissez-les à la main.');
     };
   }
 
@@ -315,30 +323,39 @@
     tick(); autoTick = setInterval(tick, 250);
     autoTimer = setTimeout(() => { clearInterval(autoTick); autoTimer = autoTick = null; if (runCtl) return; autoFire = true; $('#run').click(); }, retryDelay(k));
   }
-  /* Barre lissée : la valeur affichée rattrape la vraie, ne recule jamais, plafonne à 97 % avant la fin ; brillance si rien ne bouge. */
+  /* Barre = progression réelle pondérée : taux de change 0–5 %, cours à la minute 5–70 %, cours horaires 70–90 %, calcul et affichage 90–100 %.
+     Une relance (étape déjà passée) répartit le reste entre la valeur atteinte et 90 % : jamais de recul, jamais d'avance sur le réel. */
+  const PHASES = [['Taux de change', 0, 5], ['Cours à la minute', 5, 70], ['Cours', 70, 90]];
   function progBar() {
-    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let shown = 0, target = 0, last = Date.now(), tm = null;
-    const paint = () => { f.style.transform = 'scaleX(' + (shown / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.round(shown))); };
-    const step = () => { if (target > shown) { shown = Math.min(target, shown + Math.max(0.4, (target - shown) * 0.25)); last = Date.now(); paint(); } w.classList.toggle('stall', Date.now() - last > 1500); };
+    const w = $('#barwrap'), b = $('#bar'), f = $('#barfill'); let val = 0, last = -1, lo = 0, hi = 90;
+    const paint = () => { f.style.transform = 'scaleX(' + (val / 100).toFixed(4) + ')'; b.setAttribute('aria-valuenow', String(Math.floor(val))); };
+    const set = v => { if (v > val) { val = Math.min(100, v); paint(); } };
+    const map = (p, r) => lo + (hi - lo) * (PHASES[p][1] + (PHASES[p][2] - PHASES[p][1]) * r) / 90;
     return {
-      start() { clearInterval(tm); shown = target = 0; last = Date.now(); w.classList.remove('stall', 'done'); w.hidden = false; paint(); tm = setInterval(step, 120); },
-      to(r) { const v = Math.min(97, Math.max(0, r * 100)); if (v > target) target = v; },
-      end(ok) { clearInterval(tm); w.classList.remove('stall'); if (ok) { shown = target = 100; paint(); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 500); } else w.hidden = true; }
+      start() { val = 0; last = -1; lo = 0; hi = 90; w.classList.remove('done'); w.hidden = false; paint(); },
+      step(name, n, tot) {
+        const p = PHASES.findIndex(x => name === x[0] || name.indexOf(x[0] + ' ') === 0); if (p < 0 || !tot) return;
+        if (p < last) { lo = val; last = -1; } /* relance : nouvelle passe sur la part restante */
+        for (let q = last + 1; q < p; q++) set(map(q, 1)); /* étapes sans rien à faire : comptées comme faites */
+        last = p; set(map(p, Math.min(1, n / tot)));
+      },
+      at(v) { set(v); },
+      end(ok) { if (ok) { set(100); w.classList.add('done'); setTimeout(() => { w.hidden = true; }, 600); } else w.hidden = true; }
     };
   }
   $('#run').onclick = async () => {
     if (autoFire) autoFire = false; else cancelAuto(); clearTimeout(autoTimer); clearInterval(autoTick);
     $('#run').disabled = true; $('#run').hidden = true; $('#diag').hidden = true; $('#cancel').hidden = false; runCtl = new AbortController(); pdfState(); let failed = false;
     const bar = progBar(), t0 = Date.now(); bar.start();
-    const show = (step, n, tot) => { if (tot) bar.to(n / tot); if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + 'Calcul de vos plus-values en cours…'; $('#progress').className = ''; } };
+    const show = (step, n, tot) => { bar.step(step, n, tot); if (!/^Nouvelle/.test($('#progress').textContent) || /dans \d+ s…$/.test($('#progress').textContent)) { $('#progress').textContent = (autoTry ? `Tentative ${autoTry}/${AUTO_MAX} — ` : '') + 'Calcul de vos plus-values en cours…'; $('#progress').className = ''; } };
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
       livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
-      livePrice.txs = txs; renderDiag(src, livePrice);
-      persist(); save(); renderTx();
+      bar.at(90); livePrice.txs = txs; renderDiag(src, livePrice);
+      persist(); save(); renderTx(); bar.at(95);
       const st = src.stats;
       $('#progress').dataset.full = `Calcul terminé en ${Math.round((Date.now() - t0) / 1000)} s (${st.calls} requêtes${st.fails ? ', ' + st.fails + ' échecs réseau' : ''}${livePrice.failed.length ? ', ' + livePrice.failed.length + ' actifs sans source joignable → cours observé ≈' : ''}).`;
     } catch (e) {
