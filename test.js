@@ -345,5 +345,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const app = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="csv"|id="xlsx"/.test(app) ? 1 : 0, 0, 'Interface : export PDF seul (CSV et xlsx retirés)');
   eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), d = (ih.match(/<dialog id="donepop"[\s\S]*?<\/dialog>/) || [''])[0];
+    eq(/Formulaire 2086 généré avec succès/.test(d) && /id="donego"[^>]*>Voir mes résultats/.test(d) && /aria-live="polite"/.test(d) && /id="doneclose"/.test(d) && !/style=|<script/.test(d) ? 1 : 0, 1, 'Popup de fin : titre, bouton résultats, croix, aria-live, sans inline');
+    eq(/scheduleAuto\(failed\); if \(!failed\) showDone\(\);/.test(app) && /end\(ok\) \{ live = false;/.test(app) && /if \(live && /.test(app) ? 1 : 0, 1, 'Fin de calcul : cadre de chargement retiré, popup seulement si réussi'); }
   process.exit(ok ? 0 : 1);
 })();
