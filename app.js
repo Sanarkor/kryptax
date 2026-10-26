@@ -170,7 +170,7 @@
       if (mp.date == null || mp.asset == null || mp.qty == null) return alert('Format non reconnu : choisissez au moins les colonnes Date, Crypto et Quantité.');
       if (mp.eur == null && mp.price == null) return alert('Choisissez la colonne du montant en € (ou du prix) : sans elle, les achats et ventes seraient comptés à 0 €.');
       o.cur = mp.eur != null ? KF.headCur(head[mp.eur]) : mp.price != null ? KF.headCur(head[mp.price]) : 'EUR';
-      o.xlsx = isXlsx; o.source = name; o.strict = true; o.head = head;
+      o.xlsx = isXlsx; o.source = name; o.strict = true; o.head = head; o.line0 = hi0 + 2;
       const res = KP.importRows(rows.slice(1), mp, o, uid);
       if (res.fatal) { box.remove(); return showErr(name + ' : fichier refusé, ' + res.fatal + '. Corrigez les colonnes puis réimportez.'); }
       if (!res.txs.length) { box.remove(); return showErr(name + ' : aucune opération lisible. ' + KP.badSummary(res, hi0 + 2)); }
@@ -259,13 +259,27 @@
   function renderXfers() {
     const el = $('#xfers'); if (!el) return;
     const L = E.openSends(txs, true), open = L.filter(t => !t.sendChoice).length, np = txs.filter(t => t.type === 'SEND' && t.xferWith).length;
-    if (!L.length && !np) { el.hidden = true; el.innerHTML = ''; return; }
+    const rb = reconBox();
+    if (!L.length && !np && !rb) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
-    el.innerHTML = (np ? `<p class="ok">↔️ ${np} transfert${np > 1 ? 's' : ''} entre vos comptes reconnu${np > 1 ? 's' : ''} (retrait + dépôt) : non imposable${np > 1 ? 's' : ''}.</p>` : '') + (L.length ? `<div class="xbox${open ? ' xopen' : ''}"><p class="xtitle">${open ? `⚠️ ${open} retrait${open > 1 ? 's' : ''} sans dépôt correspondant : que sont-ils devenus ?` : '✅ Retraits qualifiés'}</p>
+    el.innerHTML = rb + (np ? `<p class="ok">↔️ ${np} transfert${np > 1 ? 's' : ''} entre vos comptes reconnu${np > 1 ? 's' : ''} (retrait + dépôt) : non imposable${np > 1 ? 's' : ''}.</p>` : '') + (L.length ? `<div class="xbox${open ? ' xopen' : ''}"><p class="xtitle">${open ? `⚠️ ${open} retrait${open > 1 ? 's' : ''} sans dépôt correspondant : que sont-ils devenus ?` : '✅ Retraits qualifiés'}</p>
       <p class="hint">Choisir avant l’export PDF. Portefeuille non importé : reste dans le portefeuille (212). Frais, perte ou don : sort sans être imposé. Paiement ou vente oubliée : cession imposable au cours du moment.</p>
       <ul class="xlist">${L.map(t => `<li data-xf="${esc(t.id)}"><span class="xwhat"><b>${num(t.qty)} ${esc(t.asset)}</b> · ${dt(t.date)}</span><select aria-label="Traitement du retrait de ${num(t.qty)} ${esc(t.asset)}"><option value="">— Choisir —</option>${XCH.map(([v, l]) => `<option value="${v}"${t.sendChoice === v ? ' selected' : ''}>${l}</option>`).join('')}</select></li>`).join('')}</ul></div>` : '');
   }
+  /* Valeurs à confirmer (virgule perdue ambiguë, valeur manquante sans cours) : même principe que les retraits orphelins */
+  function reconBox() {
+    const L = txs.filter(t => t.reconPending); if (!L.length) return '';
+    const opt = t => { const R = t.reconPending, p = R.price; return (R.choices || []).map(q => `<option value="${q}">${num(q)} ${esc(t.asset)}${p ? ' (≈ ' + eur(q * p) + ')' : ''}</option>`).join(''); };
+    return `<div class="xbox xopen" id="recons"><p class="xtitle">⚠️ ${L.length} valeur${L.length > 1 ? 's' : ''} à confirmer : la virgule ou la valeur manque dans le fichier, plusieurs hypothèses sont possibles.</p>
+      <p class="hint">Choisir avant l’export PDF (comparez avec l’application de votre plateforme).</p>
+      <ul class="xlist">${L.map(t => `<li data-rc="${esc(t.id)}"><span class="xwhat"><b>${esc(t.asset)}</b> · ${dt(t.date)}${t.line ? ' · ligne ' + t.line : ''} · ${esc(t.source || '')}${t.qtyRaw != null ? ' · lu « ' + esc(String(t.qtyRaw)) + ' »' : ''}</span>${(t.reconPending.choices || []).length ? `<select aria-label="Quantité de ${esc(t.asset)} du ${dt(t.date)}"><option value="">— Choisir —</option>${opt(t)}</select>` : `<label>Montant en € <input data-rce size="8"></label>`}</li>`).join('')}</ul></div>`;
+  }
   $('#xfers') && $('#xfers').addEventListener('change', e => {
+    const lr = e.target.closest('li[data-rc]');
+    if (lr) { const t = txs.find(x => String(x.id) === lr.dataset.rc); const v = parseFloat(String(e.target.value).replace(',', '.')); if (!t || !(v >= 0)) return;
+      const R = t.reconPending; if (e.target.hasAttribute('data-rce')) { t.eur = v; t.eurDone = 1; } else { t.qty = v; t.qtyManual = true; t.qtyStatus = 'confirmée'; }
+      t.recon = (t.recon || []).filter(r => r.field !== R.field).concat({ field: R.field, raw: String(t.qtyRaw != null ? t.qtyRaw : '(vide)'), val: v, method: 'choisie par vous', conf: 'élevée' });
+      delete t.reconPending; cancelAuto(); save(); dirty = true; window.__kxDone = false; renderTx(); pdfState(); return; }
     const li = e.target.closest('li[data-xf]'); if (!li) return; const t = txs.find(x => String(x.id) === li.dataset.xf); if (!t) return;
     if (e.target.value) t.sendChoice = e.target.value; else delete t.sendChoice;
     cancelAuto(); save(); dirty = true; window.__kxDone = false; renderTx(); pdfState();
@@ -550,6 +564,7 @@
     if (unv.length) h += `<div class="note warn">Aucun cours trouvé pour ${unv.map(esc).join(', ')} : compté 0 € dans la ligne 212 (≈, à vérifier). Cours unitaire en € si vous le connaissez : ${unv.map(x => `<label>${esc(x)} <input size="8" data-man="${esc(x)}"></label>`).join(' ')} — ou relancez le calcul plus tard.</div>`;
     h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
+    { const R = KP.reconList(txs); if (R.length) h += `<details class="note" id="reconlist"><summary class="warn">🔧 ${R.length} valeur${R.length > 1 ? 's' : ''} reconstruite${R.length > 1 ? 's' : ''} ou devinée${R.length > 1 ? 's' : ''} (virgule perdue, valeur absente)</summary><div class="scroll"><table><tr><th>Fichier · ligne</th><th>Crypto</th><th>Champ</th><th>Valeur d’origine</th><th>Valeur retenue</th><th>Méthode</th><th>Confiance</th></tr>${R.map(r => `<tr${r.pending ? ' class="bad"' : ''}><td>${esc(r.source || '')}${r.line ? ' · ' + r.line : ''}</td><td>${esc(r.asset)}</td><td>${esc(r.field)}</td><td>${esc(r.raw)}</td><td class="n">${r.field === 'quantité' ? num(r.val) : eur(r.val)}</td><td>${esc(r.method)}</td><td>${r.pending ? 'à confirmer' : esc(r.conf)}</td></tr>`).join('')}</table></div></details>`; }
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
     const exportsHtml = '<p class="exports"><button id="pdfx" class="btn">Voir le PDF</button> <button id="print" class="ghost" hidden>Imprimer</button></p><p id="pdfmsg" class="note warn pdfmsg" role="status" aria-live="polite" hidden></p>';
     h = '<div id="detail" hidden>' + h + '</div>' + exportsHtml; // détail masqué (gardé pour le code et l'export)
@@ -576,7 +591,7 @@
   }
   function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); n += p.n; m += p.nMin; return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
   const precText = P => `Cours pris à la minute pour ${P.m} opération${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
-  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
+  function withPrec(x) { { const R = KP.reconList(txs); x.recon = R.length ? R.length + ' valeur' + (R.length > 1 ? 's' : '') + ' reconstruite' + (R.length > 1 ? 's' : '') + ' (fichiers CSV/Excel incomplets) : ' + R.slice(0, 12).map(r => r.asset + ' ' + r.field + ' ' + r.raw + ' -> ' + (+r.val).toPrecision(8).replace(/\.?0+$/, '') + ' (' + r.method + ', confiance ' + r.conf + ')').join(' ; ') + (R.length > 12 ? ' ; ...' : '') + '.' : ''; } const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
@@ -586,6 +601,7 @@
     if (dirty) b.push({ k: 'imports', msg: 'vos imports ont changé : touchez « Valider mes imports » pour recalculer.' });
     if (KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') b.push({ k: 'holders', msg: 'vos relevés semblent appartenir à des personnes différentes : retirez le fichier concerné.' });
     if ($('#err') && !$('#err').hidden) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
+    { const n = txs.filter(t => t.reconPending).length; if (n) b.push({ k: 'recon', msg: `${n} valeur${n > 1 ? 's' : ''} reconstruite${n > 1 ? 's' : ''} à confirmer (plusieurs hypothèses ou confiance faible) : choisissez dans « 1. Importer ».` }); }
     { const n = E.openSends(txs).length; if (n) b.push({ k: 'xfer', msg: `${n} retrait${n > 1 ? 's' : ''} sans dépôt correspondant : choisissez leur traitement dans « 1. Importer ».` }); }
     if (t && t.incomplete) b.push({ k: 'cours', rerun: true, msg: 'des cours sont introuvables, le résultat est incomplet : relancez le calcul.' });
     else if (est && est.size) b.push({ k: 'estime', rerun: true, msg: 'un cours est seulement estimé (≈) : relancez le calcul ou saisissez le cours.' });
