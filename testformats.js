@@ -77,7 +77,7 @@ const run = (f, id) => { const rows = rd(f), d = F.detect(rows); chk(d && d.id =
   r = imp('Date;Type;Crypto;Quantité;Montant\n01/02/2025;Achat;BTC;0,5;100\n02/02/2025;Truc bizarre;BTC;0,2;50\n03/02/2025;Envoyer;BTC;0,1;0\n;Total;;0,8;150\n\n');
   chk(r.txs.length === 2 && r.txs[1].type === 'SEND' && r.bad.length === 1 && /type inconnu « Truc bizarre »/.test(P.badSummary(r)) && /ligne 3/.test(P.badSummary(r)), 'Type inconnu refusé (ligne citée), « Envoyer » = envoi, ligne Total et ligne vide ignorées : ' + P.badSummary(r));
   r = imp('Date;Type;Crypto;Quantité;Montant\n01/02/2025;Vente;BTC;0,5;\n');
-  chk(r.bad.length === 1 && /montant en €/.test(P.badSummary(r)), 'Vente sans montant : ligne refusée, pas de vente à 0 €');
+  chk(r.bad.length === 0 && r.txs[0].eurMissing === true, 'Vente sans montant : gardée, montant à reconstruire au cours historique (signalé, sinon à confirmer : jamais de vente à 0 € en silence)');
   r = imp([['Relevé fictif', '', '', '', ''], ['Généré le 01/01/2026', '', '', '', ''], ['Date', 'Type', 'Crypto', 'Quantité', 'Montant'], [45658.5, 'Achat', 'BTC', 0.01, 900], [new Date(2025, 0, 3, 14, 5, 7), 'Vente', 'BTC', 0.005, 480], ['', '', '', '', ''], ['Total', '', '', 0.015, 1380]]);
   chk(r.txs.length === 2 && !r.bad.length && iso(r.txs[0].date) === '2025-01-01T12:00' && new Date(r.txs[1].date).toISOString() === '2025-01-03T14:05:07.000Z', 'Excel : titres avant l’en-tête, date en n° de série, date typée (heure de la cellule), ligne Total ignorée');
   chk(P.numMode(['1,234', '12']) === '' && P.numMode(['0,5']) === 'FR' && P.numMode(['1,234.5']) === 'EN' && P.dateMode(['01/02/2025']) === '', 'Formats indécidables laissés au choix manuel / par défaut');

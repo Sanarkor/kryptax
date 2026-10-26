@@ -136,6 +136,31 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '').replace(/<span class="disclaim">[^<]*<\/span>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes('id="helppanel" class="help" hidden') ? 1 : 0, 1, 'Mode d’emploi conservé (replié)');
   eq(/peek|showPeek|👁/.test(A + fs.readFileSync(__dirname + '/style.css', 'utf8') + H) ? 1 : 0, 0, 'Icône œil (aperçu flouté) supprimée avec sa logique'); }
 // Multi-import (fictif) : cumul, remplacement du même fichier, dédoublonnage des relevés qui se chevauchent
+{ /* Lecture CSV/Excel : valeurs absentes, virgules perdues, ambiguïtés (données synthétiques) */
+  const KP = require('./pipeline.js'); let n = 0; const u = () => 'r' + n++, mp = { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, H = ['Symbol', 'Type', 'Quantity', 'Price', 'Value', 'Fees', 'Date'];
+  const rows = [['AAA', 'Achat', '1\u202f234,5', '2,00€', '2\u00a0469,00€', '1,00€', '3 mars 2026, 10:00:00'], ['BBB', 'Acheter - Plateforme X', '#######', '0,50$', '10,00$', '0,01$', '4 mars 2026, 11:00:00'],
+    ['CCC', 'Vente', '12,5', '0,00€', '0,25€', '0,01€', '5 mars 2026, 12:00:00'], ['DDD', 'Achat', 12345, '10,00€', '12,35€', '0,10€', '6 mars 2026, 13:00:00'],
+    ['EEE', 'Achat', '3', '', '30,00€', '0,10€', '7 mars 2026, 14:00:00'], ['FFF', 'Achat', '2', '5,00€', '', '0,10€', '8 mars 2026, 15:00:00'], ['USD', 'Autre', '100,00$', '', '100,00$', '0,00$', '9 mars 2026, 16:00:00'],
+    ['GGG', 'Achat', 77777, '1,00€', '50,00€', '0,10€', '10 mars 2026, 10:00:00']];
+  const r = KP.importRows(rows, mp, { xlsx: true, strict: true, source: 'f.xlsx', head: H }, u), T = Object.fromEntries(r.txs.map(x => [x.asset, x]));
+  eq(r.bad.length, 0, 'CSV/Excel : aucune ligne refusée (symboles € $, espaces fines, #######, prix vide ou arrondi à 0)');
+  eq(T.AAA.qty, 1234.5, 'espace fine de milliers + virgule décimale'); eq(T.BBB.qty, 20, '####### : quantité reconstruite par valeur ÷ prix'); eq(T.BBB.recon[0].method === 'valeur ÷ prix' ? 1 : 0, 1, 'reconstruction signalée');
+  eq(T.CCC.unitPrice, 0.02, 'prix arrondi à 0 → montant ÷ quantité'); eq(T.DDD.qty, 1.2345, 'virgule perdue 12345 → 1,2345'); eq(T.DDD.recon[0].raw === '12345' ? 1 : 0, 1, 'valeur d’origine gardée');
+  eq(T.EEE.unitPrice, 10, 'prix vide reconstruit'); eq(T.FFF.eur, 10, 'montant vide = quantité × prix'); eq(T.USD.type === 'IGNORE' ? 1 : 0, 1, 'ligne « Autre » en devise ignorée');
+  eq(!!T.GGG.reconPending && T.GGG.reconPending.choices.length > 1, true, 'hypothèse peu sûre → à confirmer, plusieurs choix');
+  const c = KP.importRows([['HHH', 'Achat', '12345', '10,00', '123450,00', '0', '2026-03-06 13:00']], mp, { strict: true, source: 'f.csv', head: H }, u).txs[0];
+  eq(c.qty, 12345, 'CSV : entier court cohérent non modifié');
+  const c2 = KP.importRows([['HHH', 'Achat', '123450', '10,00', '12,35', '0', '2026-03-06 13:00']], mp, { strict: true, source: 'f.csv', head: H }, u).txs[0];
+  eq(c2.qty, 1.2345, 'CSV : virgule perdue corrigée'); eq(c2.recon && c2.recon[0].conf === 'élevée' ? 1 : 0, 1, 'CSV : correction signalée');
+  // récompenses sans valeur : ambiguïté → à confirmer ; ligne jumelle d'un relevé PDF → reprise
+  const R = [['KKK', 'Autre', 1234567891, '', '', '', '11 mars 2026, 09:00:00']].map(x => (x[1] = 'Récompense', x));
+  const rw = KP.importRows(R, mp, { xlsx: true, strict: true, source: 'g.xlsx', head: H }, u).txs;
+  KP.resolveRecon(rw, rw.filter(x => x.qtyStatus === 'à reconstruire'), () => 0.01);
+  eq(!!rw[0].reconPending, true, 'récompense sans valeur ni ligne jumelle : à confirmer'); eq(rw[0].reconPending.choices[0], 12.34567891, 'hypothèse de tête : 8 décimales');
+  const pdf = { id: 'p', source: 'r.pdf', asset: 'KKK', type: rw[0].type, date: rw[0].date + 7200e3, qty: 12.34567891, eur: 0 };
+  const m = KP.mergeImport([pdf], rw); eq(rw[0].qty, 12.34567891, 'ligne jumelle du relevé PDF : quantité reprise'); eq(rw[0].reconPending === undefined ? 1 : 0, 1, 'plus rien à confirmer'); eq(rw[0].recon[0].conf === 'élevée' ? 1 : 0, 1, 'méthode jumelle, confiance élevée');
+  eq(KP.reconList(r.txs).length >= 6, true, 'liste des valeurs reconstruites (affichage + PDF)');
+}
 { const KP = require('./pipeline.js'), D = (m, d) => Date.UTC(2026, m, d, 10);
   const f1 = [{ source: 'a.pdf', type: 'BUY', asset: 'AAA', date: D(0, 5), qty: 2, eur: 100 }, { source: 'a.pdf', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }];
   const f2 = [{ source: 'b.csv', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }, { source: 'b.csv', type: 'BUY', asset: 'BBB', date: D(2, 1), qty: 5, eur: 50 }];
