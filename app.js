@@ -1,7 +1,7 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
-  const SHOW_PREC = false; // précision des cours masquée (écran et PDF) pour l'instant : passer à true pour la réafficher
+  const SHOW_PREC = /[?&]prec=1(&|$)/.test(location.search); // précision des cours masquée (écran et PDF) pour l'instant ; ajouter ?prec=1 à l'adresse pour la tester
   const KOFI_NOTE = false; // mention légale « Dons » masquée tant que le paiement Ko-fi n'est pas connecté : passer à true pour la réafficher (#kofinote)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
