@@ -351,7 +351,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/renderResults\(\); bar\.end\(!failed\); scheduleAuto\(failed\);/.test(A) && /lastEst = new Set\(AA\.retry\.filter\(x => !unk\.includes\(x\)\)\)/.test(A) ? 1 : 0, 1, 'Relance auto : déclenchée après chaque calcul tant qu’un cours est estimé');
     const XP = require('fs').readFileSync(__dirname + '/export.js', 'utf8');
     eq(/id="precsum">\$\{esc\(precText\(PP\)\)\}<\/p>/.test(A) && !/`C\$\{i \+ 1\} \(/.test(A) ? 1 : 0, 1, 'Interface : résumé de précision seul, sans liste C1…Cn');
-    eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} opération/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
+    eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} cession/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
     }
