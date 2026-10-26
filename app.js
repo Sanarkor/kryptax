@@ -677,6 +677,8 @@
     catch (err) { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } return false; }
   }
   { const hb = $('#helpbtn'), hp = $('#helppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
+  /* Smartphone : un appui n'importe où dans le mode d'emploi le replie (sauf lien, bouton ou sélection de texte) */
+  { const hb = $('#helpbtn'), hp = $('#helppanel'); if (hb && hp) hp.addEventListener('click', e => { if (!window.matchMedia('(max-width:700px)').matches) return; if (e.target.closest('a,button,input,label,select,textarea')) return; const sel = window.getSelection && String(window.getSelection()); if (sel) return; hp.hidden = true; hb.setAttribute('aria-expanded', 'false'); }); }
   // Opérations particulières (staking, airdrop…) : un seul message replié, discret, jamais bloquant
   function specialNote(sp) {
     if (!sp || (!sp.n && !sp.pay)) return '';
