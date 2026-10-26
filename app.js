@@ -1,6 +1,7 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
+  const SHOW_PREC = false; // précision des cours masquée (écran et PDF) pour l'instant : passer à true pour la réafficher
   const KOFI_NOTE = false; // mention légale « Dons » masquée tant que le paiement Ko-fi n'est pas connecté : passer à true pour la réafficher (#kofinote)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
@@ -558,7 +559,7 @@
         h += `<div class="note warn">Cession du ${dt(c.date)} : cours introuvable pour ${c.missing.map(esc).join(', ')}. Renseignez le cours unitaire en € à ce moment : ${c.missing.map(a => `<label>${esc(a)} <input size="8" data-man="${esc(a)}@${c.tx.id}"></label>`).join(' ')} (0 si valeur négligeable) ou la valeur globale (ligne 212) : <input size="10" data-o212="${c.tx.id}"></div>`;
       }
       const ap = (a, c) => livePrice && livePrice.approx && livePrice.approx.has(a + '|' + c.date) ? '≈' : '';
-      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ') + (c.detail212.length ? ` <span class="prec">(${esc(KP.precLabel(KP.cessionPrec(livePrice, c)))})</span>` : '')).join(' ;<br>')}</p></details>`;
+      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ') + (SHOW_PREC && c.detail212.length ? ` <span class="prec">(${esc(KP.precLabel(KP.cessionPrec(livePrice, c)))})</span>` : '')).join(' ;<br>')}</p></details>`;
       h += `<p>Ligne 51 — total des prix de cession (218) : <b>${eur(y.total218)}</b>${y.exonere ? ' → <b>≤ 305 € : cessions exonérées</b>, pas d’autres lignes à remplir.' : ''}</p>`;
       h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : '<span class="' + (y.total224 >= 0 ? 'pos' : 'neg') + '">' + (y.total224 >= 0 ? '+' : '') + eur(y.total224) + '</span>'}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : impôt de 12,8 % → environ ${eur(Math.max(0, y.total224) * 0.128)}. Les prélèvements sociaux s’ajoutent à l’impôt (17,2 % ou 18,6 % selon l’année, soit 30 % ou 31,4 % au total). Taux à vérifier sur impots.gouv.fr. Option barème progressif : case 3CN.</div>`;
@@ -584,7 +585,7 @@
       const sus = (livePrice && livePrice.suspect || []).filter(x => yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const warns = (unk.length ? ['Symbole non identifié, aucun cours demandé : ' + unk.map(esc).join(', ') + '. Saisissez son cours si besoin.'] : []).concat(sus.length ? ['Cours à vérifier pour ' + sus.map(esc).join(', ') + ' : sources de cours divergentes (> 30 %), cours DefiLlama retenu.'] : []);
       lastEst = new Set(AA.retry.filter(x => !unk.includes(x))); /* seulement les échecs transitoires des cryptos qui comptent */ if (t.incomplete) lastEst.add('*'); // symbole non identifié : pas de relance
-      const PP = precOf(yc), precH = (PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '') + (lastIgn.length ? `<p class="hint" id="ignsum">Cours introuvable pour ${lastIgn.map(esc).join(', ')} (récompenses, valeur ignorée à la ligne 212).</p>` : '');
+      const PP = precOf(yc), precH = (SHOW_PREC && PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '') + (lastIgn.length ? `<p class="hint" id="ignsum">Cours introuvable pour ${lastIgn.map(esc).join(', ')} (récompenses, valeur ignorée à la ligne 212).</p>` : '');
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
       const tot = t.n ? `<div class="note total-global"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})${t.incomplete ? ' (incomplet)' : ''}<br>${t.exonere ? 'Total des cessions ≤ 305 € : exonéré, rien à reporter.' : `À remplir, case <b>${t.box}</b> de la 2042-C : <b>${eur(t.report)}</b> <small class="rnd">(arrondi à l’euro le plus proche, comme l’exige l’administration fiscale ; 0,50 compte pour 1)</small>`}<br>Prélèvement estimé selon le calcul : <b>${eur(t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2026 ? 0.314 : 0.30))}</b></div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
@@ -594,7 +595,7 @@
   }
   function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); if (p.n) { n++; const q = p.own || p; if (q.k === 'minute' || q.k === 'seconde') m++; } return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
   const precText = P => `Cours de la crypto vendue pris à la minute pour ${P.m} cession${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
-  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
+  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = SHOW_PREC ? (P.L[i] || '') : ''; }); x.prec = (SHOW_PREC && P.n ? precText(P) : '') + (lastIgn.length ? (SHOW_PREC && P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
