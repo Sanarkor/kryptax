@@ -137,7 +137,6 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcu
     if (st) { doc.setFontSize(7.4); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 70, 90); const sl = doc.splitTextToSize(ascii(st), W - 2 * M);
       if (yn + sl.length * 3 + 2 > H - 8) { doc.addPage(); yn = 14; } doc.text(sl, M, yn + 2); doc.setFont('helvetica', 'normal'); yn += sl.length * 3 + 1.5;
       doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }
-    if (x.recon) { doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); const rl = doc.splitTextToSize(ascii(x.recon), W - 2 * M); if (yn + rl.length * 2.4 + 2 > H - 8) { doc.addPage(); yn = 14; } doc.text(rl, M, yn + 2); yn += rl.length * 2.4 + 1; }
     if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
     const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); doc.text(ascii(LAW), M, H - 5); }
     doc.setTextColor(0, 0, 0);
