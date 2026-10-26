@@ -592,8 +592,8 @@
     }
     $('#results').innerHTML = h; lastOut = out; lastY = Y; pdfState();
   }
-  function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); if (p.n) { n++; if (p.k === 'minute' || p.k === 'seconde') m++; } return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
-  const precText = P => `Cours pris à la minute pour ${P.m} cession${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
+  function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); if (p.n) { n++; const q = p.own || p; if (q.k === 'minute' || q.k === 'seconde') m++; } return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
+  const precText = P => `Cours de la crypto vendue pris à la minute pour ${P.m} cession${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
   function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;

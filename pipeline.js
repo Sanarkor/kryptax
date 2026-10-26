@@ -11,9 +11,9 @@
   const PREC = ['seconde', 'minute', 'horaire', 'journalier', 'estimé'];
   const precLabel = p => p ? (p.k === 'seconde' ? 'cours à la seconde' : p.k === 'minute' ? 'cours à la minute' : p.k === 'horaire' ? 'cours horaire' : p.k === 'journalier' ? 'cours journalier' : 'cours estimé') + (p.src && p.k !== 'estimé' ? ' (' + p.src + ')' : '') : '';
   function cessionPrec(fn, c) { // -> { k, src, n, nMin } pour une cession (detail212)
-    let w = null, n = 0, nMin = 0;
-    for (const d of c.detail212 || []) { const key = d.asset + '|' + c.date, p = fn && fn.approx && fn.approx.has(key) ? { k: 'estimé', src: '' } : (fn && fn.prec && fn.prec.get(key)) || null; if (!p) continue; n++; if (p.k === 'minute' || p.k === 'seconde') nMin++; if (!w || PREC.indexOf(p.k) > PREC.indexOf(w.k)) w = p; }
-    return w ? Object.assign({ n, nMin }, w) : { k: '', src: '', n, nMin };
+    let w = null, n = 0, nMin = 0, own = null;
+    for (const d of c.detail212 || []) { const key = d.asset + '|' + c.date, p = fn && fn.approx && fn.approx.has(key) ? { k: 'estimé', src: '' } : (fn && fn.prec && fn.prec.get(key)) || null; if (!p) continue; if (d.asset === c.asset) own = p; n++; if (p.k === 'minute' || p.k === 'seconde') nMin++; if (!w || PREC.indexOf(p.k) > PREC.indexOf(w.k)) w = p; }
+    return w ? Object.assign({ n, nMin, own }, w) : { k: '', src: '', n, nMin, own };
   }
 
   /* ---- Lecture CSV/Excel fiable : formats déduits par COLONNE (jamais cellule par cellule), sinon refus clair ---- */
