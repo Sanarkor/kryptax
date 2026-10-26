@@ -25,7 +25,7 @@ eq(E.parseNum('€1,234.56'), 1234.56, 'nombre EN'); eq(E.parseNum('1 234,56 €
 eq(new Date(E.parseDate('13/01/2024 15:45')).getMonth(), 0, 'date FR'); eq(new Date(E.parseDate('Jan 13, 2024, 3:45:12 PM')).getHours(), 15, 'date EN');
 // Format relevé .xlsx (valeurs fictives)
 eq(E.parseNum('68â_x0080_¯116,39â_x0082_¬'), 68116.39, 'montant mojibake'); eq(E.currencyOf(E.fixText('20,19$')) === 'USD' ? 1 : 0, 1, 'devise USD');
-eq(E.guessType('RÃ©compenseÂ\u00a0Apprendre') === 'INTEREST' ? 1 : 0, 1, 'récompense Learn'); eq(E.guessType('Vendre - Revolut X') === 'SELL' ? 1 : 0, 1, 'Vendre (plateforme X)');
+eq(E.guessType('RÃ©compenseÂ\u00a0Apprendre') === 'INTEREST' ? 1 : 0, 1, 'récompense Learn'); eq(E.guessType('Vendre - Plateforme X') === 'SELL' ? 1 : 0, 1, 'Vendre (plateforme X)');
 eq(new Date(E.parseDate('15 juil. 2026, 12:30:25')).getMonth(), 6, 'date FR juil.'); eq(E.parisParts(E.parseDate('17 mai 2026, 00:09:10')).day, 17, 'date FR mai');
 eq(E.fixQty(81033368, 1.23, 100).qty, 81.033368, 'quantité tronquée XRP'); eq(E.fixQty(73403, 68116.39, 50).qty, 0.00073403, 'quantité tronquée BTC');
 // Détection des échanges crypto→crypto (données fictives)
@@ -50,7 +50,7 @@ r = E.compute(sw, (a) => ({ BBB: 16, CCC: 11, DDD: 40 })[a]);
 eq(r.total220, 300 + 79, 'Achat d’un échange hors ligne 220'); eq(r.cessions.length, 2, 'Cessions imposables');
 sw.find(t => t.id === 's1').swapForce = 'taxable'; sw.find(t => t.id === 'b1').swapForce = 'taxable'; E.detectSwaps(sw);
 eq(ty('s1') === 'SELL' && ty('b1') === 'BUY' ? 1 : 0, 1, 'Forcer imposable');
-const fz = E.parseFiatSales('Transfer from Revolut Digital Assets Europe Ltd - Vente de BBB;21/05/2026 11:00:01;80,00\nautre ligne\n21/05/2026 12:00:00 Vente de ZZZ 5');
+const fz = E.parseFiatSales('Transfer from Exchange Digital Assets Ltd - Vente de BBB;21/05/2026 11:00:01;80,00\nautre ligne\n21/05/2026 12:00:00 Vente de ZZZ 5');
 E.detectSwaps(sw); const cc = E.crossCheck(sw, fz.map(x => Object.assign(x, { date: x.asset === 'BBB' ? T0 + 3600e3 + 1e3 : x.date })));
 eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'Vente confirmée par le relevé €'); eq(cc.sellNoFiat.length, 2, 'Ventes absentes du relevé € signalées (s1 forcée, s3)'); eq(cc.fiatNoSell.length, 1, 'Ligne € sans vente signalée');
 // État reporté au 31/12 : historique complet sur 2 ans == calcul 2027 à partir de l'état exporté (données fictives)
@@ -133,9 +133,34 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 // Page : plus de bandeau « conseil fiscal », pas d'icône ℹ️, pas d'icône œil
 { const fs = require('fs'), H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   eq(/id="helpbtn" class="small ghost" aria-expanded="false" aria-controls="helppanel">Mode d’emploi<\/button><button id="reset" class="small ghost"/.test(H) && !/Mode d'emploi et aide|details class="help"/.test(H) ? 1 : 0, 1, 'Mode d’emploi : bouton à gauche de Réinitialiser, même style');
-  eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes('id="helppanel" class="help" hidden') ? 1 : 0, 1, 'Mode d’emploi conservé (replié)');
+  eq(/pas un conseil fiscal|class="banner/.test(H.replace(/<dialog id="privacy"[\s\S]*?<\/dialog>/, '').replace(/<span class="disclaim">[^<]*<\/span>/, '')) ? 1 : 0, 0, 'Bandeau « Outil d’aide… » retiré de la page'); eq(H.includes('ℹ️') ? 1 : 0, 0, 'Icône ℹ️ retirée'); { const C = fs.readFileSync(__dirname + '/style.css', 'utf8'); eq(/summary\{list-style:none\}/.test(C) && /-webkit-details-marker\{display:none\}/.test(C) && /::marker\{content:""\}/.test(C) ? 1 : 0, 1, 'Triangle des <summary> masqué'); } eq(H.includes('id="helppanel" class="help" hidden') ? 1 : 0, 1, 'Mode d’emploi conservé (replié)');
   eq(/peek|showPeek|👁/.test(A + fs.readFileSync(__dirname + '/style.css', 'utf8') + H) ? 1 : 0, 0, 'Icône œil (aperçu flouté) supprimée avec sa logique'); }
 // Multi-import (fictif) : cumul, remplacement du même fichier, dédoublonnage des relevés qui se chevauchent
+{ /* Lecture CSV/Excel : valeurs absentes, virgules perdues, ambiguïtés (données synthétiques) */
+  const KP = require('./pipeline.js'); let n = 0; const u = () => 'r' + n++, mp = { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, H = ['Symbol', 'Type', 'Quantity', 'Price', 'Value', 'Fees', 'Date'];
+  const rows = [['AAA', 'Achat', '1\u202f234,5', '2,00€', '2\u00a0469,00€', '1,00€', '3 mars 2026, 10:00:00'], ['BBB', 'Acheter - Plateforme X', '#######', '0,50$', '10,00$', '0,01$', '4 mars 2026, 11:00:00'],
+    ['CCC', 'Vente', '12,5', '0,00€', '0,25€', '0,01€', '5 mars 2026, 12:00:00'], ['DDD', 'Achat', 12345, '10,00€', '12,35€', '0,10€', '6 mars 2026, 13:00:00'],
+    ['EEE', 'Achat', '3', '', '30,00€', '0,10€', '7 mars 2026, 14:00:00'], ['FFF', 'Achat', '2', '5,00€', '', '0,10€', '8 mars 2026, 15:00:00'], ['USD', 'Autre', '100,00$', '', '100,00$', '0,00$', '9 mars 2026, 16:00:00'],
+    ['GGG', 'Achat', 77777, '1,00€', '50,00€', '0,10€', '10 mars 2026, 10:00:00']];
+  const r = KP.importRows(rows, mp, { xlsx: true, strict: true, source: 'f.xlsx', head: H }, u), T = Object.fromEntries(r.txs.map(x => [x.asset, x]));
+  eq(r.bad.length, 0, 'CSV/Excel : aucune ligne refusée (symboles € $, espaces fines, #######, prix vide ou arrondi à 0)');
+  eq(T.AAA.qty, 1234.5, 'espace fine de milliers + virgule décimale'); eq(T.BBB.qty, 20, '####### : quantité reconstruite par valeur ÷ prix'); eq(T.BBB.recon[0].method === 'valeur ÷ prix' ? 1 : 0, 1, 'reconstruction signalée');
+  eq(T.CCC.unitPrice, 0.02, 'prix arrondi à 0 → montant ÷ quantité'); eq(T.DDD.qty, 1.2345, 'virgule perdue 12345 → 1,2345'); eq(T.DDD.recon[0].raw === '12345' ? 1 : 0, 1, 'valeur d’origine gardée');
+  eq(T.EEE.unitPrice, 10, 'prix vide reconstruit'); eq(T.FFF.eur, 10, 'montant vide = quantité × prix'); eq(T.USD.type === 'IGNORE' ? 1 : 0, 1, 'ligne « Autre » en devise ignorée');
+  eq(!!T.GGG.reconPending && T.GGG.reconPending.choices.length > 1, true, 'hypothèse peu sûre → à confirmer, plusieurs choix');
+  const c = KP.importRows([['HHH', 'Achat', '12345', '10,00', '123450,00', '0', '2026-03-06 13:00']], mp, { strict: true, source: 'f.csv', head: H }, u).txs[0];
+  eq(c.qty, 12345, 'CSV : entier court cohérent non modifié');
+  const c2 = KP.importRows([['HHH', 'Achat', '123450', '10,00', '12,35', '0', '2026-03-06 13:00']], mp, { strict: true, source: 'f.csv', head: H }, u).txs[0];
+  eq(c2.qty, 1.2345, 'CSV : virgule perdue corrigée'); eq(c2.recon && c2.recon[0].conf === 'élevée' ? 1 : 0, 1, 'CSV : correction signalée');
+  // récompenses sans valeur : ambiguïté → à confirmer ; ligne jumelle d'un relevé PDF → reprise
+  const R = [['KKK', 'Autre', 1234567891, '', '', '', '11 mars 2026, 09:00:00']].map(x => (x[1] = 'Récompense', x));
+  const rw = KP.importRows(R, mp, { xlsx: true, strict: true, source: 'g.xlsx', head: H }, u).txs;
+  KP.resolveRecon(rw, rw.filter(x => x.qtyStatus === 'à reconstruire'), () => 0.01);
+  eq(!!rw[0].reconPending, true, 'récompense sans valeur ni ligne jumelle : à confirmer'); eq(rw[0].reconPending.choices[0], 12.34567891, 'hypothèse de tête : 8 décimales');
+  const pdf = { id: 'p', source: 'r.pdf', asset: 'KKK', type: rw[0].type, date: rw[0].date + 7200e3, qty: 12.34567891, eur: 0 };
+  const m = KP.mergeImport([pdf], rw); eq(rw[0].qty, 12.34567891, 'ligne jumelle du relevé PDF : quantité reprise'); eq(rw[0].reconPending === undefined ? 1 : 0, 1, 'plus rien à confirmer'); eq(rw[0].recon[0].conf === 'élevée' ? 1 : 0, 1, 'méthode jumelle, confiance élevée');
+  eq(KP.reconList(r.txs).length >= 6, true, 'liste des valeurs reconstruites (affichage + PDF)');
+}
 { const KP = require('./pipeline.js'), D = (m, d) => Date.UTC(2026, m, d, 10);
   const f1 = [{ source: 'a.pdf', type: 'BUY', asset: 'AAA', date: D(0, 5), qty: 2, eur: 100 }, { source: 'a.pdf', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }];
   const f2 = [{ source: 'b.csv', type: 'SELL', asset: 'AAA', date: D(1, 5), qty: 1, eur: 70 }, { source: 'b.csv', type: 'BUY', asset: 'BBB', date: D(2, 1), qty: 5, eur: 50 }];
@@ -148,8 +173,27 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const after = m.txs.filter(t => t.source !== 'b.csv'); eq(KP.fileList(after).length, 2, 'Retirer un fichier (✕)');
   { const A9 = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), H9 = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C9 = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
     eq(/role="progressbar"[^>]*aria-valuenow/.test(H9) && /id="progress" aria-live="polite"/.test(H9) && !/<progress id="bar"/.test(H9) ? 1 : 0, 1, 'Progression : barre pleine largeur accessible, texte annoncé');
-    eq(!/sur \$\{tot\}|Cours récupérés/.test(A9) && /Lecture de vos fichiers…/.test(A9) && /Récupération des cours…/.test(A9) && /Génération du formulaire 2086…/.test(A9) && !/Calcul de vos plus-values/.test(A9) && /lecture: \[0, 25\], cours: \[25, 90\], fin: \[90, 100\]/.test(A9) && /bar\.at\(98\); renderResults\(\); bar\.end\(!failed\)/.test(A9) && !/Math\.min\(97/.test(A9) && /if \(v > val\)/.test(A9) && /if \(tot !== lastT\) \{ lo = val;/.test(A9) && !/kxshine/.test(C9) ? 1 : 0, 1, 'Progression : réelle pondérée, sans numéros, jamais de recul, pas de plafond arbitraire');
-    eq(!/creep|setInterval\(creep/.test(A9) && /if \(!hold \|\| el >= READ_MIN_MS\) \{ hold = false; raw\(tgt\); return; \}/.test(A9) && /Math\.min\(tgt, 25,/.test(A9) ? 1 : 0, 1, 'Progression : aucun délai après la lecture (cours et génération = progression réelle)');
+    eq(!/sur \$\{tot\}|Cours récupérés/.test(A9) && /Lecture de vos fichiers…/.test(A9) && /Récupération des cours…/.test(A9) && /Génération du formulaire 2086…/.test(A9) && !/Calcul de vos plus-values/.test(A9) && /lecture: \[0, 25\], cours: \[25, 90\], fin: \[90, 100\]/.test(A9) && /bar\.at\(98\); await breathe\(\); renderResults\(\); bar\.end\(!failed\)/.test(A9) && !/Math\.min\(97/.test(A9) && /if \(v > val\)/.test(A9) && /if \(tot !== lastT\) \{ lo = val;/.test(A9) && !/kxshine/.test(C9) ? 1 : 0, 1, 'Progression : réelle pondérée, sans numéros, jamais de recul, pas de plafond arbitraire');
+    eq(/requestAnimationFrame\(tick\)/.test(A9) && !/setInterval\(/.test(A9.slice(A9.indexOf('function progBar'), A9.indexOf("$('#run').onclick"))) ? 1 : 0, 1, 'Progression : animation requestAnimationFrame, sans minuterie à paliers');
+    { /* Simulation : rAF factice, réponses de cours irrégulières (rafale puis attente) */
+      const src = A9.slice(A9.indexOf('  const SEG ='), A9.indexOf('  const PLABEL')) + A9.slice(A9.indexOf('  function progBar'), A9.indexOf("  $('#run').onclick"));
+      let now = 0, q = []; const el = () => ({ style: {}, classList: { add() {}, remove() {} }, setAttribute() {}, hidden: true, textContent: '', className: '' });
+      const els = { '#barwrap': el(), '#bar': el(), '#barfill': el(), '#progress': el() };
+      const sb = { $: s => els[s], Date: { now: () => now }, window: {}, requestAnimationFrame: f => { q.push(f); return q.length; }, performance: { now: () => now }, cancelAnimationFrame() {}, setTimeout: (f) => 1, clearTimeout() {}, clearInterval() {}, PLABEL: () => '' };
+      const pb = new Function(...Object.keys(sb), src + '; return progBar;')(...Object.values(sb))();
+      const vals = []; const run = ms => { for (let i = 0; i < ms / 16; i++) { now += 16; const f = q; q = []; f.forEach(g => g(now)); vals.push(parseFloat((els['#barfill'].style.transform || 'scaleX(0)').slice(7)) * 100); } };
+      pb.start(false); pb.unit('lecture', 1, 1); run(2100); pb.unit('cours', 0, 10);
+      pb.unit('cours', 5, 10); run(300); const afterBurst = vals[vals.length - 1]; run(4000); const afterWait = vals[vals.length - 1];
+      let back = 0, maxJump = 0; for (let i = 1; i < vals.length; i++) { if (vals[i] < vals[i - 1] - 1e-9) back++; maxJump = Math.max(maxJump, vals[i] - vals[i - 1]); }
+      eq(back, 0, 'Progression fluide : jamais de recul');
+      eq(afterBurst < 25 + 65 * 5 / 10 + 0.01 && afterWait > afterBurst + 1 && afterWait < 25 + 65 * 6 / 10 ? 1 : 0, 1, 'Progression fluide : avance douce pendant l’attente, sans dépasser la prochaine réponse');
+      eq(maxJump < 6 ? 1 : 0, 1, 'Progression fluide : pas de saut brutal (' + maxJump.toFixed(2) + ')');
+      pb.unit('cours', 10, 10); pb.at(90); run(200); const g0 = vals[vals.length - 1]; run(3000); const g1 = vals[vals.length - 1];
+      eq(g1 > g0 + 1 && g1 < 98 ? 1 : 0, 1, 'Génération : avance continue vers 98 % sans se figer (' + g0.toFixed(1) + ' → ' + g1.toFixed(1) + ')');
+      pb.end(true); const e0 = vals.length; run(32); const firstAfter = vals[vals.length - 1]; run(500);
+      let jEnd = 0; for (let i = e0; i < vals.length; i++) jEnd = Math.max(jEnd, vals[i] - vals[i - 1]);
+      eq(firstAfter < 100 && jEnd < 2 && els['#barfill'].style.transform === 'scaleX(1.0000)' ? 1 : 0, 1, 'Progression : fin en glissement (~400 ms) jusqu’à 100 %, sans saut');
+      eq(/const breathe = \(\) => new Promise\(r => requestAnimationFrame\(\(\) => setTimeout\(r, 0\)\)\)/.test(A9) && (A9.match(/await breathe\(\)/g) || []).length >= 5 ? 1 : 0, 1, 'Génération : l’interface respire entre les gros calculs'); }
     eq(/READ_MIN_MS = 2000/.test(A9) && /25 \* el \/ READ_MIN_MS/.test(A9) && /prefers-reduced-motion/.test(A9) && /setTimeout\(fin, rest\)/.test(A9) ? 1 : 0, 1, 'Progression : « Lecture de vos fichiers… » affichée au moins 2 s, montée fluide 0 → 25 %');
     eq(/linear-gradient\(90deg,#22d3ee,#10b981\);box-shadow:[^;]*;transition:transform \.12s linear/.test(C9) && /prefers-reduced-motion:reduce\)\{\.kxfill\{transition:none\}/.test(C9) ? 1 : 0, 1, 'Progression : bleu-vert avec halo, fluide, mouvement réduit respecté');
     eq(/header \.sub\{font-size:1\.04em;font-weight:700[^}]*color:#fff[^}]*text-shadow/.test(C9) && !/header \.sub\{[^}]*animation/.test(C9) && !/#f59e0b\)?;box-shadow|kxfill\{[^}]*#f59e0b/.test(C9) ? 1 : 0, 1, 'Sous-titre blanc sobre, contour gris, sans animation ; barre sans orange'); }
@@ -157,19 +201,19 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
 // CSP : chaque hôte appelé par le code doit figurer dans connect-src
 {
   const fs = require('fs'), html = fs.readFileSync(__dirname + '/index.html', 'utf8'), csp = (html.match(/connect-src ([^;"]*)/) || [])[1] || '';
-  const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github/.test(h));
+  const hosts = [...new Set((fs.readFileSync(__dirname + '/pipeline.js', 'utf8') + fs.readFileSync(__dirname + '/app.js', 'utf8')).match(/https:\/\/[a-z0-9.-]+/g))].filter(h => !/impots|github|ko-fi\.com/.test(h)); // ko-fi.com : simple lien de navigation, jamais appelé
   { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), D = (H.match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0], A = fs.readFileSync(__dirname + '/app.js', 'utf8'), P = fs.readFileSync(__dirname + '/pipeline.js', 'utf8');
     eq(D ? 1 : 0, 1, 'Panneau vie privée présent');
     eq(H.includes('<footer><span class="law">Art. 150 VH bis CGI') && !/footline|Fiscalité Française<\/span>/.test(H) ? 1 : 0, 1, 'Pied de page sans répétition du titre');
-    eq(/<\/footer>\s*<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page');
-    eq(/revolut|code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni Revolut ni « code ouvert »');
+    eq(/<\/footer>\s*(<p class="kofifoot">[\s\S]*?<\/p>\s*)?(<dialog id="why"[\s\S]*?<\/dialog>\s*)?<p class="privlink"><a href="#vie-privee" id="privopen">/.test(H) ? 1 : 0, 1, 'Lien discret sous le pied de page'); eq(!/class="signature"/.test(H) ? 1 : 0, 1, 'Plus de signature en pied de page (seulement sous le logo)'); eq(/<h1>Kry<span class="ptax">ptax<\/span><span class="hsig" aria-hidden="true">Made by Damien M\. with Grok Bot<\/span><\/h1>/.test(H) ? 1 : 0, 1, 'Signature fine sous « ptax » du logo'); { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'); eq(/addEventListener\('resize', run\)/.test(AP) && /fonts\.ready\.then\(run\)/.test(AP) && /new ResizeObserver\(run\)/.test(AP) && /addEventListener\('load', run\)/.test(AP) && /getImageData/.test(AP) && /setTimeout\(run, 300\); setTimeout\(run, 1000\)/.test(AP) && /canvasFont\(h, 'ptax'/.test(AP) && /const L = L0 \+ \(PC \? 0\.16 \* px : 0\);/.test(AP) && /a0\[0\] \* k \+ \(PC \? 38 : 0\)/.test(AP) && /matchMedia\('\(min-width: 768px\)'\)\.matches && !matchMedia\('\(pointer: coarse\)'\)/.test(AP) ? 1 : 0, 1, 'Signature : de la hampe du p au bord du x, mesurée (encre réelle), recalculée au resize et après les polices'); } eq((H.match(/seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale/g) || []).length, 2, 'Avertissement de non-responsabilité : pied de page + mentions légales');
+    eq(new RegExp(['rev', 'olut'].join(''), 'i').test(D + H.replace(/<[^>]*>/g, '')) || /code ouvert/i.test(D + H.replace(/<[^>]*>/g, '')) ? 1 : 0, 0, 'Ni nom de plateforme ni « code ouvert »');
     eq(/style="/.test(H + A) ? 1 : 0, 0, 'Aucun style inline (CSP)');
     eq(/goatcounter|gtag|plausible|analytics|document\.cookie|cryptocompare|cckey/i.test(H + A + P) ? 1 : 0, 0, 'Pas de mesure d’audience, cookie ni clé API');
     const names = {'api.binance.com':'Binance','data-api.binance.vision':'Binance','api.gateio.ws':'Gate.io','www.okx.com':'OKX','coins.llama.fi':'DefiLlama','api.bitget.com':'Bitget','www.bitstamp.net':'Bitstamp','api.crypto.com':'Crypto.com','api.exchange.coinbase.com':'Coinbase','api.kraken.com':'Kraken','api.coingecko.com':'CoinGecko','api.geckoterminal.com':'GeckoTerminal','api.frankfurter.dev':'Frankfurter'};
-    const used = [...new Set((P + A).match(/https:\/\/[a-z0-9.-]+/g).map(u => u.slice(8)))];
+    const used = [...new Set((P + A).match(/https:\/\/[a-z0-9.-]+/g).map(u => u.slice(8)))].filter(h => h !== 'ko-fi.com'); // lien de don (navigation), pas une source de cours
     eq(used.filter(h => !names[h] || !D.includes(names[h])).length, 0, 'Chaque source appelée est citée');
     eq(Object.keys(names).filter(h => !used.includes(h)).length, 0, 'Aucune source citée non appelée');
-    eq(D.includes('Réinitialiser') && D.includes('pas un conseil fiscal') ? 1 : 0, 1, 'Réinitialiser + aide au calcul cités'); }
+    eq(D.includes('Réinitialiser') && D.includes('un conseil fiscal') ? 1 : 0, 1, 'Réinitialiser + aide au calcul cités'); }
   { const A2 = fs.readFileSync(__dirname + '/app.js', 'utf8'); eq(/Aucune erreur<\/div>'\)[^\n]*\.join\(''\) \+ specialNote\(X\.special\(txs, fyear\)\) \+ tot/.test(A2) && /<details class="note spec" id="special">/.test(A2) && A2.includes('Voir le PDF') ? 1 : 0, 1, 'Message replié « opérations particulières » sous « Aucune erreur »'); }
   const miss = hosts.filter(h => !csp.split(/\s+/).includes(h)); eq(miss.length, 0, 'CSP connect-src couvre tous les hôtes appelés' + (miss.length ? ' (manque ' + miss.join(', ') + ')' : ''));
 }
@@ -299,38 +343,24 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/currentBlockers\(\)[\s\S]*if \(b\.length\) \{ pdfRefused\(b\); return false; \}[\s\S]*if \(pdfBusy\) return false/.test(d) ? 1 : 0, 1, 'PDF : blocage imposé dans la génération (erreur, double clic)');
     { const dd = A.slice(A.indexOf('function downloadPdf'), A.indexOf('function specialNote')), ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
       eq(/showPdf\(/.test(dd) && !/\.download\s*=/.test(dd) ? 1 : 0, 1, 'PDF : affiché d’abord (aperçu), pas de téléchargement direct');
-      eq(/id="pdfview"/.test(ih) && /id="pvsave"[^>]*>Enregistrer le PDF</.test(ih) && /Voir mon PDF/.test(A) ? 1 : 0, 1, 'Aperçu : bouton « Enregistrer le PDF » après la pub « Voir mon PDF »');
+      eq(/id="pdfview"/.test(ih) && /id="pvsave"[^>]*>Enregistrer le PDF</.test(ih) ? 1 : 0, 1, 'Aperçu : bouton « Enregistrer le PDF » dans l’aperçu');
       eq(/a\.download = pvName/.test(A) && /getDocument\(/.test(A.slice(A.indexOf('async function showPdf'))) ? 1 : 0, 1, 'Aperçu rendu en images (pdf.js), enregistrement seulement sur demande'); }
-    eq(/if \(e\.target\.id === 'pdfx'\) \{ if \(adSeen\) \{ adDone = true; downloadPdf\(\); adDone = false; \} else openAdGate\(\); \}/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton ouvre la pub, message non bloquant');
-    { const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'); eq(/^var AD_VIDEO_S = 15;[^\n]*\nvar AD_SKIP_S = 5;/m.test(AJ) && /videoS: AD_VIDEO_S, skipS: AD_SKIP_S, slides: \[V_BATTLE, V_CHAT\]/.test(AJ) ? 1 : 0, 1, 'Pub vidéo : 15 s, saut après 5 s, réglages en haut de ad.js'); }
-    eq(/if \(!adDone\) return false;/.test(d) && /if \(el < AD_SKIP_S\)[^\n]*return; \}/.test(A) && /adDone = true; cnt\.textContent = 'Vous pouvez passer la pub\.'/.test(A) && /Vous pourrez passer la pub dans \$\{n\}…/.test(A) ? 1 : 0, 1, 'Pub vidéo : décompte 5 s puis « Passer la pub ▸ », PDF seulement ensuite');
-    const ag = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="adgate"[\s\S]*?<\/dialog>/) || [''])[0];
-    eq(/aria-describedby="adgatecount"/.test(ag) && /role="status" aria-live="polite"/.test(ag) && /Publicité — exemple fictif/.test(ag) && /id="adgatego"[^>]*hidden>Passer la pub ▸/.test(ag) && !/style=|<script|<video|https?:|revolut|csv/i.test(ag) ? 1 : 0, 1, 'Pub vidéo : dialogue accessible, fictive, sans vidéo externe ni inline');
-    eq(/let adDone = false, adTimer = null, adSeen = false;/.test(A) && !/localStorage[^\n]*adSeen|adSeen[^\n]*localStorage/.test(A) && (A.match(/adSeen = true/g) || []).length === 2 && /if \(!adDone\) return; adSeen = true;/.test(A) ? 1 : 0, 1, 'Pub vidéo : passée ou terminée = vue (mémoire seulement) ; fermer par ✕ = pub revue');
+    eq(/if \(e\.target\.id === 'pdfx'\) downloadPdf\(\);/.test(A) && !/alert\(/.test(d) ? 1 : 0, 1, 'PDF : le bouton lance directement la génération, message non bloquant');
     eq(/const RETRY_DELAY_MS = 1000, AUTO_MAX = 10;/.test(A) && /k <= 5 \? RETRY_DELAY_MS : RETRY_DELAY_MS \* Math\.min\(2 \*\* \(k - 5\), 10\)/.test(A) && !/Nouvelle tentative \$\{k\}/.test(A) && /après \$\{AUTO_MAX\} tentatives automatiques/.test(A) ? 1 : 0, 1, 'Relance auto : 1 s, plafond 10, backoff après la 5e, message final');
     eq(['fyear = +e.target.value', 'dirty = true; window.__kxDone', "data-del')) return; cancelAuto()", 'cancelAuto(); txs = []', 'cancelAuto(); save(); dirty = !!txs.length', 'seront effacés.\')) return; cancelAuto();'].filter(x => { const i = A.indexOf(x); return i > 0 && A.slice(Math.max(0, i - 60), i + x.length + 20).includes('cancelAuto()'); }).length, 6, 'Relance auto annulée : année, import, retrait de fichier, effacement, réinitialisation');
     eq(/renderResults\(\); bar\.end\(!failed\); scheduleAuto\(failed\);/.test(A) && /lastEst = new Set\(AA\.retry\.filter\(x => !unk\.includes\(x\)\)\)/.test(A) ? 1 : 0, 1, 'Relance auto : déclenchée après chaque calcul tant qu’un cours est estimé');
     const XP = require('fs').readFileSync(__dirname + '/export.js', 'utf8');
     eq(/id="precsum">\$\{esc\(precText\(PP\)\)\}<\/p>/.test(A) && !/`C\$\{i \+ 1\} \(/.test(A) ? 1 : 0, 1, 'Interface : résumé de précision seul, sans liste C1…Cn');
-    eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} opération/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
-    eq(/window\.KryptaxAd = \{ img: IMG,/.test(require('fs').readFileSync(__dirname + '/ad.js', 'utf8')) ? 1 : 0, 1, 'Pub export : image réutilisée depuis ad.js');
+    eq(/c\.date\.slice\(0, 16\) \+ \(c\.prec \? '\\n' \+ c\.prec : ''\)/.test(XP) && /\['Précision des cours', x\.prec\]/.test(XP) && /Cours pris à la minute pour \$\{P\.m\} cession/.test(A) && /withPrec\(X\.exportData/.test(A) ? 1 : 0, 1, 'PDF et interface : précision par cession + « Cours pris à la minute pour X opérations sur Y »');
     eq(['calc', 'imports', 'holders', 'import', 'cours', 'estime'].every(k => A.includes("k: '" + k + "'")) ? 1 : 0, 1, 'PDF : 6 causes bloquantes');
     eq(/#pdfx\.off\{/.test(C) && /aria-disabled/.test(A) ? 1 : 0, 1, 'PDF : bouton grisé + aria-disabled');
     }
   { const pv = (require('fs').readFileSync(__dirname + '/index.html', 'utf8').match(/<dialog id="privacy"[\s\S]*?<\/dialog>/) || [''])[0];
-    eq(!/pas de publicité/i.test(pv) && /publicités fictives de démonstration/.test(pv) && /aucune régie publicitaire/.test(pv) && /consentement aux cookies/.test(pv) && !/revolut/i.test(pv) ? 1 : 0, 1, 'Vie privée : publicité fictive décrite honnêtement, consentement prévu'); }
-  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8'), ad = (ih.match(/<aside class="adslot" aria-label="Publicité">[\s\S]*?<\/aside>/) || [''])[0];
-    eq((ih.match(/class="adslot"/g) || []).length, 1, 'Pub : un seul encart <aside class="adslot">');
-    eq((ih.match(/class="adrail adrail-[lr]"/g) || []).length === 2 && /\.adrail\{display:none\}/.test(C) && /@media \(min-width:1024px\)\{[\s\S]*\.adslot\{display:none\}/.test(C) ? 1 : 0, 1, 'Pub PC : 2 bandeaux verticaux, encart du bas masqué ; mobile inchangé');
-    { const AJ2 = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'); eq(/ROTATE_MS = 8000/.test(AJ2) && /prefers-reduced-motion/.test(AJ2) && /CHOC/.test(AJ2) && !/ChatCoquin|Rencontre coquine/.test(AJ2) ? 1 : 0, 1, 'Pub mobile : alternance des 2 pubs fictives, mouvement réduit respecté'); }
-    eq(ad.includes('<span class="adlabel">Publicité</span>') && ad.includes('Exemple de pub fictive — emplacement réservé') ? 1 : 0, 1, 'Pub : étiquette « Publicité » + mention fictive');
-    eq(!/style=|<script|href=|https?:/.test(ad) && /<\/aside>\s*<\/main>\s*<footer>/.test(ih) ? 1 : 0, 1, 'Pub : sans style inline, script ni lien, juste avant le pied de page');
-    eq(/\.adslot\{[^}]*max-width:100%[^}]*overflow:hidden/.test(C) ? 1 : 0, 1, 'Pub : CSS dans style.css, jamais plus large que l’écran');
-    const AJ = require('fs').readFileSync(__dirname + '/ad.js', 'utf8'), m = AJ.match(/data:image\/jpeg;base64,([A-Za-z0-9+/=]+)/);
-    eq(m && Buffer.from(m[1], 'base64').slice(0, 3).toString('hex') === 'ffd8ff' && m[1].length * 3 / 4 < 80000 && AJ.length < 200000 ? 1 : 0, 1, 'Pub : visuels JPEG intégrés (< 200 Ko au total) dans ad.js');
-    eq(ad.includes('width="640" height="278"') && /aspect-ratio:640\/278/.test(C) && ih.includes('Exemple de pub fictive : ce jeu n’existe pas, l’encart ne mène nulle part.') ? 1 : 0, 1, 'Pub : bandeau 2,3:1 (≈ 146 px à 360 px) + message au tap');
-    eq(ad.includes('alt="Exemple de publicité fictive pour un jeu vidéo médiéval fantastique"') && /<script src="ad\.js\?v=\w+"><\/script>/.test(ih) && !/https?:\/\//.test(AJ) ? 1 : 0, 1, 'Pub : alt, script local, aucun lien externe'); }
-  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span><\/footer>/.test(ih) && !/code ouvert|revolut/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
+    eq(!/<h3>Publicit|pub vidéo|régie|fictive/i.test(pv) && /pas de publicité/.test(pv) && !new RegExp(['rev', 'olut'].join(''), 'i').test(pv) ? 1 : 0, 1, 'Vie privée : aucune publicité, décrit honnêtement'); }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8'), AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+    eq(!/adslot|adrail|adimg|adhit|admsg|adrimg|emplacement réservé/.test(ih + C) && !/CHOC|Barthyl/.test(ih + AP) ? 1 : 0, 1, 'Pub : plus aucun encart (latéraux, bas, mobile), ni CSS associé');
+    eq(!/ad\.js|adgate|av-slide|av-skip|KryptaxAd|adDone|adSeen|openAdGate|Passer la pub|Espace publicitaire|Votre annonce ici/.test(ih + C + AP) && !require('fs').existsSync(__dirname + '/ad.js') && /header,main\{max-width:768px;/.test(C) ? 1 : 0, 1, 'Pub : aucune publicité (ni vidéo, ni ad.js, ni CSS/JS associé)'); }
+  { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'); eq(/<footer><span class="law">Art\. 150 VH bis CGI[^<]*art\. 200 C CGI[^<]*<\/span>(<span class="disclaim">[^<]*<\/span>)?<\/footer>/.test(ih) && !(/code ouvert/i.test(ih.match(/<footer>[\s\S]*<\/footer>/)[0]) || new RegExp(['rev', 'olut'].join(''), 'i').test(ih.match(/<footer>[\s\S]*<\/footer>/)[0])) ? 1 : 0, 1, 'Pied de page : articles de loi (150 VH bis, 200 C)'); }
   { // Fuseaux (données fictives) : relevés en UTC, affichage et année fiscale en heure de Paris
     const u = (s, tz) => E.parseDate(s, 'DMY', tz);
     eq(E.fmtParis(u('27 sept. 2026, 00:13:00', 'UTC')) === '27/09/2026 02:13' ? 1 : 0, 1, 'Relevé UTC 27/09 00:13 → 02:13 heure de Paris (été, UTC+2)');
@@ -352,8 +382,42 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(/isUnlocked|cadenas|🔒/.test(app) ? 1 : 0, 0, 'PDF sans verrou');
   { const ih = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), d = (ih.match(/<dialog id="donepop"[\s\S]*?<\/dialog>/) || [''])[0];
     eq(/Formulaire 2086 généré avec succès/.test(d) && /id="donego"[^>]*>Voir mon formulaire/.test(d) && /aria-live="polite"/.test(d) && /id="doneclose"/.test(d) && !/style=|<script/.test(d) ? 1 : 0, 1, 'Popup de fin : titre, bouton résultats, croix, aria-live, sans inline');
-    eq(/scheduleAuto\(failed\); if \(!failed\) showDone\(\);/.test(app) && /end\(ok\) \{ clearInterval\(timer\); if \(!ok\) \{ live = false;/.test(app) && /const fin = \(\) => \{ live = false;/.test(app) && /if \(live && /.test(app) ? 1 : 0, 1, 'Fin de calcul : cadre de chargement retiré, popup seulement si réussi'); }
+    eq(/scheduleAuto\(failed\); if \(!failed\) showDone\(\);/.test(app) && /end\(ok\) \{ clearInterval\(timer\); if \(!ok\) \{ live = false;/.test(app) && /const fin = \(\) => \{ fin0 = performance\.now\(\);/.test(app) && /if \(live && /.test(app) ? 1 : 0, 1, 'Fin de calcul : cadre de chargement retiré, popup seulement si réussi'); }
   eq(!/Nouvelle tentative \$\{k\}/.test(app) && /const quiet = autoTry > 0;/.test(app) && /if \(!quiet\) w\.hidden = false/.test(app) && /autoInd\(true\)/.test(require('fs').readFileSync(__dirname + '/app.js', 'utf8')) && /id="autoind"[^>]*aria-live="polite"[^>]*hidden>/.test(require('fs').readFileSync(__dirname + '/index.html', 'utf8')) ? 1 : 0, 1, 'Relance auto discrète : ni barre ni compte à rebours, petit indicateur');
   eq(/if \(btn && !b\.length && !runCtl\) \{ btn\.click\(\); return; \}/.test(app) && /if \(btn && b\.length\) pdfRefused\(b\);/.test(app) ? 1 : 0, 1, 'Popup : « Voir mon formulaire » = parcours Voir le PDF (pub puis aperçu), sinon explique pourquoi');
+  // Transferts entre mes comptes (données FICTIVES) : jamais une cession, PRU et 212 corrects
+  { const D = (m, d) => Date.UTC(2025, m, d, 10), P = a => a === 'BTC' ? 40000 : null, H = 3600e3;
+    const base = () => [{ id: 'b1', date: D(0, 5), type: 'BUY', asset: 'BTC', qty: 1, eur: 30000, fee: 100 }], sell = () => ({ id: 's9', date: D(5, 1), type: 'SELL', asset: 'BTC', qty: 0.1, eur: 4000, fee: 0 });
+    const ref = E.compute([...base(), sell()], P).cessions[0];
+    let T = [...base(), { id: 'w1', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 0.9995, feeQty: 0.0005, eur: 0, source: 'A.csv' }, { id: 'd1', date: D(1, 1) + 10 * 60e3, type: 'RECEIVE', asset: 'BTC', qty: 0.9995, eur: 0, source: 'B.csv' }, sell()];
+    E.detectSwaps(T); let r = E.compute(T, P);
+    eq(T[1].xferWith === 'd1' && T[2].xferWith === 'w1' && !E.openSends(T).length ? 1 : 0, 1, 'Transfert : retrait A + dépôt B appariés');
+    eq(r.cessions.length, 1, 'Transfert : seule la vente est une cession'); eq(r.cessions[0].l212, 0.9995 * 40000, 'Transfert : 212 = solde réel (frais réseau déduits)');
+    eq(r.cessions[0].l220, 30100, 'Transfert : 220 inchangé'); eq(r.cessions[0].l221, 0, 'Transfert : 221'); eq(r.cessions[0].l224, 4000 - 30100 * 4000 / (0.9995 * 40000), 'Transfert : 224');
+    T = [...base(), { id: 'w2', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 1, eur: 0 }, { id: 'f2', date: D(1, 1), type: 'FEE', asset: 'BTC', qty: 0.0005, eur: 0 }, { id: 'd2', date: D(1, 1) + 2 * H, type: 'RECEIVE', asset: 'BTC', qty: 0.9995, eur: 0 }, sell()];
+    E.detectSwaps(T); r = E.compute(T, P); eq(T[1].xferWith === 'd2' && r.cessions.length === 1 ? 1 : 0, 1, 'Transfert : frais réseau en ligne séparée, apparié, non imposable');
+    T = [...base(), { id: 'w3', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 1, eur: 35000 }, { id: 'd3', date: D(1, 1) + 1, type: 'RECEIVE', asset: 'BTC', qty: 1, eur: 35000 }, sell()];
+    E.detectSwaps(T); r = E.compute(T, P); eq(r.cessions.length === 1 && r.cessions[0].l220 === 30100 ? 1 : 0, 1, 'Transfert valorisé : ni cession ni 220 gonflé');
+    T = [...base(), { id: 'w4', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 1 }, { id: 'd4', date: D(1, 1) + 49 * H, type: 'RECEIVE', asset: 'BTC', qty: 1 }, { id: 'w5', date: D(2, 1), type: 'SEND', asset: 'BTC', qty: 0.5 }, { id: 'd5', date: D(2, 1) + H, type: 'RECEIVE', asset: 'BTC', qty: 0.6 }];
+    E.detectSwaps(T); eq(E.openSends(T).length, 2, 'Transfert : dépôt après 48 h ou supérieur au retrait non apparié');
+    for (const s of ['Withdrawal', 'Deposit', 'Transfer out', 'Transfer in', 'Retrait', 'Dépôt']) eq(['SEND', 'RECEIVE'].includes(E.guessType(s, true)) ? 1 : 0, 1, 'Type transfert reconnu : ' + s);
+    // Retrait seul (portefeuille B non importé) : à qualifier ; sans choix, 212 serait sous-évalué
+    const one = c => { const L = [{ id: 'b1', date: D(0, 5), type: 'BUY', asset: 'BTC', qty: 1, eur: 30000, fee: 0 }, { id: 'w6', date: D(1, 1), type: 'SEND', asset: 'BTC', qty: 0.9, feeQty: 0.001, eur: 0 }, { id: 's6', date: D(5, 1), type: 'SELL', asset: 'BTC', qty: 0.1, eur: 4000, fee: 0 }]; if (c) L[1].sendChoice = c; E.detectSwaps(L); return { L, r: E.compute(L, () => 40000).cessions[0] }; };
+    eq(E.openSends(one().L).length, 1, 'Retrait sans dépôt : signalé, à qualifier'); eq(E.openSends(one('own').L).length, 0, 'Retrait qualifié : plus bloquant');
+    eq(one('own').r.l212, 0.999 * 40000, 'Retrait « vers mon portefeuille non importé » : reste dans 212 (hors frais)'); eq(one('own').r.l224, 4000 - 30000 * 4000 / 39960, 'Retrait « mon portefeuille » : 224 correct');
+    { const g = one('gift'), rg = E.compute(g.L, () => 40000); eq(g.r.l212, 0.099 * 40000, 'Retrait « Frais, perte ou don » : retiré du solde'); eq(rg.cessions.length === 1 && rg.cessions[0].tx.id === 's6' && rg.cessions[0].l220 === 30000 ? 1 : 0, 1, 'Retrait « Frais, perte ou don » : aucune ligne 211+, 220 inchangé'); }
+    { const sl = one('sale'), rs = E.compute(sl.L, () => 40000), c0 = rs.cessions[0], need = E.neededPrices(sl.L);
+      eq(rs.cessions.length, 2, 'Retrait « Paiement ou vente oubliée » : devient une cession (211+)'); eq(c0.tx.id === 'w6' && c0.fromSend ? 1 : 0, 1, 'Retrait « Paiement ou vente oubliée » : cession à la date du retrait');
+      eq(c0.l213, 0.9 * 40000, 'Retrait « Paiement ou vente oubliée » : 213 = quantité × cours du moment'); eq(c0.l212, 40000, 'Retrait « Paiement ou vente oubliée » : 212 = portefeuille avant la sortie');
+      eq(c0.l224, 36000 - 30000 * 36000 / 40000, 'Retrait « Paiement ou vente oubliée » : 224'); eq(need.some(n => n.asset === 'BTC' && n.txId === 'w6') ? 1 : 0, 1, 'Retrait « Paiement ou vente oubliée » : cours du moment demandé aux fournisseurs');
+      const rn = E.compute(sl.L, () => null).cessions[0]; eq(rn.l224 === null && rn.missing.includes('BTC') ? 1 : 0, 1, 'Retrait « Paiement ou vente oubliée » sans cours : à renseigner, jamais 0 €'); } eq(one('ignore').r.l212, 40000, 'Retrait « Ignorer » : aucun effet');
+    const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
+    eq(/E\.openSends\(txs\)\.length; if \(n\) b\.push\(\{ k: 'xfer'/.test(AP) && /Vers mon portefeuille non importé/.test(AP) && /Frais, perte ou don/.test(AP) && /'sale', 'Paiement ou vente oubliée'/.test(AP) && /'ignore', 'Ignorer'/.test(AP) && /id="xfers"/.test(IH) ? 1 : 0, 1, 'Retraits sans dépôt : choix obligatoire avant l’export PDF'); }
+  { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
+    eq(/<p class="kofifoot"><button type="button" id="whyopen"[^>]*>.*Pourquoi Kryptax \?.*<\/button><button type="button" id="kofi2"[^>]*aria-haspopup="dialog" aria-label="Soutenir Kryptax, merci"><span aria-hidden="true">☕ Soutenir Kryptax 🙏<\/span><\/button><\/p>/.test(IH) && /<button type="button" id="kofi" class="btn kofi" aria-haspopup="dialog" aria-label="Soutenir Kryptax, merci" hidden>☕ Soutenir Kryptax 🙏<\/button>/.test(IH) && /<dialog id="merci"[^>]*>[\s\S]*Merci pour ton soutien 🙏<\/h2><p id="mercitext">Bientôt, tu pourras faire un don au développeur\. En attendant, Kryptax reste gratuit pour tout le monde\.<\/p>[\s\S]*id="merciok" class="btn">Fermer<\/button>/.test(IH) && !/ko-fi\.com/i.test(IH + AP) && /<dialog id="why" aria-labelledby="whytitle">[\s\S]*Pourquoi j'ai créé Kryptax<\/h2><p>Débutant dans la crypto en 2026[\s\S]*plusieurs dizaines d'euros rien que pour obtenir un simple PDF\.[\s\S]*Si ça t'a servi, un petit café fait toujours plaisir ☕<\/p>/.test(IH) && !new RegExp(['rev', 'olut'].join(''), 'i').test(IH) && !/srcbtn|Code source/.test(IH + AP) && /const KOFI_NOTE = false;/.test(AP) && /\['#kofi', '#kofi2'\]\.forEach/.test(AP) ? 1 : 0, 1, 'Soutenir : 2 boutons sans lien externe → fenêtre « Merci pour ton soutien », bio à jour, mention « Dons » masquée');
+    eq(/function savePdf\(\) \{ showKofi\(\);/.test(AP) && /<div id="kofinote" hidden>/.test(IH) ? 1 : 0, 1, 'Soutenir : bouton affiché après l’enregistrement du PDF, mention « Dons » masquée'); }
+  eq(require('fs').readFileSync(__dirname + '/index.html', 'utf8').includes('<p>Éditeur : Damien M. alias « Sanarkor ». Hébergement : GitHub Pages (GitHub, Inc.).</p>') ? 1 : 0, 1, 'Mentions : éditeur Damien M. alias « Sanarkor »');
   process.exit(ok ? 0 : 1);
 })();
+{const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
+{const C=require('fs').readFileSync(__dirname+'/style.css','utf8');const h=/0 0 6px rgba\(255,255,255,\.35\)/;const a=(C.match(/header \.sub\{font-size:1\.04em[^}]*\}/)||[''])[0],b=(C.match(/header \.sub2\{[^}]*\}/)||[''])[0];if(!h.test(a)||!h.test(b))throw new Error('halo sous-titres');console.log('halo ok');}
