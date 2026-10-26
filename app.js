@@ -1,7 +1,6 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
-  const KOFI_URL = 'https://ko-fi.com/sanarkor'; // page Ko-fi de Damien (vide = boutons masqués ; don-test.html reste dans le dépôt mais n'est plus utilisée)
   const KOFI_NOTE = false; // mention légale « Dons » masquée tant que le paiement Ko-fi n'est pas connecté : passer à true pour la réafficher (#kofinote)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
@@ -102,7 +101,10 @@
         const ok = sh.filter(r => KF.detect(r) || (() => { const m = guessMap((r[KF.headerRow(r)] || []).map(String)); return m.date != null && (m.qty != null || m.asset != null); })());
         if (ok.length > 1) holdInfo = file.name + ' : ' + ok.length + ' feuilles lisibles, seule la première est importée.';
         showMapping(file.name, ok[0] || sh[0] || [], true);
-      } else showMapping(file.name, parseCSV(await file.text()), false);
+      } else { const rows = parseCSV(new Uint8Array(await file.arrayBuffer())), I = rows.info || {};
+        const sig = [I.repl ? I.repl + ' caractère' + (I.repl > 1 ? 's' : '') + ' illisible' + (I.repl > 1 ? 's' : '') + ' « � » (encodage ' + I.enc + ')' : '', I.short && I.short.length ? I.short.length + ' ligne' + (I.short.length > 1 ? 's' : '') + ' incomplète' + (I.short.length > 1 ? 's' : '') + ' (cellules vides : ligne' + (I.short.length > 1 ? 's ' : ' ') + I.short.slice(0, 5).join(', ') + (I.short.length > 5 ? '…' : '') + ')' : '', I.merged && I.merged.length ? I.merged.length + ' quantité' + (I.merged.length > 1 ? 's' : '') + ' décimale' + (I.merged.length > 1 ? 's' : '') + ' sans guillemets recollée' + (I.merged.length > 1 ? 's' : '') + ' (ligne' + (I.merged.length > 1 ? 's ' : ' ') + I.merged.slice(0, 5).join(', ') + ')' : ''].filter(Boolean);
+        if (sig.length) holdInfo = file.name + ' : ' + sig.join(' ; ') + '. Vérifiez ces lignes.';
+        showMapping(file.name, rows, false); }
     } catch (err) { showErr(file.name + ' : fichier illisible. Vérifiez qu\'il s\'agit bien d\'un relevé PDF, CSV ou Excel.'); } }
   }
   $('#files').addEventListener('change', async e => { await handleFiles(Array.from(e.target.files)); e.target.value = ''; });
@@ -268,7 +270,7 @@
   }
   /* Valeurs à confirmer (virgule perdue ambiguë, valeur manquante sans cours) : même principe que les retraits orphelins */
   function reconBox() {
-    const L = txs.filter(t => t.reconPending); if (!L.length) return '';
+    const L = txs.filter(t => t.reconPending && t.tab); if (!L.length) return '';
     const opt = t => { const R = t.reconPending, p = R.price; return (R.choices || []).map(q => `<option value="${q}">${num(q)} ${esc(t.asset)}${p ? ' (≈ ' + eur(q * p) + ')' : ''}</option>`).join(''); };
     return `<div class="xbox xopen" id="recons"><p class="xtitle">⚠️ ${L.length} valeur${L.length > 1 ? 's' : ''} à confirmer : la virgule ou la valeur manque dans le fichier, plusieurs hypothèses sont possibles.</p>
       <p class="hint">Choisir avant l’export PDF (comparez avec l’application de votre plateforme).</p>
@@ -591,7 +593,7 @@
   }
   function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); n += p.n; m += p.nMin; return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
   const precText = P => `Cours pris à la minute pour ${P.m} opération${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
-  function withPrec(x) { { const R = KP.reconList(txs); x.recon = R.length ? R.length + ' valeur' + (R.length > 1 ? 's' : '') + ' reconstruite' + (R.length > 1 ? 's' : '') + ' (fichiers CSV/Excel incomplets) : ' + R.slice(0, 12).map(r => r.asset + ' ' + r.field + ' ' + r.raw + ' -> ' + (+r.val).toPrecision(8).replace(/\.?0+$/, '') + ' (' + r.method + ', confiance ' + r.conf + ')').join(' ; ') + (R.length > 12 ? ' ; ...' : '') + '.' : ''; } const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
+  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = P.L[i] || ''; }); x.prec = (P.n ? precText(P) : '') + (lastIgn.length ? (P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
@@ -601,7 +603,7 @@
     if (dirty) b.push({ k: 'imports', msg: 'vos imports ont changé : touchez « Valider mes imports » pour recalculer.' });
     if (KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') b.push({ k: 'holders', msg: 'vos relevés semblent appartenir à des personnes différentes : retirez le fichier concerné.' });
     if ($('#err') && !$('#err').hidden) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
-    { const n = txs.filter(t => t.reconPending).length; if (n) b.push({ k: 'recon', msg: `${n} valeur${n > 1 ? 's' : ''} reconstruite${n > 1 ? 's' : ''} à confirmer (plusieurs hypothèses ou confiance faible) : choisissez dans « 1. Importer ».` }); }
+    { const n = txs.filter(t => t.reconPending && t.tab).length; if (n) b.push({ k: 'recon', msg: `${n} valeur${n > 1 ? 's' : ''} reconstruite${n > 1 ? 's' : ''} à confirmer (plusieurs hypothèses ou confiance faible) : choisissez dans « 1. Importer ».` }); }
     { const n = E.openSends(txs).length; if (n) b.push({ k: 'xfer', msg: `${n} retrait${n > 1 ? 's' : ''} sans dépôt correspondant : choisissez leur traitement dans « 1. Importer ».` }); }
     if (t && t.incomplete) b.push({ k: 'cours', rerun: true, msg: 'des cours sont introuvables, le résultat est incomplet : relancez le calcul.' });
     else if (est && est.size) b.push({ k: 'estime', rerun: true, msg: 'un cours est seulement estimé (≈) : relancez le calcul ou saisissez le cours.' });
@@ -645,12 +647,18 @@
     } catch (e) { box.innerHTML = '<p class="hint">Aperçu indisponible sur cet appareil : utilisez « Ouvrir dans le navigateur » ou « Enregistrer le PDF ».</p>'; }
     box.setAttribute('aria-busy', 'false');
   }
-  /* Bouton de don Ko-fi : affiché seulement si KOFI_URL est renseignée (adresse de la page Ko-fi) */
-  const kofiReal = (() => { try { const u = new URL(KOFI_URL); return u.protocol === 'https:' && u.hostname === 'ko-fi.com' && u.pathname.length > 1; } catch (e) { return false; } })();
-  const kofiTest = KOFI_URL === 'don-test.html';
-  const kofiOk = kofiReal || kofiTest;
-  { const k = $('#kofi'), k2 = $('#kofi2'), n = $('#kofinote'); if (k && kofiOk) k.href = KOFI_URL; if (k2 && kofiOk) { k2.href = KOFI_URL; k2.hidden = false; } if (n) n.hidden = !(kofiReal && KOFI_NOTE); } /* bas de page : visible d'emblée */
-  const showKofi = () => { const k = $('#kofi'); if (k && kofiOk) k.hidden = false; };
+  /* Boutons « Soutenir » : petite fenêtre de remerciement (aucun lien externe tant que les dons ne sont pas ouverts) */
+  { const n = $('#kofinote'); if (n) n.hidden = !KOFI_NOTE; }
+  { const d = $('#merci'), x = $('#merciclose'), ok = $('#merciok'); let from = null;
+    if (d && x && ok) {
+      const close = () => { if (d.close) d.close(); else d.removeAttribute('open'); };
+      const open = e => { from = e.currentTarget; if (d.showModal) d.showModal(); else d.setAttribute('open', ''); ok.focus(); };
+      ['#kofi', '#kofi2'].forEach(s => { const b = $(s); if (b) b.addEventListener('click', open); });
+      x.addEventListener('click', close); ok.addEventListener('click', close); d.addEventListener('close', () => { if (from) from.focus(); });
+      d.addEventListener('click', e => { if (e.target !== d) return; const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close(); });
+      d.addEventListener('keydown', e => { if (e.key !== 'Tab') return; const f = [...d.querySelectorAll('button')], a0 = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a0) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a0.focus(); } });
+    } }
+  const showKofi = () => { const k = $('#kofi'); if (k) k.hidden = false; };
   function savePdf() { showKofi();
     if (!pvBlob) return;
     const f = typeof File === 'function' ? new File([pvBlob], pvName, { type: 'application/pdf' }) : null;

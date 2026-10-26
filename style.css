@@ -214,8 +214,10 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 .fbtn{display:inline-flex;align-items:center;justify-content:center;gap:.3em;font-size:.85rem;padding:.4em .8em;white-space:nowrap;text-decoration:none;line-height:1.2;box-sizing:border-box;min-width:0}
 .fbtn[hidden]{display:none}.fbtn .fs{display:none}
 @media (max-width:420px){.kofifoot{gap:6px}.fbtn{font-size:.8rem;padding:.4em .6em}.fbtn .fl{display:none}.fbtn .fs{display:inline}}
-#why{max-width:min(560px,calc(100vw - 24px));width:100%;box-sizing:border-box;max-height:85vh;overflow:auto;padding:0;border:1px solid #334155;border-radius:12px;background:#0f172a;color:#e2e8f0}#why::backdrop{background:rgba(0,0,0,.6)}
-#why .pv-in{padding:16px 18px;font-size:.92rem;line-height:1.5;overflow-wrap:break-word}#why h2{margin:0 0 10px;font-size:1.1rem;padding-right:36px}#why p{margin:0 0 8px}.why-x{position:sticky;top:0;height:0;margin:0!important;text-align:right}
+#why,#merci{max-width:min(560px,calc(100vw - 24px));width:100%;box-sizing:border-box;max-height:85vh;overflow:auto;padding:0;border:1px solid #334155;border-radius:12px;background:#0f172a;color:#e2e8f0}#why::backdrop,#merci::backdrop{background:rgba(0,0,0,.6)}
+#why .pv-in,#merci .pv-in{padding:16px 18px;font-size:.92rem;line-height:1.5;overflow-wrap:break-word}#why h2,#merci h2{margin:0 0 10px;font-size:1.1rem;padding-right:36px}#why p,#merci p{margin:0 0 8px}.why-x{position:sticky;top:0;height:0;margin:0!important;text-align:right}
 .kofifoot>.fbtn{height:2.4em;min-height:0;margin:0;align-self:center;font-family:inherit}
 .kofifoot>.fbtn{font-weight:600;color:var(--acc)}
 @media (max-width:360px){.kofifoot{gap:5px;padding:0 4px}.kofifoot>.fbtn{font-size:.74rem;padding:.4em .45em}}
+.fhelp{margin:10px 0;padding:8px 12px;border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:8px;background:var(--card2);color:var(--text);font-size:.88em;overflow-wrap:anywhere}.fhelp p{margin:.25em 0}.fhelp-t{font-weight:650;color:var(--acc)}.fhelp-s{display:none}@media (max-width:767px){.fhelp-l{display:none}.fhelp-s{display:block}}
+#merci{max-width:min(420px,calc(100vw - 24px))}.merci-foot{text-align:right;margin:12px 0 0!important}
