@@ -52,7 +52,7 @@
   function twinFix(all) {
     let n = 0;
     for (const t of all) {
-      if (!(t.qtyRaw && (t.reconPending || t.qtyStatus === 'à reconstruire' || t.qtyStatus === 'suspect')) || t.qtyManual) continue;
+      if (!t.tab || !(t.qtyRaw && (t.reconPending || t.qtyStatus === 'à reconstruire' || t.qtyStatus === 'suspect')) || t.qtyManual) continue;
       for (const u of all) {
         if (u === t || u.source === t.source || u.qtyRaw || u.asset !== t.asset || u.type !== t.type) continue;
         const d = Math.abs(u.date - t.date); if (d > 14 * 3600e3 || Math.min(d % 900e3, 900e3 - d % 900e3) > 60e3) continue;
@@ -80,7 +80,7 @@
       const D = Math.min(8, Math.max(0, ...txs.filter(u => u.source === t.source && u.qtyRaw && sure(u)).map(u => dec(u.qty)))) || 8;
       const grp = rec.filter(u => u.asset === t.asset && u.type === t.type && u.source === t.source), ref = Math.max(...grp.map(u => u.qtyRaw)), head = qtyChoices(raw, ref / Math.pow(10, D), 1)[0];
       let ch = qtyChoices(raw, 1, 26); if (p) ch = ch.filter(q => q * p >= 0.001 && q * p <= 5000).sort((a, b) => Math.abs(Math.log10(a * p)) - Math.abs(Math.log10(b * p)));
-      ch = [head].concat(ch.filter(q => q !== head)).slice(0, 4); t.qty = ch[0] != null ? ch[0] : raw; t.qtyStatus = 'à confirmer';
+      const h0 = t.int0 ? raw : head; /* prix arrondi à 0 : l'entier lu est l'hypothèse de tête */ ch = [h0].concat(ch.filter(q => q !== h0)).slice(0, 4); t.qty = ch[0] != null ? ch[0] : raw; t.qtyStatus = 'à confirmer';
       t.reconPending = { field: 'quantité', method: p ? 'hypothèses de virgule (cours historique)' : 'hypothèses de virgule (aucun cours)', choices: ch, price: p || undefined };
     }
   }
@@ -116,11 +116,12 @@
       else type = E.guessType(g('type'), g('desc'), strict);
       if (E.FIATS.includes(asset)) type = 'IGNORE'; // lignes « Autre » : dépôts / change de devises
       if (!type) { bad.push(i); why.push('type inconnu « ' + String(E.fixText(g('type')) || '').slice(0, 30) + ' »'); return; }
-      let qty, qtyStatus = 'ok', qtyRaw; const recon = [], line = i + (o.line0 || 2), blank = x => x == null || String(x).trim() === '';
+      
       const conf = e => e < 0.05 ? 'élevée' : e < 0.15 ? 'moyenne' : 'faible';
+      let qty, qtyStatus = 'ok', qtyRaw; const recon = [], line = i + (o.line0 || 2), blank = x => x == null || String(x).trim() === '';
       let pq = typeof rawQ === 'number' ? rawQ : E.parseNum(rawQ, nm.qty || o.nmode);
       /* virgule perdue : entier (cellule numérique xlsx, ou CSV réenregistré) qui ne colle pas à Valeur / Prix */
-      const lost = Number.isInteger(pq) && pq !== 0 && (o.xlsx ? typeof rawQ === 'number' : (strict && Math.abs(pq) >= 1000 && price > 0 && val > 0 && Math.abs(Math.log10(Math.abs(pq) * price / val)) > 0.5));
+      const lost = Number.isInteger(pq) && pq !== 0 && (o.xlsx ? typeof rawQ === 'number' : (strict && Math.abs(pq) >= 1000 && val > 0 && ((price > 0 && Math.abs(Math.log10(Math.abs(pq) * price / val)) > 0.5) || (price === 0 && !blank(pRaw))))); // prix arrondi à 0 : entier invérifiable → cours historique
       if (lost) {
         const f = E.fixQty(pq, price, val); qty = f.qty; qtyStatus = f.status; qtyRaw = Math.abs(pq);
         if (!(price > 0 && val > 0)) qtyStatus = 'à reconstruire';
@@ -138,9 +139,11 @@
       if (!(price > 0) && isFinite(val) && val > 0 && qty > 0 && blank(pRaw) && mp.price != null && type !== 'IGNORE') recon.push({ field: 'prix', raw: '(vide)', val: val / qty, method: 'montant ÷ quantité', conf: 'élevée' });
       if (price === 0 && !blank(pRaw) && isFinite(val) && val > 0 && qty > 0 && type !== 'IGNORE' && qtyStatus === 'ok') recon.push({ field: 'prix', raw: String(E.fixText(pRaw)), val: val / qty, method: 'prix arrondi à 0 : montant ÷ quantité', conf: 'élevée' });
       const t = { id: uid(), seq: i, line, date, type, feeInKind: o.feeInKind != null ? !!o.feeInKind : /^relev/i.test(o.platform || ''), rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || (recon.some(r => r.field === 'prix') ? val / qty : undefined) };
-      if (recon.length) t.recon = recon; if (eurMissing) t.eurMissing = true;
-      if (qtyStatus === 'suspect' && price > 0 && val > 0) { t.reconPending = { field: 'quantité', choices: qtyChoices(qtyRaw, val / price, 3) }; }
-      if (cur === 'EUR') { t.eur = v || 0; t.fee = fee; } else { t.cur = cur; t.valCur = v || 0; t.feeCur = fee; t.unitPriceCur = price || undefined; t.eur = 0; t.fee = 0; t.unitPrice = undefined; t.fxPending = true; }
+      if (strict) { t.tab = 1; if (lost && price === 0) t.int0 = 1; if (recon.length) t.recon = recon; if (eurMissing) t.eurMissing = true; } // reconstructions : CSV/Excel uniquement (le PDF reste inchangé)
+      else { delete t.line; t.unitPrice = price || undefined; }
+      if (strict && qtyStatus === 'suspect' && price > 0 && val > 0) { t.reconPending = { field: 'quantité', choices: qtyChoices(qtyRaw, val / price, 3) }; }
+      const fCur = strict && /[$£€]|USD|GBP|EUR/.test(E.fixText(String(fRaw || ''))) ? E.currencyOf(E.fixText(String(fRaw))) : cur; // frais dans une autre devise que le montant
+      if (cur === 'EUR') { t.eur = v || 0; t.fee = fee; if (fCur !== 'EUR' && fee > 0) { t.fee = 0; t.cur = fCur; t.valCur = 0; t.feeCur = fee; t.eurKeep = t.eur; t.fxPending = true; } } else if (fCur === 'EUR' && fCur !== cur) { t.cur = cur; t.valCur = v || 0; t.feeCur = 0; t.feeEur = fee; t.unitPriceCur = price || undefined; t.eur = 0; t.fee = 0; t.unitPrice = undefined; t.fxPending = true; } else { t.cur = cur; t.valCur = v || 0; t.feeCur = fee; t.unitPriceCur = price || undefined; t.eur = 0; t.fee = 0; t.unitPrice = undefined; t.fxPending = true; }
       out.push(t);
     });
     return { txs: out, bad, why };
@@ -565,7 +568,7 @@
       for (const t of pending.filter(t => t.cur === cur)) {
         const d = new Date(t.date).toISOString().slice(0, 10); let r = m[d];
         if (!r) { const prev = days.filter(x => x <= d).pop(); r = m[prev] || m[days[0]]; } // jour ouvré précédent
-        if (r) { t.fx = r; t.eur = t.valCur * r; t.fee = t.feeCur * r; if (t.unitPriceCur) t.unitPrice = t.unitPriceCur * r; delete t.fxPending; if (t.qtyStatus === 'suspect' || t.qtyStatus === 'corrigée') { const f = E.fixQty(t.qtyRaw, t.unitPrice, t.eur); t.qty = f.qty; t.qtyStatus = f.status; } }
+        if (r) { t.fx = r; t.eur = t.valCur * r + (t.eurKeep || 0); t.fee = t.feeCur * r + (t.feeEur || 0); if (t.unitPriceCur) t.unitPrice = t.unitPriceCur * r; delete t.fxPending; if (t.qtyStatus === 'suspect' || t.qtyStatus === 'corrigée') { const f = E.fixQty(t.qtyRaw, t.unitPrice, t.eur); t.qty = f.qty; t.qtyStatus = f.status; } }
       }
       log('Taux de change ' + cur, ++k, curs.length); unit('lecture', ++uL, uLT);
     }
@@ -610,7 +613,7 @@
     // 3. quantités tronquées (xlsx)
     const fn = priceLookup(txs, cache, opt.manual, { zeroIfUnknown: true }), obs0 = observed(txs);
     resolveRecon(txs, rec, (a, ts) => fn(a, ts) || obs0(a, ts));
-    for (const t of txs) if (t.eurMissing && !t.eurDone) { const p = fn(t.asset, t.date) || obs0(t.asset, t.date); if (p) { t.eur = p * t.qty; t.eurDone = 1; (t.recon = t.recon || []).push({ field: 'montant', raw: '(vide)', val: t.eur, method: 'quantité × cours historique', conf: 'moyenne' }); } else if (!t.reconPending) t.reconPending = { field: 'montant', method: 'aucun cours : saisissez le montant', choices: [] }; }
+    for (const t of txs) if (t.tab && t.eurMissing && !t.eurDone) { const p = fn(t.asset, t.date) || obs0(t.asset, t.date); if (p) { t.eur = p * t.qty; t.eurDone = 1; (t.recon = t.recon || []).push({ field: 'montant', raw: '(vide)', val: t.eur, method: 'quantité × cours historique', conf: 'moyenne' }); } else if (!t.reconPending) t.reconPending = { field: 'montant', method: 'aucun cours : saisissez le montant', choices: [] }; }
     save(); unit('cours', uCT, uCT);
     fn.unknown = [...unknown]; fn.failed = failed; fn.fxMissing = txs.filter(t => t.fxPending).length; fn.missing = failed.length; fn.suspect = [...new Set(txs.map(t => t.asset))].filter(x => cache[x + '|suspect']); return fn;
   }
@@ -656,9 +659,9 @@
   function mergeImport(old, fresh) {
     twinFix(old.concat(fresh));
     const names = new Set(fresh.map(t => t.source).filter(Boolean)), kept = old.filter(t => !names.has(t.source)), replaced = old.length - kept.length;
-    const seen = new Set(kept.map(txKey)), add = [], dup = [];
-    for (const t of fresh) (seen.has(txKey(t)) ? dup : add).push(t);
-    return { txs: kept.concat(add), added: add.length, dup: dup.length, replaced };
+    const seen = new Map(kept.map(t => [txKey(t), t])), add = [], dup = [], drop = new Set();
+    for (const t of fresh) { const o = seen.get(txKey(t)); if (!o) add.push(t); else if (o.tab && !t.tab && !drop.has(o)) { drop.add(o); add.push(t); } else dup.push(t); } // relevé PDF maître : remplace la ligne CSV/Excel équivalente
+    return { txs: kept.filter(t => !drop.has(t)).concat(add), added: add.length, dup: dup.length + drop.size, replaced };
   }
   const fileList = txs => { const m = new Map(); txs.forEach(t => { const k = t.source || 'Saisie manuelle'; m.set(k, (m.get(k) || 0) + 1); }); return [...m].map(([name, n]) => ({ name, n })); };
   /* Titulaire du relevé (en-tête « Nom du compte », « Titulaire », colonne dédiée…) ; '' si le format n'en contient pas. */

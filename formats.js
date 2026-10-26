@@ -69,22 +69,49 @@
     return 0;
   }
 
-  /* ---------- CSV : séparateur , ; ou tabulation, BOM, guillemets, préambule ---------- */
-  function parseCSV(text) {
-    text = String(text).replace(/^\ufeff/, '');
-    const lines = text.split(/\r?\n/).filter(l => l.trim()).slice(0, 15);
-    const count = (l, d) => { let n = 0, q = false; for (const c of l) { if (c === '"') q = !q; else if (c === d && !q) n++; } return n; };
-    const delim = [',', ';', '\t'].map(d => [d, lines.reduce((a, l) => a + (count(l, d) > 0 ? 1 : 0), 0) * 1000 + lines.reduce((a, l) => a + count(l, d), 0)]).sort((a, b) => b[1] - a[1])[0][0];
-    const rows = []; let row = [], f = '', q = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
-      else if (c === '"') q = true; else if (c === delim) { row.push(f); f = ''; }
-      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(f); f = ''; if (row.some(x => x.trim() !== '')) rows.push(row); row = []; }
-      else f += c;
+  /* ---------- CSV : octets bruts → texte (BOM UTF-8/UTF-16, UTF-8 strict, repli windows-1252) ---------- */
+  function decodeCSV(buf) {
+    const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf), dec = (e, o) => new TextDecoder(e, o).decode(b);
+    let text, enc;
+    if (b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) { text = dec('utf-8'); enc = 'UTF-8 (BOM)'; }
+    else if (b[0] === 0xFF && b[1] === 0xFE) { text = dec('utf-16le'); enc = 'UTF-16 LE'; }
+    else if (b[0] === 0xFE && b[1] === 0xFF) { text = dec('utf-16be'); enc = 'UTF-16 BE'; }
+    else {
+      let z0 = 0, z1 = 0; const n = Math.min(b.length, 4000); for (let k = 0; k < n; k++) if (!b[k]) (k % 2 ? z1++ : z0++);
+      if (n > 3 && z1 > n / 6 && z0 < n / 50) { text = dec('utf-16le'); enc = 'UTF-16 LE'; }
+      else if (n > 3 && z0 > n / 6 && z1 < n / 50) { text = dec('utf-16be'); enc = 'UTF-16 BE'; }
+      else { try { text = dec('utf-8', { fatal: true }); enc = 'UTF-8'; } catch (e) { text = dec('windows-1252'); enc = 'windows-1252'; } }
     }
-    row.push(f); if (row.some(x => x.trim() !== '')) rows.push(row);
-    return rows.map(r => r.map(x => x.trim()));
+    const repl = (text.match(/\ufffd/g) || []).length;
+    return { text: normText(text), enc, repl };
+  }
+  /* retours ligne, espaces insécables/fines, signes moins unicode */
+  const normText = s => String(s).replace(/^\ufeff/, '').replace(/\r\n?/g, '\n').replace(/[\u00a0\u202f\u2007\u2009]/g, ' ').replace(/\u2212|[\u2012-\u2014](?=\s*\d)/g, '-');
+  /* ---------- CSV : séparateur , ; tabulation ou |, guillemets, préambule, lignes courtes ---------- */
+  function parseCSV(text) {
+    if (text && typeof text === 'object' && !(typeof text === 'string')) { const d = decodeCSV(text); const r = parseCSV(d.text); r.info.enc = d.enc; r.info.repl = d.repl; return r; }
+    text = normText(text);
+    const split = d => { const rows = []; let row = [], f = '', q = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+        else if (c === '"' && f.trim() === '') { q = true; f = ''; } else if (c === d) { row.push(f); f = ''; }
+        else if (c === '\n') { row.push(f); f = ''; if (row.some(x => x.trim() !== '')) rows.push(row); row = []; }
+        else f += c;
+      }
+      row.push(f); if (row.some(x => x.trim() !== '')) rows.push(row); return rows; };
+    // séparateur : le plus grand nombre de lignes au même nombre de colonnes (> 1) sur les 30 premières
+    let best = null;
+    for (const d of [';', ',', '\t', '|']) { const R = split(d).slice(0, 30), cnt = {}; R.forEach(r => { if (r.length > 1) cnt[r.length] = (cnt[r.length] || 0) + 1; });
+      const top = Object.entries(cnt).sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]; const sc = top ? top[1] * 1000 + +top[0] : 0; if (!best || sc > best.sc) best = { d, sc }; }
+    const rows = split(best.d).map(r => r.map(x => x.trim())), info = { delim: best.d, short: [] };
+    // lignes courtes après l'en-tête : cellules manquantes complétées par des champs vides (signalées), jamais décalées
+    const hi = headerRow(rows), w = (rows[hi] || []).length;
+    // ligne trop longue d'un champ : nombre décimal non mis entre guillemets (« 104 190,5 » coupé en deux) → recollé et signalé
+    info.merged = [];
+    for (let k = hi + 1; k < rows.length; k++) if (rows[k].length === w + 1 && best.d === ',') { const r = rows[k]; for (let j = 0; j < r.length - 1; j++) if (/^-?\d{1,3}(?: \d{3})*$|^-?\d+$/.test(r[j]) && /^\d+$/.test(r[j + 1])) { r.splice(j, 2, r[j] + ',' + r[j + 1]); info.merged.push(k + 1); break; } }
+    for (let k = hi + 1; k < rows.length; k++) if (rows[k].length < w) { info.short.push(k + 1); while (rows[k].length < w) rows[k].push(''); }
+    rows.info = info; return rows;
   }
 
   /* ---------- Formats de plateformes (en-têtes publiés) ---------- */
@@ -251,6 +278,6 @@
     return { txs: out, bad, skipped, format: fmt.label };
   }
 
-  const api = { norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, detect, parse, kindOf, FORMATS };
+  const api = { norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxFormats = api;
 })(this);
