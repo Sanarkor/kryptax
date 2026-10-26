@@ -219,5 +219,5 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 .kofifoot>.fbtn{height:2.4em;min-height:0;margin:0;align-self:center;font-family:inherit}
 .kofifoot>.fbtn{font-weight:600;color:var(--acc)}
 @media (max-width:360px){.kofifoot{gap:5px;padding:0 4px}.kofifoot>.fbtn{font-size:.74rem;padding:.4em .45em}}
-.fhelp{margin:6px 0;padding:4px 8px;border:1px solid rgba(34,48,74,.55);border-left:2px solid rgba(34,211,238,.35);border-radius:6px;background:rgba(20,29,49,.35);color:#7f8ea3;font-size:11.5px;line-height:1.45;overflow-wrap:anywhere}.fhelp p{margin:.15em 0}.fhelp b{color:#9aa8bc;font-weight:650}.fhelp-t{font-weight:650;color:#9aa8bc}.fhelp-s{display:none}@media (max-width:767px){.fhelp-l{display:none}.fhelp-s{display:block}}
+.fhelp{font-style:italic;margin:6px 0;padding:4px 8px;border:1px solid rgba(34,48,74,.55);border-left:2px solid rgba(34,211,238,.35);border-radius:6px;background:rgba(20,29,49,.35);color:#7f8ea3;font-size:11.5px;line-height:1.45;overflow-wrap:anywhere}.fhelp p{margin:.15em 0}.fhelp b{color:#9aa8bc;font-weight:650}.fhelp-t{font-weight:650;color:#9aa8bc}.fhelp-s{display:none}@media (max-width:767px){.fhelp-l{display:none}.fhelp-s{display:block}}
 #merci{max-width:min(420px,calc(100vw - 24px))}.merci-foot{text-align:right;margin:12px 0 0!important}
