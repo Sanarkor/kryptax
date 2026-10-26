@@ -656,11 +656,32 @@
      Même nom de fichier ré-importé -> remplace l'ancien (pas de doublon) ; transactions identiques déjà présentes
      depuis un AUTRE fichier (relevés qui se chevauchent) -> ignorées. Clé : type, actif, date (minute), quantité, montant €. */
   const txKey = t => [t.type, t.asset, Math.round(+t.date / 60000), (+t.qty || 0).toPrecision(9), Math.round((+t.eur || 0) * 100)].join('|');
+  /* Rapprochement tolérant CSV/Excel <-> relevé PDF (jamais entre deux fichiers du même genre) : même type et même actif,
+     heure à 2 min près ou décalée d'un nombre entier d'heures (fuseau, jusqu'à 2 h), ou même jour si l'une des deux n'a pas d'heure ;
+     quantité à 1e-6 près en relatif, montant à 1 % (min. 2 centimes) près. Appariement un-pour-un, le plus proche d'abord. */
+  const relOk = (a, b, r, abs) => Math.abs(a - b) <= Math.max(abs, r * Math.max(Math.abs(a), Math.abs(b)));
+  const midnight = d => { const x = new Date(+d); return x.getUTCHours() === 0 && x.getUTCMinutes() === 0 && x.getUTCSeconds() === 0; };
+  function timeGap(a, b) {
+    const d = Math.abs(+a - +b); if (d <= 120e3) return d;
+    for (let h = 1; h <= 2; h++) { const e = Math.abs(d - h * 3600e3); if (e <= 120e3) return 1e6 + e; }
+    if ((midnight(a) || midnight(b)) && new Date(+a).toISOString().slice(0, 10) === new Date(+b).toISOString().slice(0, 10)) return 1e8 + d;
+    return -1;
+  }
+  function twinOf(t, pool, used, drop) {
+    let best = null, bd = Infinity;
+    for (const o of pool) {
+      if (used.has(o) || drop.has(o) || !o.tab === !t.tab || o.source === t.source || o.type !== t.type || o.asset !== t.asset) continue;
+      if (!relOk(+o.qty || 0, +t.qty || 0, 1e-6, 1e-12) || !relOk(+o.eur || 0, +t.eur || 0, 0.01, 0.02)) continue;
+      const g = timeGap(o.date, t.date); if (g >= 0 && g < bd) { bd = g; best = o; }
+    }
+    return best;
+  }
   function mergeImport(old, fresh) {
     twinFix(old.concat(fresh));
     const names = new Set(fresh.map(t => t.source).filter(Boolean)), kept = old.filter(t => !names.has(t.source)), replaced = old.length - kept.length;
     const seen = new Map(kept.map(t => [txKey(t), t])), add = [], dup = [], drop = new Set();
-    for (const t of fresh) { const o = seen.get(txKey(t)); if (!o) add.push(t); else if (o.tab && !t.tab && !drop.has(o)) { drop.add(o); add.push(t); } else dup.push(t); } // relevé PDF maître : remplace la ligne CSV/Excel équivalente
+    const used = new Set();
+    for (const t of fresh) { const o = seen.get(txKey(t)) || twinOf(t, kept, used, drop); if (o) used.add(o); if (!o) add.push(t); else if (o.tab && !t.tab && !drop.has(o)) { drop.add(o); add.push(t); } else dup.push(t); } // relevé PDF maître : remplace la ligne CSV/Excel équivalente
     return { txs: kept.filter(t => !drop.has(t)).concat(add), added: add.length, dup: dup.length + drop.size, replaced };
   }
   const fileList = txs => { const m = new Map(); txs.forEach(t => { const k = t.source || 'Saisie manuelle'; m.set(k, (m.get(k) || 0) + 1); }); return [...m].map(([name, n]) => ({ name, n })); };
