@@ -96,7 +96,7 @@
     return t;
   }
 
-  /* Texte abîmé (mojibake) des exports Revolut .xlsx : « 100,00â_x0082_¬ » → « 100,00 € » */
+  /* Texte abîmé (mojibake) des exports .xlsx de l'exchange : « 100,00â_x0082_¬ » → « 100,00 € » */
   function fixText(v) {
     if (v == null || typeof v !== 'string') return v;
     let s = v.replace(/_x([0-9A-Fa-f]{4})_/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
@@ -137,13 +137,13 @@
     }
     return need;
   }
-  /* Revolut prélève les frais d'achat EN NATURE : quantité créditée = quantité affichée × (1 − frais / valeur). */
+  /* L'exchange prélève les frais d'achat EN NATURE : quantité créditée = quantité affichée × (1 − frais / valeur). */
   function feeRatio(t) {
     if (!t.feeInKind) return 0;
     const v = t.cur ? Math.abs(t.valCur || 0) : Math.abs(t.eur || 0), f = t.cur ? Math.abs(t.feeCur || 0) : Math.abs(t.fee || 0);
     if (!(v > 0)) return 0;
-    // Revolut X : frais « taker » de 0,09 % prélevés sur l'actif reçu ; le relevé arrondit le montant au centime (0,00 $ affiché).
-    if (/revolut x/i.test(t.rawType || '')) return 0.0009;
+    // Plateforme de trading « … X » : frais « taker » de 0,09 % prélevés sur l'actif reçu ; le relevé arrondit le montant au centime (0,00 $ affiché).
+    if (/^(acheter|vendre)\s*-\s*\S.*\sx\s*$/i.test(t.rawType || '')) return 0.0009;
     return f > 0 && f < v ? f / v : 0;
   }
   function netQty(t) { const q = Math.abs(t.qty || 0); return (t.type === 'BUY' || t.type === 'EXCH_IN') ? q * (1 - feeRatio(t)) : q; }
@@ -189,7 +189,7 @@
       if (t.date <= o) continue;
       if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
       if ((t.type === 'RECEIVE' || t.type === 'SEND') && !t.xferWith && !t.sendChoice) warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
-      if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // Revolut : la valeur payée inclut déjà les frais
+      if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // relevé de compte : la valeur payée inclut déjà les frais
       if (isCess(t)) {
         const ss = sendSale(t), pm = ss ? (t.asset in FIAT ? FIAT[t.asset] : priceFn(t.asset, t.date)) : null;
         const p213 = ss ? (pm != null && isFinite(pm) ? pm * Math.abs(t.qty || 0) : 0) : Math.abs(t.eur || 0), p214 = t.feeInKind ? 0 : Math.abs(t.fee || 0), p216 = t.soulte || 0;
@@ -277,7 +277,7 @@
     }
     return y;
   }
-  /* Échanges crypto→crypto dans un relevé Revolut : la vente et l'achat apparaissent comme deux lignes
+  /* Échanges crypto→crypto dans un relevé de compte : la vente et l'achat apparaissent comme deux lignes
      à la même seconde (écart ≤ win ms) pour une valeur € proche (±tol). Appariement un-pour-un.
      Les ventes vers € n'ont pas d'achat simultané. t.swapForce = 'taxable' empêche l'appariement. */
   function detectSwaps(txs, o) {

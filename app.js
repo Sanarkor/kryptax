@@ -114,7 +114,7 @@
     zone.addEventListener('dragover', e => { if (KP.hasFileDrag(e.dataTransfer)) e.dataTransfer.dropEffect = 'copy'; });
     zone.addEventListener('dragleave', () => { if (--depth <= 0) off(); });
     zone.addEventListener('drop', e => { const f = KP.droppedFiles(e.dataTransfer); off(); if (f.length) { e.preventDefault(); e.stopPropagation(); handleFiles(f); } }); }
-  /* ---------- PDF Revolut (pdf.js local, rien n'est envoyé) ---------- */
+  /* ---------- PDF de relevé de compte (pdf.js local, rien n'est envoyé) ---------- */
   async function importPdf(file) {
     if (!window.pdfjsLib) return showErr('Lecture PDF indisponible, rechargez la page.');
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
@@ -329,7 +329,7 @@
       <td>${dt(t.date)}${t.example ? ' <span class="tag">exemple</span>' : ''}</td><td><select data-k="type">${typeOpts(t.type)}</select>${t.rawType ? `<br><span class="hint">${esc(t.rawType)}</span>` : ''}</td>
       <td><input data-k="asset" value="${esc(t.asset)}" size="6"></td><td class="n${t.qtyStatus && !['ok', 'corrigée'].includes(t.qtyStatus) && !t.qtyManual ? ' bad' : ''}"><input data-k="qty" value="${num(t.qty)}" size="10">${t.qtyStatus && t.qtyStatus !== 'ok' && !t.qtyManual ? `<br><span class="hint">qté ${esc(t.qtyStatus)}</span>` : ''}</td>
       <td class="n"><input data-k="eur" value="${num(t.eur)}" size="9">${t.cur ? `<br><span class="hint">${num(t.valCur)} ${t.cur}${t.fx ? ' × ' + num(t.fx) : ' (à convertir)'}</span>` : ''}</td><td class="n"><input data-k="fee" value="${num(t.fee)}" size="6"></td>
-      <td>${esc(/revolut/i.test(t.platform || '') ? 'Relevé' : (t.platform || ''))}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : (all.length ? '<tr><td>Aucune vente (cession imposable). Cliquez « Afficher toutes les transactions ».</td></tr>' : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>');
+      <td>${esc(t.platform || '')}</td><td><button class="small danger" data-del>✕</button></td></tr>`).join('') : (all.length ? '<tr><td>Aucune vente (cession imposable). Cliquez « Afficher toutes les transactions ».</td></tr>' : '<tr><td>Aucune transaction. Importez un CSV ou chargez l’exemple.</td></tr>');
   }
   $('#txall').onclick = () => { showAll = !showAll; renderTx(); };
   /* ---------- Soldes de clôture du relevé PDF ---------- */

@@ -137,7 +137,7 @@
       if (!isFinite(val) && price > 0 && qty > 0 && type !== 'IGNORE' && qtyStatus === 'ok') recon.push({ field: 'montant', raw: '(vide)', val: v, method: 'quantité × prix', conf: 'élevée' });
       if (!(price > 0) && isFinite(val) && val > 0 && qty > 0 && blank(pRaw) && mp.price != null && type !== 'IGNORE') recon.push({ field: 'prix', raw: '(vide)', val: val / qty, method: 'montant ÷ quantité', conf: 'élevée' });
       if (price === 0 && !blank(pRaw) && isFinite(val) && val > 0 && qty > 0 && type !== 'IGNORE' && qtyStatus === 'ok') recon.push({ field: 'prix', raw: String(E.fixText(pRaw)), val: val / qty, method: 'prix arrondi à 0 : montant ÷ quantité', conf: 'élevée' });
-      const t = { id: uid(), seq: i, line, date, type, feeInKind: o.feeInKind != null ? !!o.feeInKind : /revolut|^relev/i.test(o.platform || ''), rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || (recon.some(r => r.field === 'prix') ? val / qty : undefined) };
+      const t = { id: uid(), seq: i, line, date, type, feeInKind: o.feeInKind != null ? !!o.feeInKind : /^relev/i.test(o.platform || ''), rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || (recon.some(r => r.field === 'prix') ? val / qty : undefined) };
       if (recon.length) t.recon = recon; if (eurMissing) t.eurMissing = true;
       if (qtyStatus === 'suspect' && price > 0 && val > 0) { t.reconPending = { field: 'quantité', choices: qtyChoices(qtyRaw, val / price, 3) }; }
       if (cur === 'EUR') { t.eur = v || 0; t.fee = fee; } else { t.cur = cur; t.valCur = v || 0; t.feeCur = fee; t.unitPriceCur = price || undefined; t.eur = 0; t.fee = 0; t.unitPrice = undefined; t.fxPending = true; }
@@ -614,7 +614,7 @@
     save(); unit('cours', uCT, uCT);
     fn.unknown = [...unknown]; fn.failed = failed; fn.fxMissing = txs.filter(t => t.fxPending).length; fn.missing = failed.length; fn.suspect = [...new Set(txs.map(t => t.asset))].filter(x => cache[x + '|suspect']); return fn;
   }
-  /* Relevé PDF Revolut : lignes de texte -> lignes à 7 colonnes (Symbole, Type, Quantité, Prix, Valeur, Frais, Date)
+  /* Relevé PDF de l'exchange : lignes de texte -> lignes à 7 colonnes (Symbole, Type, Quantité, Prix, Valeur, Frais, Date)
      + lignes des relevés en devises (« Vente de X » / « Achat de X ») pour la contre-vérification. */
   const DATE_RE = '(\\d{1,2}\\s+[a-zéèûô.]+\\s+\\d{4},?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)';
   function parsePdfLines(lines) {
