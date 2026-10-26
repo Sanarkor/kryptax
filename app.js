@@ -488,7 +488,8 @@
     let src;
     try {
       const persist = () => saveCache(), sig = runCtl.signal;
-      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, onUnit: (p, n, t) => bar.unit(p, n, t), concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
+      const span = txs.reduce((r, t) => { const d = +t.date; return d > 0 ? [Math.min(r[0], d), Math.max(r[1], d)] : r; }, [Infinity, 0]); if (!(span[1] > 0)) span[0] = span[1] = undefined; /* $→€ : une seule série EURUSDT couvrant toutes les dates (évite des séries $ tronquées puis complétées source par source) */
+      livePrice = await KP.prepareRetry(txs, k => (src = KP.makeSources((u, o) => fetch(u, o), { signal: sig, rotate: k, from: span[0], to: span[1], binSyms: binSymsCached(), onBinSyms: L => { try { localStorage.setItem('kryptax.binsyms', JSON.stringify({ t: Date.now(), L })); } catch (e) {} } })), cache, show, { signal: sig, onUnit: (p, n, t) => bar.unit(p, n, t), concurrency: 4, onSave: persist, manual, until: scopeUntil(), maxTries: 0, // les reprises sont gérées par scheduleAuto (1 s)
        
         onRetry: (k, max, f) => { if (quiet) return; $('#progress').textContent = `Nouvelle tentative… (${k}/${max}, ${f.length} cours manquant${f.length > 1 ? 's' : ''})`; $('#progress').className = 'hint'; } });
       bar.at(90); await breathe(); livePrice.txs = txs; renderDiag(src, livePrice); bar.at(92); await breathe();
