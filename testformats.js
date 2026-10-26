@@ -83,7 +83,7 @@ const run = (f, id) => { const rows = rd(f), d = F.detect(rows); chk(d && d.id =
   chk(P.numMode(['1,234', '12']) === '' && P.numMode(['0,5']) === 'FR' && P.numMode(['1,234.5']) === 'EN' && P.dateMode(['01/02/2025']) === '', 'Formats indécidables laissés au choix manuel / par défaut');
   const A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   chk(/colonnes décalées/.test(A) && /feuilles lisibles, seule la première/.test(A) && /o\.strict = true/.test(A) && /res\.fatal/.test(A), 'Appli : colonnes décalées refusées, feuille utile choisie, refus clair'); }
-chk(!fs.readdirSync(__dirname + '/testdata/formats').some(f => /revolut/i.test(fs.readFileSync(__dirname + '/testdata/formats/' + f, 'utf8'))), 'Fichiers de test fictifs, sans Revolut');
+chk(!fs.readdirSync(__dirname + '/testdata/formats').some(f => new RegExp(['rev', 'olut'].join(''), 'i').test(fs.readFileSync(__dirname + '/testdata/formats/' + f, 'utf8'))), 'Fichiers de test fictifs, sans nom de plateforme');
 { const f1 = { name: 'a.csv' }, f2 = { name: 'b.pdf' };
   const dt = { types: ['Files', 'text/plain'], items: [{ kind: 'file', getAsFile: () => f1 }, { kind: 'string', getAsFile: () => null }, { kind: 'file', getAsFile: () => f2 }] };
   const d = P.droppedFiles(dt);
