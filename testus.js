@@ -158,4 +158,16 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq(/^\(a\) Description/.test(U.toCSV(U.compute(T))), true, 'CSV without time zone option: unchanged');
   const H = [{ line: 2, date: W(2024, 6, 17, 20), type: 'BUY', asset: 'ETH', qty: 1, usd: 1000, fee: 0, wallet: '' }, { line: 3, date: W(2025, 6, 18, 2), type: 'SELL', asset: 'ETH', qty: 1, usd: 2000, fee: 0, wallet: '' }];
   eq(U.compute(H, { fileTz: 'UTC', taxTz: 'UTC' }).rows[0].term + '|' + U.compute(H, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows[0].term, 'long|short', 'holding period by calendar day in the tax zone (Pub. 544 example dates)'); }
+{ // v1.9: cost and date entered by the user for missing units
+  const X = 'Date,Type,Asset,Quantity,Total (USD)\n2024-01-01,Buy,XRP,10,10\n2024-02-01,Sell,XRP,15,30\n', tx = () => U.fromCSVText(X).txs;
+  const a = U.compute(tx()), m = a.rows.find(x => !x.acquired);
+  eq([m.status.startsWith('to verify: no purchase found'), a.totals.short.gain], [true, 10], 'without input: missing units excluded and flagged (unchanged)');
+  const b = U.compute(tx(), { manualCost: { 3: { cost: 4, date: D('2022-05-01') } } }), n = b.rows.find(x => x.user);
+  eq([n.status, n.cost, n.gain, n.term, n.acquired === D('2022-05-01'), b.totals.short.gain, b.totals.long.gain], ['ok', 4, 6, 'long', true, 10, 6], 'entered cost and date: included, long term');
+  const c = U.compute(tx(), { manualCost: { 3: { cost: 4, date: D('2024-01-15') } } });
+  eq(c.rows.find(x => x.user).term + '|' + c.totals.short.gain, 'short|16', 'entered date less than 1 year: short term');
+  eq(U.compute(tx(), { manualCost: { 3: { cost: 4, date: D('2025-01-01') } } }).rows.some(x => x.user), false, 'date after the sale: ignored, still flagged');
+  eq(U.compute(tx(), { manualCost: { 3: { cost: NaN, date: D('2022-05-01') } } }).rows.some(x => x.user), false, 'no cost: ignored, still flagged');
+  eq(/entered by you/.test(U.toCSV(b)), true, 'CSV marks entered data');
+  eq(/entered by you/.test(U.toCSV(a)), false, 'CSV without input: no mark'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
