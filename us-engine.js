@@ -291,12 +291,39 @@
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   /* CSV of 8949-style lines (columns a, b, c, d, e, h + term/box hint + status) */
-  function toCSV(res) {
-    const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
-    const head = ['(a) Description', '(b) Date acquired', '(c) Date sold', '(d) Proceeds USD', '(e) Cost basis USD', '(h) Gain or loss USD', 'Term', 'Form 8949 box (no 1099-DA, to verify)', 'Status'];
-    const hasW = res.rows.some(r => r.wallet); if (hasW) head.push('Wallet');
-    const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.user && r.status === 'ok' ? 'ok - cost and date acquired entered by you (to verify)' : r.status].concat(hasW ? [r.wallet] : []));
-    return (res.totals.tz ? q('# Times in file: ' + res.totals.tz.file + '; tax dates: ' + res.totals.tz.tax + ' (to verify)') + '\n' : '') + [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
+  /* v2.2 Form 8949 layout (IRS Instructions for Form 8949, 2025; Schedule D (Form 1040) 2025). Digital assets use boxes G/H/I (Part I, short term)
+     and J/K/L (Part II, long term), never A-F. G/J: Form 1099-DA with basis reported to the IRS; H/K: Form 1099-DA without basis or basis not
+     reported; I/L: no Form 1099-DA. Totals go to Schedule D lines 1b/2/3 (Part I) and 8b/9/10 (Part II). Columns (f) and (g) are left blank. */
+  const CAT = { basis: ['G', 'J'], nobasis: ['H', 'K'], none: ['I', 'L'] }, SCHD = { G: '1b', H: '2', I: '3', J: '8b', K: '9', L: '10' };
+  function form8949(res, cat) {
+    const bx = CAT[cat] || null, ok = res.rows.filter(r => r.status === 'ok' && r.term);
+    const part = (term, i) => {
+      const box = bx ? bx[i] : null, lines = ok.filter(r => r.term === term), sum = k => r2(lines.reduce((t, r) => t + (r[k] || 0), 0));
+      return { part: i ? 'II' : 'I', title: i ? 'Part II - Long-term (held more than 1 year)' : 'Part I - Short-term (held 1 year or less)', box,
+        boxText: box || (i ? 'J, K or L - to verify' : 'G, H or I - to verify'), scheduleD: box ? 'Schedule D line ' + SCHD[box] : (i ? 'Schedule D line 8b, 9 or 10 - to verify' : 'Schedule D line 1b, 2 or 3 - to verify'),
+        lines, totals: { d: sum('proceeds'), e: sum('cost'), g: null, h: sum('gain') } };
+    };
+    return { cat: bx ? cat : null, parts: [part('short', 0), part('long', 1)], toVerify: res.rows.filter(r => r.status !== 'ok' || !r.term) };
+  }
+  const CATNOTE = { basis: 'Form 1099-DA received, basis reported to the IRS', nobasis: 'Form 1099-DA received, basis not shown or not reported to the IRS', none: 'No Form 1099-DA received' };
+  function toCSV(res, opts) {
+    opts = opts || {};
+    const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), m = v => v == null ? '' : v.toFixed(2);
+    const F = form8949(res, opts.cat), hasW = res.rows.some(r => r.wallet), out = [];
+    const head = ['(a) Description of property', '(b) Date acquired', '(c) Date sold or disposed of', '(d) Proceeds (sales price)', '(e) Cost or other basis', '(f) Code(s)', '(g) Amount of adjustment', '(h) Gain or (loss)'].concat(hasW ? ['Wallet'] : []).concat(['Note']);
+    out.push(['# Form 8949 - digital assets - estimate, to verify. Situation: ' + (CATNOTE[F.cat] || 'not chosen - to verify')]);
+    if (res.totals.tz) out.push(['# Times in file: ' + res.totals.tz.file + '; tax dates: ' + res.totals.tz.tax + ' (to verify)']);
+    if (F.cat && F.cat !== 'none') out.push(['# With a Form 1099-DA: column (d) and (e) should show the amounts on the form; any correction goes in (f) and (g) - to verify']);
+    for (const P of F.parts) {
+      out.push([]); out.push([P.title + ' - Box ' + P.boxText]); out.push(head);
+      for (const r of P.lines) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.user ? 'cost and date acquired entered by you (to verify)' : '']));
+      out.push(['Totals (' + P.scheduleD + ')', '', '', m(P.totals.d), m(P.totals.e), '', '', m(P.totals.h)]);
+    }
+    if (F.toVerify.length) {
+      out.push([]); out.push(['Not on Form 8949 - to verify (missing cost or value; not in the totals)']); out.push(head);
+      for (const r of F.toVerify) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.status]));
+    }
+    return out.map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function incomeCSV(res) {
     const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), hasW = res.income.some(r => r.wallet);
@@ -305,7 +332,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -313,7 +340,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {}, da = {};
+    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {}, da = {}, cat = '';
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -329,6 +356,7 @@
     out.addEventListener('change', e => {
       const t = e.target; if (!cur) return;
       if (t.id === 'usmethod') { method = t.value; render(); return; }
+      if (t.id === 'uscat') { cat = t.value; render(); return; }
       if (t.classList.contains('usda')) { const v = parseFloat(String(t.value || '').replace(/[$,\s]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) da[k] = v; else delete da[k]; render(); return; }
       if (t.classList.contains('usmc') || t.classList.contains('usmd')) {
         const line = +t.dataset.line, c = out.querySelector('.usmc[data-line="' + line + '"]'), d = out.querySelector('.usmd[data-line="' + line + '"]');
@@ -385,6 +413,11 @@
         + '<ul>' + line('Proceeds', o.proceeds, o.dProceeds) + line('Cost basis', o.cost, o.dCost) + '</ul>'
         + '<p class="usnote">Box 1f is proceeds after transaction costs. Box 1g may be blank for assets bought before 2026 or moved in from elsewhere (noncovered). Rewards and staking are not on Form 1099-DA. Sales marked to verify are not in the Kryptax totals. A difference does not mean an error — to verify. Source: IRS Instructions for Form 1099-DA.</p></details>';
     }
+    function catSel() {
+      const F = form8949(last, cat), o = (v, l) => `<option value="${v}"${cat === v ? ' selected' : ''}>${l}</option>`;
+      return `<div class="grid uscat"><label>Form 8949 box (from your Form 1099-DA) <select id="uscat">${o('', 'Not chosen — to verify')}${o('none', 'No Form 1099-DA → box I / L')}${o('nobasis', 'Form 1099-DA, basis not reported to the IRS → box H / K')}${o('basis', 'Form 1099-DA, basis reported to the IRS → box G / J')}</select></label></div>`
+        + `<p class="hint">Part I (short term): box ${esc(F.parts[0].boxText)}, totals to ${esc(F.parts[0].scheduleD)}. Part II (long term): box ${esc(F.parts[1].boxText)}, totals to ${esc(F.parts[1].scheduleD)}. If only some sales are on a Form 1099-DA, each kind needs its own Part — to verify.</p>`;
+    }
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
@@ -411,14 +444,15 @@
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
         + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
         + (method === 'MANUAL' ? manualHtml(res) : '')
+        + catSel()
         + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (Form 8949 lines)</button>${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
     }
     out.addEventListener('click', e => {
       if (e.target.id === 'uspdfmain' || e.target.id === 'uscsvmain') { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
-      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc); return; }
+      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat }); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
-      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last)], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last, { cat })], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;

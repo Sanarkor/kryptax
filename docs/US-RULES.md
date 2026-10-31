@@ -94,3 +94,19 @@ Source: IRS, Instructions for Form 1099-DA (irs.gov/instructions/i1099da, checke
 - Rewards and staking payments are not reported on Form 1099-DA.
 - The user types the box 1f and box 1g totals for the year. Kryptax shows its own totals (sales marked to verify excluded) and the difference. Any difference of $0.01 or more is flagged "to verify". No tax is computed.
 - Not done: per-transaction matching, import of the 1099-DA file, box 2 / box 9 / 8949 checkbox codes (G, H, J, K, Y) logic, wash sales.
+
+## Form 8949 layout (v2.2)
+
+Sources: IRS, Instructions for Form 8949 (2025), irs.gov/instructions/i8949, and Schedule D (Form 1040) 2025, irs.gov/pub/irs-pdf/f1040sd.pdf (both checked 2026-11-01).
+
+- Columns (a) to (h) as on the form. Column (a) for a digital asset: name or symbol and exact units.
+- Part I = short term (held 1 year or less), Part II = long term (more than 1 year).
+- Digital assets never use boxes A to F ("Do not use box C / box F to report digital asset transactions"). They use:
+  - G (Part I) / J (Part II): Form 1099-DA showing basis reported to the IRS.
+  - H / K: Form 1099-DA without basis, or basis not reported to the IRS.
+  - I / L: no Form 1099-DA.
+- The user picks the situation in a small selector. If not chosen, the box shows "to verify". One choice applies to all sales; if only some sales are on a Form 1099-DA, each kind needs its own Part (to verify).
+- Part totals go to Schedule D: G → line 1b, H → line 2, I → line 3, J → line 8b, K → line 9, L → line 10.
+- Columns (f) and (g) are left blank (no adjustment computed). With a Form 1099-DA, column (d) and (e) should match the form and corrections go in (f)/(g) — to verify.
+- Exception 1 (reporting directly on Schedule D lines 1a/8a) is not handled.
+- Lines to verify (missing cost or value) are listed apart and are not in the Part totals.

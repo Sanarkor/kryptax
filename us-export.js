@@ -5,7 +5,8 @@
 (function (root) {
   'use strict';
   const FOOT = 'Estimate - not tax advice - to be verified - state taxes not included';
-  const BOXNOTE = 'Form 8949 box: indication only, to verify (Form 1099-DA not read). Short term: G/H/I, long term: J/K/L; without a 1099-DA usually I (short) or L (long).';
+  const BOXNOTE = 'Digital assets: Part I uses box G, H or I and Part II box J, K or L (never A-F). G/J: Form 1099-DA with basis reported to the IRS; H/K: Form 1099-DA without basis or basis not reported; I/L: no Form 1099-DA. Columns (f) and (g) left blank. Source: IRS Instructions for Form 8949 (2025). To verify.';
+  const eng = () => typeof module !== 'undefined' ? require('./us-engine.js') : root.KryptaxUS;
   const ascii = s => String(s == null ? '' : s).replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\u2192/g, '->').replace(/[^\x20-\x7e]/g, '?');
   const pad = n => String(n).padStart(2, '0');
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return isNaN(d) ? 'unknown' : pad(d.getUTCMonth() + 1) + '/' + pad(d.getUTCDate()) + '/' + d.getUTCFullYear(); };
@@ -15,16 +16,17 @@
   /* Pure: everything printed in the PDF (tested in testus.js). */
   function summaryData(res, opts) {
     opts = opts || {}; const T = res.totals, now = opts.now || new Date(), hasW = res.rows.some(r => r.wallet);
-    const head = ['(a) Description', '(b) Acquired', '(c) Sold', '(d) Proceeds', '(e) Cost', '(h) Gain/loss', 'Term'].concat(hasW ? ['Wallet'] : []).concat(['Box*']);
-    const rows = res.rows.map(r => {
-      const tv = r.status !== 'ok';
-      return { tv, cells: [r.desc + (tv ? ' - TO VERIFY: ' + r.status.replace(/^to verify:\s*/, '') : '') + (r.user ? ' - COST AND DATE ENTERED BY YOU (to verify)' : ''), mdy(r.acquired), mdy(r.sold), usd(r.proceeds), usd(r.cost), usd(r.gain),
-        r.term === 'long' ? 'Long' : r.term === 'short' ? 'Short' : '?'].concat(hasW ? [r.wallet || '?'] : []).concat([r.term === 'long' ? 'L?' : r.term === 'short' ? 'I?' : '?']).map(ascii) };
-    });
+    const F = eng().form8949(res, opts.cat), head = ['(a) Description', '(b) Acquired', '(c) Sold', '(d) Proceeds', '(e) Cost or basis', '(f) Code', '(g) Adj.', '(h) Gain/(loss)'].concat(hasW ? ['Wallet'] : []);
+    const cells = (r, extra) => [r.desc + (extra || ''), mdy(r.acquired), mdy(r.sold), usd(r.proceeds), usd(r.cost), '', '', usd(r.gain)].concat(hasW ? [r.wallet || '?'] : []).map(ascii);
+    const parts = F.parts.map(P => ({ title: ascii(P.title + ' - Box ' + P.boxText), head, rows: P.lines.map(r => ({ tv: false, cells: cells(r, r.user ? ' - COST AND DATE ENTERED BY YOU (to verify)' : '') })),
+      total: ['Totals (' + P.scheduleD + ')', '', '', usd(P.totals.d), usd(P.totals.e), '', '', usd(P.totals.h)].concat(hasW ? [''] : []).map(ascii) }));
+    const tv = F.toVerify.map(r => ({ tv: true, cells: cells(r, ' - TO VERIFY: ' + r.status.replace(/^to verify:\s*/, '')) }));
+    const rows = parts.reduce((a, P) => a.concat(P.rows), []).concat(tv);
     const info = [
       'Generated: ' + now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate()) + ' ' + pad(now.getUTCHours()) + ':' + pad(now.getUTCMinutes()) + ' UTC',
       'Lot method: ' + (METHOD[T.method] || METHOD.FIFO),
       'Wallets: ' + (T.wallets && T.wallets.length ? T.wallets.join(', ') : 'one (no wallet column)'),
+      'Form 8949 situation: ' + (eng().CATNOTE[F.cat] || 'not chosen - to verify'),
       'Tax year: ' + (T.year || 'all years') + (T.tz ? ' (times in file: ' + T.tz.file + '; tax dates: ' + T.tz.tax + ', to verify)' : ' (sale dates in UTC, to verify)'),
       'Sales: ' + T.sales + ' (' + T.rows + ' lines' + (T.toVerify ? ', ' + T.toVerify + ' to verify, not in the totals' : '') + ')',
       'Short term: proceeds ' + usd(T.short.proceeds) + ', cost ' + usd(T.short.cost) + ', gain/loss ' + usd(T.short.gain),
@@ -32,7 +34,7 @@
       'Total gain or loss: ' + usd(T.gain)
     ];
     if (T.income && T.income.count) info.push('Income (staking / airdrops / interest): ' + usd(T.income.usd) + ' (' + (T.income.count - T.income.unknown) + ' of ' + T.income.count + ' lines' + (T.income.unknown ? '; ' + T.income.unknown + ' without USD value, to verify' : '') + ') - ordinary income, to verify; no tax rates applied');
-    return { title: 'Kryptax - U.S. summary (estimate)', info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows };
+    return { title: 'Kryptax - U.S. summary (estimate)', info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows, parts, tv };
   }
 
   function makePdf(jsPDF, res, opts) {
@@ -41,17 +43,23 @@
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); let y = 24;
     for (const l of D.info) { for (const s of doc.splitTextToSize(l, W - 2 * M)) { doc.text(s, M, y); y += 5; } }
     doc.setFontSize(8); doc.setTextColor(90); for (const s of doc.splitTextToSize(D.boxNote, W - 2 * M)) { doc.text(s, M, y); y += 4; } doc.setTextColor(0);
-    const hasW = D.head.length === 9, desc = hasW ? 40 : 54;
-    const cs = { 0: { cellWidth: desc } }; [3, 4, 5].forEach(i => cs[i] = { halign: 'right' }); if (hasW) cs[7] = { cellWidth: 24 };
-    doc.autoTable({ startY: y + 2, head: [D.head], body: D.rows.map(r => r.cells), margin: { left: M, right: M, bottom: 16, top: 12 }, 
-      styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, headStyles: { fillColor: [40, 40, 40] }, columnStyles: cs, rowPageBreak: 'avoid',
-      didParseCell: c => { if (c.section === 'body' && D.rows[c.row.index].tv) { c.cell.styles.fillColor = [255, 236, 200]; c.cell.styles.fontStyle = 'bold'; } } });
+    const hasW = D.head.length === 9, cs = { 0: { cellWidth: hasW ? 40 : 52 } }; [3, 4, 7].forEach(i => cs[i] = { halign: 'right' }); [5, 6].forEach(i => cs[i] = { cellWidth: 9 }); if (hasW) cs[8] = { cellWidth: 22 };
+    const tbl = (title, body, foot, hl) => {
+      if (y > H - 40) { doc.addPage(); y = 16; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(title, M, y + 4); doc.setFont('helvetica', 'normal');
+      doc.autoTable({ startY: y + 6, head: [D.head], body, foot: foot ? [foot] : undefined, showFoot: 'lastPage', margin: { left: M, right: M, bottom: 16, top: 12 },
+        styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, headStyles: { fillColor: [40, 40, 40] }, footStyles: { fillColor: [225, 225, 225], textColor: 0 }, columnStyles: cs, rowPageBreak: 'avoid',
+        didParseCell: c => { if (hl && c.section === 'body') { c.cell.styles.fillColor = [255, 236, 200]; c.cell.styles.fontStyle = 'bold'; } } });
+      y = doc.lastAutoTable.finalY + 6;
+    };
+    for (const P of D.parts) tbl(P.title, P.rows.length ? P.rows.map(r => r.cells) : [['No sale in this part'].concat(D.head.slice(1).map(() => ''))], P.total, false);
+    if (D.tv.length) tbl('Not on Form 8949 - to verify (not in the totals)', D.tv.map(r => r.cells), null, true);
     const n = doc.internal.getNumberOfPages();
     for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(80); doc.text(D.foot, M, H - 7); doc.text('Page ' + i + ' / ' + n, W - M, H - 7, { align: 'right' }); doc.setTextColor(0); }
     return doc;
   }
-  function download(jsPDF, res, doc0) {
-    const d = (doc0 || root.document), blob = makePdf(jsPDF, res).output('blob'), a = d.createElement('a');
+  function download(jsPDF, res, doc0, opts) {
+    const d = (doc0 || root.document), blob = makePdf(jsPDF, res, opts).output('blob'), a = d.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'kryptax-us-summary.pdf'; d.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
   const api = { summaryData, makePdf, download, FOOT };
