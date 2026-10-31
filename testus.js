@@ -204,4 +204,12 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq(U.toCSV(r, { da: { p: 88938, b: 46055 } }).includes('Cost basis (box 1g),46055.00,46055.00,0.00,matches'), true, 'CSV: matching basis');
   const X = require('./us-export.js'), d0 = X.summaryData(r, {}), d1 = X.summaryData(r, { da: { p: 88900 } });
   eq([d0.info.some(l => /Form 1099-DA Proceeds/.test(l)), d1.info.some(l => l === 'Form 1099-DA Proceeds (box 1f): $88,900.00 vs Kryptax $88,938.00 - difference $38.00 (TO VERIFY)')], [false, true], 'PDF: 1099-DA line only when entered'); }
+// v2.4 capital loss carryover entry (Schedule D lines 6 and 14), only when entered
+{ eq(U.carryLines(r, {}), null, 'carryover: nothing entered, nothing shown');
+  const K = U.carryLines(r, { s: 1000, l: -500 });
+  eq([K.s, K.l, K.net7, K.net15], [1000, 500, 21933, 19450], 'carryover subtracted from the Part totals (sign typed either way)');
+  const c = U.toCSV(r, { carry: { s: 1000 } }).split('\n');
+  eq([c.includes('Schedule D line 6 - short-term carryover,-1000.00'), c.includes('Schedule D line 14 - long-term carryover,0.00'), /Capital loss carryover/.test(U.toCSV(r))], [true, true, false], 'CSV: carryover section only when entered');
+  const X = require('./us-export.js');
+  eq([X.summaryData(r, { carry: { l: 500 } }).info.some(l => /long-term -\$500\.00 \(line 14\)/.test(l)), X.summaryData(r, {}).info.some(l => /carryover/.test(l))], [true, false], 'PDF: carryover line only when entered'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
