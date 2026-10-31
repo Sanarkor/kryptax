@@ -57,7 +57,33 @@
   const usDate = v => v instanceof Date ? Date.UTC(v.getFullYear(), v.getMonth(), v.getDate(), v.getHours(), v.getMinutes(), v.getSeconds())
     : typeof v === 'number' ? NaN : E.parseDate(String(v == null ? '' : v).trim(), 'MDY', 'UTC');
   /* rows: array of arrays (header found in the first 25 rows). Returns { txs, skipped, missingCols } */
+  /* v2.0 platform exports, recognised only when the header matches a structure documented on the platform's official help pages:
+     Kraken "Trades" export (support.kraken.com, "How to interpret Trades history fields"): txid, ordertxid, pair, time (UTC), type (buy/sell), price, cost (quote currency, fees NOT included), fee (quote currency), vol (base currency), margin.
+     Only pairs quoted in USD and non-margin trades are converted; other rows are skipped and listed (to verify). */
+  const KR_BASE = { XXBT: 'BTC', XBT: 'BTC', XXDG: 'DOGE', XDG: 'DOGE' };
+  function krakenPair(p) {
+    p = String(p || '').toUpperCase().replace(/[\/\s-]/g, ''); const m = /^(.+?)(ZUSD|USD)$/.exec(p); if (!m) return null;
+    let b = m[1]; if (KR_BASE[b]) return KR_BASE[b]; if (m[2] === 'ZUSD' && b.length === 4 && b[0] === 'X') b = b.slice(1); return b || null;
+  }
+  function platformRows(rows) {
+    for (let i = 0; i < Math.min(25, rows.length); i++) {
+      const h = (rows[i] || []).map(norm), ix = k => h.indexOf(k);
+      if (['txid', 'ordertxid', 'pair', 'time', 'type', 'price', 'cost', 'fee', 'vol'].every(k => ix(k) > -1)) {
+        const out = [['Date', 'Type', 'Asset', 'Quantity', 'Total (USD)', 'Fee (USD)']], skipped = [];
+        rows.slice(i + 1).forEach((r, j) => {
+          const line = i + j + 2, g = k => r[ix(k)], a = krakenPair(g('pair')), mg = ix('margin') > -1 ? num(g('margin')) : 0;
+          if (!r.some(x => String(x).trim() !== '')) return;
+          if (!a) { skipped.push({ line, why: 'pair not quoted in USD (' + String(g('pair')) + ')' }); out.push(['', '', '', '', '', '']); return; }
+          if (mg > 0) { skipped.push({ line, why: 'margin trade (not handled)' }); out.push(['', '', '', '', '', '']); return; }
+          out.push([String(g('time') || '').replace(/\.\d+$/, ''), g('type'), a, g('vol'), g('cost'), g('fee')]);
+        });
+        return { rows: out, skipped, platform: 'Kraken trades export', fileTz: 'UTC' };
+      }
+    }
+    return null;
+  }
   function parseRows(rows) {
+    const P = platformRows(rows); if (P) { const o = parseRows(P.rows); o.skipped = P.skipped.concat(o.skipped.filter(x => !P.skipped.some(y => y.line === x.line))); o.platform = P.platform; o.fileTz = P.fileTz; return o; }
     const hi = headerIndex(rows), head = rows[hi] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null) };
     if (out.missingCols.length) return out;
     rows.slice(hi + 1).forEach((r, i) => {
@@ -339,7 +365,7 @@
         } else p = fromCSVText(data);
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; render();
+      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; if (p.fileTz && tzSel) { fileTz = p.fileTz; tzSel.value = p.fileTz; } render();
     });
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
@@ -361,6 +387,7 @@
           const iso = v => { if (v == null) return ''; const d = new Date(v); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); };
           return `<details class="note usmiss"${M.some(r => !r.user) ? ' open' : ''}><summary>Missing purchases: enter the cost (optional)</summary><p class="hint">Units sold with no purchase in your file are left out of the totals. If you know them, enter the total cost in USD and the date acquired; the line is then included and marked “entered by you” (to verify).</p>`
             + M.map(r => { const mc = mcost[r.line] || {}; return `<div class="grid"><p><b>Sale line ${r.line}</b>: ${esc(r.desc)} sold ${mdy(r.sold)}${r.wallet ? ' (' + esc(r.wallet) + ')' : ''}</p><label>Total cost (USD)<input class="usmc" data-line="${r.line}" inputmode="decimal" value="${mc.cost != null ? esc(String(mc.cost)) : ''}" placeholder="e.g. 250.00"></label><label>Date acquired<input type="date" class="usmd" data-line="${r.line}" value="${esc(iso(mc.date))}" max="${iso(r.sold)}"></label></div>`; }).join('') + '</details>'; })()
+        + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
         + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
