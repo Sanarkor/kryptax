@@ -73,3 +73,14 @@ State taxes are not included.
 ## Missing purchases entered by the user (v1.9)
 
 When a sale needs more units than the purchases in the file, the extra units are flagged « to verify: no purchase found » and left out of the totals. The result offers an optional form, one line per such sale: total cost in USD and date acquired. When both are filled (and the date is not after the sale), the units are included with that cost, the term is computed with the same holding-period rule (Pub. 544), and the line is marked « entered by you (to verify) » in the result, the CSV and the PDF. Without input, nothing changes. The user remains responsible for these values (to verify against their records).
+
+## Platform export formats (v2.0)
+
+Recognised automatically only when the header matches a structure published on the platform's own help pages; any other file goes through the generic import (Date, Type, Asset, Quantity, Total or Price, Fee).
+
+- **Kraken — Trades export** (support.kraken.com, "How to interpret Trades history fields", checked 2026-11-01): `txid, ordertxid, pair, time, type, ordertype, price, cost, fee, vol, margin, misc, ledgers`. `time` is UTC (the time zone selector is set to UTC); `cost` is in the quote currency and excludes fees; `fee` is in the quote currency. Only USD-quoted pairs (e.g. XXBTZUSD, SOLUSD) and non-margin trades are read; other rows are skipped and listed (to verify). Kraken asset codes XXBT/XBT → BTC, XXDG/XDG → DOGE, other 4-letter X-codes in Z-quoted pairs drop the leading X (to verify for unusual assets).
+
+Not added (structure not verifiable on the platform's official help pages, or no USD value per row):
+- Coinbase transaction history CSV: the official help page explains how to download statements but does not document the columns.
+- Gemini transaction history (.xlsx): the official help page explains the download only.
+- Kraken Ledgers export: documented officially, but rows carry amounts in the asset only, with no USD value, so a cost basis cannot be computed from it alone.
