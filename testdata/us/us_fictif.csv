@@ -1,0 +1,10 @@
+Date,Type,Asset,Quantity,Price (USD),Total (USD),Fee (USD),Received Asset,Received Quantity
+01/10/2024,Buy,BTC,1,,30000,50,,
+03/01/2025,Buy,BTC,1,,60000,40,,
+01/10/2025,Sell,BTC,0.5,,35000,25,,
+01/11/2025,Sell,BTC,0.5,,35000,25,,
+06/01/2025,Buy,ETH,10,2000,,10,,
+07/01/2025,Convert,ETH,5,,12000,12,SOL,80
+09/01/2025,Sell,SOL,40,,7000,,,
+10/01/2025,Sell,DOGE,1000,,150,1,,
+11/01/2025,Staking reward,ETH,0.1,,250,,,
