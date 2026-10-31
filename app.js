@@ -4,6 +4,12 @@
   const SHOW_PREC = false; // précision des cours masquée (écran et PDF) pour l'instant : passer à true pour la réafficher
   const KOFI_NOTE = true; // mention légale « Dons » affichée (#kofinote) : les dons passent par Ko-fi (lien dans la fenêtre #merci)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
+  /* Bouton FRANCE / US (en-tête) : le mode US est une page en construction qui masque l'import et les résultats ; FRANCE reste inchangé. */
+  { const b = $('#region'), us = $('#usmode'), m = document.querySelector('main'), K = 'kx-region';
+    const set = v => { const u = v === 'US'; if (b) { b.textContent = u ? 'US' : 'FRANCE'; b.setAttribute('aria-pressed', u ? 'true' : 'false'); b.setAttribute('aria-label', u ? 'Pays : US. Revenir au mode France' : 'Pays : France. Basculer vers le mode US'); }
+      if (us) us.hidden = !u; if (m) m.hidden = u; try { localStorage.setItem(K, u ? 'US' : 'FR'); } catch (e) {} };
+    let v0 = 'FR'; try { v0 = localStorage.getItem(K) === 'US' ? 'US' : 'FR'; } catch (e) {}
+    if (b) { set(v0); b.addEventListener('click', () => set(b.textContent === 'US' ? 'FR' : 'US')); } }
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
   /* Encre réelle d'un glyphe (px, depuis l'origine) : rendu canvas puis balayage des pixels (robuste au gras synthétique, au zoom, aux polices de remplacement) */
   function inkX(ch, font, px) {
