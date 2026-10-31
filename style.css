@@ -237,3 +237,4 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 
 .usmode .usimp{text-align:left}.usmode .usimp .sechead h2{margin:0}.usmode .usimp>.hint{margin:6px 0}.usmode .usimp>label.btn{margin:4px 0}.usmode .usimp .fhelp{margin:6px 0 0}.usdet{margin:.15em 0}.usdet summary{cursor:pointer;color:#9aa8bd}.usdet[open] summary{margin-bottom:.15em}#usimp.dropover::after{content:"Drop your file here"}
 @media (max-width:767.98px){.usmode .usimp{padding:11px 12px}}
+.usexp{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.usexp .btn{flex:1 1 150px}.usreshead{margin:14px 0 6px;text-align:left}#usresult{text-align:left}
