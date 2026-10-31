@@ -1,0 +1,37 @@
+{
+ "nTx": 3,
+ "types": {
+  "BUY": 1,
+  "SELL": 2
+ },
+ "years": {
+  "2025": {
+   "cessions": 2,
+   "incomplete": false,
+   "l213": 1750,
+   "l214": 0,
+   "l218": 1750,
+   "l224": 750,
+   "exonere": false,
+   "box": "3AN",
+   "base": 750,
+   "prelevement": 235.5,
+   "detail": [
+    [
+     "BTC",
+     1200,
+     450,
+     1000,
+     75
+    ],
+    [
+     "BTC",
+     1300,
+     1300,
+     625,
+     675
+    ]
+   ]
+  }
+ }
+}
