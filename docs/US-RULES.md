@@ -115,3 +115,12 @@ Sources: IRS, Instructions for Form 8949 (2025), irs.gov/instructions/i8949, and
 
 - When the user typed a box 1f and/or box 1g total, the CSV gets a "Form 1099-DA comparison" section and the PDF summary gets one line per entered box: Form 1099-DA amount, Kryptax amount, difference, "to verify" or "matches", plus the same caveats as on screen.
 - Nothing is added when nothing was entered. Same IRS source as v2.1.
+
+## Capital loss carryover entry (v2.4)
+
+Source: IRS, Instructions for Schedule D (Form 1040) (2025), "Capital Loss Carryover Worksheet—Lines 6 and 14" (irs.gov/instructions/i1040sd, checked 2026-11-01): worksheet line 8 goes to Schedule D line 6 (short term) and worksheet line 13 to line 14 (long term).
+
+- Optional: the user types the two amounts from their own worksheet. Kryptax does not fill the worksheet (it needs last year's Form 1040 and Schedule D).
+- Kryptax shows the net short-term and long-term amounts for this file plus the carryover. These equal Schedule D lines 7 and 15 only if there are no other capital items — to verify.
+- Shown on screen, and in the CSV and PDF only when entered.
+- Not done: the capital loss limit of Schedule D line 21, any tax rate or tax computation, wash sales.
