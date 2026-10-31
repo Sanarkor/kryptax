@@ -38,6 +38,10 @@ State taxes are not included.
 - CSV, Excel (.xlsx/.xls, read with the SheetJS shipped with the app) and PDF.
 - PDF import is **best effort, to verify**. Text is read in the browser with the same pdf.js (`isEvalSupported: false`), and only lines like `MM/DD/YYYY Type ASSET quantity $total [$fee] [-> qty ASSET]` are used. If no line matches, nothing is computed.
 
+## PDF summary (v1.5)
+
+`us-export.js` builds a PDF with jsPDF (already shipped; `export.js` is not used): title, generation date (UTC), lot method, wallets, short / long / total, income total if any, then all Form 8949-style lines on as many pages as needed. Lines "to verify" are highlighted and marked "TO VERIFY". Every page has the footer "Estimate - not tax advice - to be verified - state taxes not included". The box letter (G/H/I short term, J/K/L long term; I or L without a Form 1099-DA, see i8949 above) is printed only as an indication, to verify (Form 1099-DA not read).
+
 ## To be verified (not coded in v1)
 
 - **Wash sales.** Section 1091 is written for "stock or securities". Bill H.R. 9172 (introduced June 8, 2026) would extend it to digital assets, but it was still only introduced in October 2026. Kryptax does not apply it; check the current law.

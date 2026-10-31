@@ -103,7 +103,27 @@ eq(ic.rows.map(x => [x.cost, x.gain]), [[300, 100]], 'income lot cost = USD valu
 const icsv = U.incomeCSV(ic).split('\n');
 eq([icsv[0].startsWith('Date received,Asset,Quantity,Value USD'), icsv[1], icsv[4].split(',')[3]], [true, '01/15/2025,ETH,0.1,300.00,Staking,ok', ''], 'separate income CSV');
 eq(U.incomeType('Learning reward') + U.incomeType('Earn interest'), 'RewardInterest', 'income type labels');
+
+// PDF summary (us-export.js, jsPDF already shipped; export.js untouched)
+{ const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
+  const cp = require('child_process'), pdfText = (res, o) => cp.execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, res, o).output('arraybuffer')) }).toString();
+  const now = new Date(Date.UTC(2026, 9, 31, 21, 0));
+  const sd = X.summaryData(w, { now });
+  eq([sd.head.includes('Wallet'), sd.rows.filter(x => x.tv).length, sd.info[0], /Lot method: FIFO/.test(sd.info[1])], [true, 1, 'Generated: 2026-10-31 21:00 UTC', true], 'summary data (wallets, to verify, date, method)');
+  const t1 = pdfText(w, { now }), p1 = t1.split('\f').filter(p => p.trim());
+  eq([/Kryptax . U\.S\. summary \(estimate\)/.test(t1), /Total gain or loss: \$30,020\.00/.test(t1), /TO VERIFY/.test(t1), /indication only, to verify \(Form 1099-DA not read\)/.test(t1), /Hardware wallet/.test(t1)], [true, true, true, true, true], 'PDF text: title, totals, to verify, box note, wallet');
+  eq(p1.every(p => p.includes(X.FOOT)), true, 'footer on every page');
+  eq(/Income \(staking \/ airdrops \/ interest\): \$495\.00/.test(pdfText(ic, { now })), true, 'PDF shows income total');
+  eq(/Lot method: HIFO/.test(pdfText(U.compute(lt, { method: 'HIFO' }), { now })), true, 'PDF shows the lot method');
+  // 2000 fictitious sales: clean pagination
+  let big = 'Date,Type,Asset,Quantity,Total (USD),Wallet\n2024-01-02,Buy,BTC,2000,2000000,Exchange A\n';
+  for (let i = 0; i < 2000; i++) big += '2025-0' + (1 + i % 9) + '-1' + (i % 9) + ',Sell,BTC,1,' + (900 + i % 300) + ',Exchange A\n';
+  const B = run(big), tb = pdfText(B, { now }), pb = tb.split('\f').filter(p => p.trim()), lines = tb.split('\n').filter(l => / BTC /.test(l) && /\$/.test(l));
+  eq([B.rows.length, pb.length > 20, pb.every(p => p.includes(X.FOOT) && /Page \d+ \/ \d+/.test(p)), lines.length], [2000, true, true, 2000], '2000 lines paginated, footer and page number on each page');
+  fs.writeFileSync('/tmp/kryptax-us-big.pdf', Buffer.from(X.makePdf(jsPDF, B, { now }).output('arraybuffer')));
+  fs.writeFileSync('/tmp/kryptax-us-wallets.pdf', Buffer.from(X.makePdf(jsPDF, w, { now }).output('arraybuffer')));
+}
 // English only, no French legal words in the module texts
-const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8');
+const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8') + fs.readFileSync(__dirname + '/us-export.js', 'utf8');
 eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), false, 'no French legal text in the U.S.A. module');
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
