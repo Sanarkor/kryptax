@@ -22,7 +22,7 @@ chk(!bad.length, 'Tableau 2086 : chaque ligne porte les 12 valeurs 212-224' + (b
 chk(/GLOBAL.*\d/.test(tab) && !/Cession 1 \(/.test(txt), 'Tableau 2086 : ligne GLOBAL en bas, pas de fiche par cession');
 chk(!/RENSEIGNER/.test(txt), 'Aucune ligne « À RENSEIGNER » (jeu fictif complet)');
 chk(!/Soldes|Revenus/.test(txt) && /exclus\s+4 \(non imposables\)/.test(txt), 'Pas de liste d’échanges, soldes ni revenus (simple compteur)');
-chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
+chk(!new RegExp(['rev', 'olut'].join(''), 'i').test(txt), 'PDF : aucune mention de la plateforme');
 // Année choisie : titre et année vide (fictif)
 { const xy = X.exportData(Y, S, () => [], T, 2026), ty = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xy, X.title(2026)).output('arraybuffer')) }).toString();
   chk(/Annee 2026 - declaration 2027|Année 2026 - déclaration 2027/.test(ty), 'PDF : titre « Année 2026 — déclaration 2027 »');
@@ -68,6 +68,14 @@ chk(!/revolut/i.test(txt), 'PDF : aucune mention de la plateforme');
   chk(/non traitees comme des cessions : staking 3 ; airdrops 1 ; minage 1 ; cadeaux et dons 1 ; frais payes en crypto 1 ; depots et retraits entre comptes 2|non traitées comme des cessions : staking 3 ; airdrops 1 ; minage 1 ; cadeaux et dons 1 ; frais payés en crypto 1 ; dépôts et retraits entre comptes 2/.test(one), 'PDF : liste des catégories et nombres');
   chk(/n'est pas calcul. par Kryptax/.test(one) && /. v.rifier : 1 paiement en crypto/.test(one), 'PDF : régime propre non calculé + paiement à vérifier');
   require('fs').writeFileSync('/tmp/kx-sp.pdf', Buffer.from(X.makePdf(jsPDF, x2, X.title(2026)).output('arraybuffer')));
-  chk(!/revolut|conseil fiscal personnalis/i.test(tp), 'PDF : ni plateforme ni conseil');
+  chk(!new RegExp(['rev', 'olut'].join(''), 'i').test(tp) && !/conseil fiscal personnalis/i.test(tp), 'PDF : ni plateforme ni conseil');
 }
+chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » bien visible en en-tête');
+{ const X2 = require('./export.js'); const S = (require('fs').readFileSync(__dirname + '/export.js', 'utf8').match(/const SHORT = \[([^\]]*)\]/) || [, ''])[1];
+  const n = (S.match(/\(€\)'/g) || []).length; chk(n === 12 && !/211 Date[^']*€/.test(S), 'PDF : « (€) » dans les 12 en-têtes de montants (212 à 224), pas sur la date (' + n + ')'); }
+// Seuil 305 € dans le PDF : même règle que l'écran (somme des lignes 218, frais déduits). Cession fictive de 310 € avec 10 € de frais -> exonérée.
+{ const T3 = [{ id: 1, date: E.fromParis(2025, 0, 10), type: 'BUY', asset: 'AAA', qty: 1, eur: 100, fee: 0 }, { id: 2, date: E.fromParis(2025, 5, 10), type: 'SELL', asset: 'AAA', qty: 1, eur: 310, fee: 10 }];
+  const Y3 = E.byYear(E.compute(T3, () => null)), x3 = X.exportData(Y3, {}, () => [], T3, 2025);
+  const t3 = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, x3, X.title(2025)).output('arraybuffer')) }).toString();
+  chk(Y3[2025].exonere === true && x3.totals[0].exonere === true && /<= 305|≤ 305/.test(t3) && !/3AN|3BN/.test(t3.replace(/3AN\/3BN/g, '')) && /exon/i.test(t3), 'PDF : 310 € avec 10 € de frais (218 = 300 €) exonéré, comme à l’écran'); }
 process.exit(ok ? 0 : 1);

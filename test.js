@@ -453,6 +453,24 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     for (const [l, z, w] of cs) eq(AR(l, z) === w ? 1 : 0, 1, 'Région auto ' + JSON.stringify(l) + ' / ' + z + ' -> ' + w);
     eq(/if \(save\) try \{ localStorage\.setItem\(K/.test(AP) && AP.includes("set('FR', true)") && AP.includes("set('US', true)") && !/set\(v0, true\)|set\('US', true\); fr\.add/.test(AP) ? 1 : 0, 1, 'Région : seul le clic est mémorisé, choix mémorisé prioritaire');
     eq(/fetch\(|XMLHttpRequest|geolocation|ipapi|ipinfo/i.test(src + AP.slice(AP.indexOf("const fr = $('#regfr')"), AP.indexOf('/* Signature sous le logo'))) || /géoloc|détect|geoloc|detect/i.test(require('fs').readFileSync(__dirname + '/index.html', 'utf8')) ? 1 : 0, 0, 'Région auto : aucun appel réseau ni géolocalisation'); }
+  { // Seuil 305 € : somme des lignes 218 (prix de cession nets de frais), même règle à l'écran et dans le PDF
+    const X = require('./export.js'), T = [{ id: 1, date: E.fromParis(2025, 0, 10), type: 'BUY', asset: 'AAA', qty: 1, eur: 100, fee: 0 }, { id: 2, date: E.fromParis(2025, 5, 10), type: 'SELL', asset: 'AAA', qty: 1, eur: 310, fee: 10 }];
+    const R = E.compute(T, () => null), Y = E.byYear(R), x = X.exportData(Y, {}, () => [], T);
+    eq(Y[2025].total218, 300, 'Seuil : cession 310 € - 10 € de frais -> ligne 218 = 300 €'); eq(Y[2025].exonere ? 1 : 0, 1, 'Seuil : 310 € avec 10 € de frais exonéré à l’écran');
+    eq(x.totals[0].exonere && x.totals[0].report === 0 && x.totals[0].box === 'aucune (≤ 305 €)' ? 1 : 0, 1, 'Seuil : 310 € avec 10 € de frais exonéré dans le PDF');
+    eq(E.isExempt(305) && !E.isExempt(305.01) ? 1 : 0, 1, 'Seuil : 305 € exonéré, 305,01 € imposable');
+    const T2 = [T[0], { id: 2, date: E.fromParis(2025, 5, 10), type: 'SELL', asset: 'AAA', qty: 1, eur: 320, fee: 10 }], Y2 = E.byYear(E.compute(T2, () => null)), x2 = X.exportData(Y2, {}, () => [], T2);
+    eq(!Y2[2025].exonere && !x2.totals[0].exonere ? 1 : 0, 1, 'Seuil : 320 € - 10 € = 310 € imposable (écran et PDF)');
+    eq(/l213 <= 305/.test(require('fs').readFileSync(__dirname + '/export.js', 'utf8')) ? 1 : 0, 0, 'PDF : plus de seuil testé sur la ligne 213'); }
+  { // Fuseau : résultats identiques quel que soit le fuseau du navigateur
+    const cp = require('child_process'), out = ['UTC', 'America/Los_Angeles', 'Asia/Tokyo', 'Europe/Paris'].map(z => cp.execFileSync(process.execPath, [__dirname + '/testdata/tzprobe.js', __dirname], { env: Object.assign({}, process.env, { TZ: z }) }).toString().trim());
+    eq(new Set(out).size, 1, 'Fuseau : crossCheck / parisYear / fromParis identiques sous UTC, Los Angeles, Tokyo, Paris');
+    eq(JSON.parse(out[0]).slice(0, 3).join(',') === '1,1,1' ? 1 : 0, 1, 'Fuseau : jour civil de Paris (31/12 23h30 ≠ 01/01 ; 10/06 00h15 = 10/06)');
+    const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+    eq(AP.includes('const now = E.parisYear(Date.now())') && AP.includes('return E.fromParis(scopedYear + 1, 0, 1);') ? 1 : 0, 1, 'scopeUntil : année et 1er janvier en heure de Paris');
+    eq((AP.match(/getDocument\(\{[^}]*isEvalSupported: false/g) || []).length === (AP.match(/getDocument\(/g) || []).length ? 1 : 0, 1, 'pdf.js : isEvalSupported:false à chaque appel');
+    const IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
+    eq(/object-src 'none'; base-uri 'none'; form-action 'none'">/.test(IH) && IH.includes('<meta name="referrer" content="no-referrer">') && !/<form/i.test(IH) ? 1 : 0, 1, 'CSP : object-src, base-uri, form-action, referrer, aucun formulaire'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
