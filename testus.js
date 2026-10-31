@@ -40,6 +40,24 @@ eq(U.fromCSVText('Foo,Bar\n1,2\n').missingCols, ['date', 'type', 'asset', 'qty']
 const csv = U.toCSV(r).split('\n');
 eq(csv[0].startsWith('(a) Description,(b) Date acquired,(c) Date sold,(d) Proceeds USD'), true, 'CSV header');
 eq(csv[1], '0.5 BTC,01/10/2024,01/10/2025,34975.00,15025.00,19950.00,short,I,ok', 'CSV first line');
+
+// Excel (SheetJS shipped with the app): header found below a title, 2nd sheet, Date cells and MM/DD/YYYY text
+const X = require('./xlsx.mini.min.js');
+const xp = U.fromWorkbook(X, Buffer.from(fs.readFileSync(__dirname + '/testdata/us/us_fictif.xlsx.b64', 'utf8'), 'base64'));
+eq([xp.missingCols.length, xp.txs.length, xp.txs.map(t => t.type).join()], [0, 4, 'BUY,SELL,BUY,CONVERT'], 'xlsx read (header row 3, sheet 2)');
+eq(xp.txs.map(t => U.mdy(t.date)), ['01/10/2024', '01/11/2025', '06/01/2025', '07/01/2025'], 'xlsx dates kept as written in every time zone');
+const xr = U.compute(xp.txs);
+eq([xr.rows[0].cost, xr.rows[0].proceeds, xr.rows[0].term, xr.rows[1].gain], [15025, 34975, 'long', 1983], 'xlsx → same results as CSV');
+// PDF (best effort): text lines as pdf.js / pdftotext give them; unknown lines ignored, EUR line refused
+const { execFileSync } = require('child_process');
+const pdfLines = f => execFileSync('pdftotext', ['-layout', __dirname + '/testdata/us/' + f, '-'], { encoding: 'utf8' }).split('\n');
+const pp = U.fromPdfLines(pdfLines('us_fictif.pdf.txt'));
+eq([pp.matched, pp.txs.map(t => t.type + ' ' + t.asset).join()], [4, 'BUY BTC,SELL BTC,CONVERT BTC,INCOME ETH'], 'pdf lines recognised (EUR line ignored)');
+const pr = U.compute(pp.txs);
+eq(pr.rows.map(r => [r.proceeds, r.cost, r.term]), [[34975, 15025, 'long'], [14990, 7512.5, "long"]], "pdf → FIFO results");
+eq(pr.totals.income.usd, 250, 'pdf staking line kept');
+eq(U.fromPdfLines(pdfLines('us_inconnu_fictif.pdf.txt')).txs.length, 0, 'unrecognised pdf → nothing computed');
+eq(U.fromPdfLines(['21 juil. 2026 Vente BBB 5 80,00€']).txs.length, 0, 'euro statement line not read as USD');
 // English only, no French legal words in the module texts
 const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8');
 eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), false, 'no French legal text in the U.S.A. module');

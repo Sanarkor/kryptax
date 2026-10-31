@@ -42,13 +42,21 @@
     return null;
   }
   const num = v => { if (v == null || String(v).trim() === '') return NaN; const n = E.parseNum(String(v)); return isFinite(n) ? Math.abs(n) : NaN; };
-  /* rows: array of arrays (first = header). Returns { txs, skipped, missingCols } */
+  /* Header row = first of the first 25 rows where Date, Type, Asset and Quantity are recognised (CSV or Excel). */
+  function headerIndex(rows) {
+    for (let i = 0; i < Math.min(25, rows.length); i++) { const m = mapHeader(rows[i] || []); if (['date', 'type', 'asset', 'qty'].every(k => m[k] != null)) return i; }
+    return 0;
+  }
+  /* Excel dates come as JS Date in local time (SheetJS cellDates): keep the calendar date/time as written, read as UTC. */
+  const usDate = v => v instanceof Date ? Date.UTC(v.getFullYear(), v.getMonth(), v.getDate(), v.getHours(), v.getMinutes(), v.getSeconds())
+    : typeof v === 'number' ? NaN : E.parseDate(String(v == null ? '' : v).trim(), 'MDY', 'UTC');
+  /* rows: array of arrays (header found in the first 25 rows). Returns { txs, skipped, missingCols } */
   function parseRows(rows) {
-    const head = rows[0] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null) };
+    const hi = headerIndex(rows), head = rows[hi] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null) };
     if (out.missingCols.length) return out;
-    rows.slice(1).forEach((r, i) => {
+    rows.slice(hi + 1).forEach((r, i) => {
       const g = k => m[k] == null ? '' : r[m[k]];
-      const line = i + 2, type = kind(g('type')), date = E.parseDate(String(g('date')).trim(), 'MDY', 'UTC');
+      const line = hi + i + 2, type = kind(g('type')), date = usDate(g('date'));
       const asset = String(g('asset') || '').trim().toUpperCase(), qty = num(g('qty'));
       if (!type || !isFinite(date) || !asset || !(qty > 0)) { if (r.some(x => String(x).trim() !== '')) out.skipped.push({ line, why: !type ? 'unknown type' : !isFinite(date) ? 'unreadable date' : 'missing asset or quantity' }); return; }
       const price = num(g('price')), total0 = num(g('total')), fee = num(g('fee'));
@@ -57,6 +65,25 @@
     });
     out.txs.sort((a, b) => a.date - b.date || a.line - b.line);
     return out;
+  }
+  /* Excel (.xlsx/.xls) through the SheetJS already shipped (xlsx.mini.min.js): first sheet that has a recognised header. */
+  function fromWorkbook(X, data) {
+    const wb = X.read(data, { cellDates: true });
+    let best = null;
+    for (const n of wb.SheetNames) {
+      const rows = X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }); if (!rows.length) continue;
+      const p = parseRows(rows); if (!p.missingCols.length) return p; if (!best) best = p;
+    }
+    return best || { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'] };
+  }
+  /* PDF statement in USD — BEST EFFORT, to verify. Text lines (same pdf.js, isEvalSupported:false) of the form:
+     DATE TYPE ASSET QUANTITY $TOTAL [$FEE] [-> QTY ASSET]   e.g. "01/10/2025 Sell BTC 0.5 $35,000.00 $25.00"
+     Lines that do not match are ignored; if no line matches, nothing is computed (never an invented result). */
+  const PDF_RX = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})(?:[ ,]+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)?\s+(buy|purchase|sell|sale|convert|exchange|swap|staking reward|reward|airdrop|interest|send|receive|deposit|withdrawal)\s+([A-Z0-9]{2,10})\s+([\d,]*\.?\d+)\s+\$\s?([\d,]*\.?\d+)(?:\s+\$\s?([\d,]*\.?\d+))?(?:\s+(?:→|->|to)\s+([\d,]*\.?\d+)\s+([A-Z0-9]{2,10}))?\s*$/i;
+  function fromPdfLines(lines) {
+    const rows = [['Date', 'Type', 'Asset', 'Quantity', 'Total (USD)', 'Fee (USD)', 'Received Asset', 'Received Quantity']];
+    for (const l of lines) { const m = String(l).replace(/\s+/g, ' ').trim().match(PDF_RX); if (m) rows.push([m[1], m[2], m[3], m[4], m[5], m[6] || '', m[8] || '', m[7] || '']); }
+    const p = parseRows(rows); p.matched = rows.length - 1; return p;
   }
   /* Long term = sold strictly after the 1-year anniversary of the acquisition date (calendar days, UTC). */
   function isLong(acq, sold) {
@@ -113,7 +140,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { mapHeader, kind, parseRows, fromCSVText, compute, isLong, toCSV, mdy, usd };
+  const api = { mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, mdy, usd };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -123,11 +150,27 @@
     let last = null;
     inp.addEventListener('change', async () => {
       const f = inp.files && inp.files[0]; if (!f) return;
-      const p = fromCSVText(new Uint8Array(await f.arrayBuffer()));
+      const name = f.name.toLowerCase(), data = new Uint8Array(await f.arrayBuffer()), W = typeof window !== 'undefined' ? window : root;
+      let p, pdfNote = '';
+      try {
+        if (/\.pdf$/.test(name) || (data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46)) {
+          if (!W.pdfjsLib) { out.innerHTML = '<p class="warn">PDF reading is not available. Please reload the page.</p>'; return; }
+          W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+          const doc = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
+          const toLines = W.KryptaxPipeline && W.KryptaxPipeline.itemsToLines;
+          for (let i = 1; i <= doc.numPages; i++) { const c = await (await doc.getPage(i)).getTextContent(); lines = lines.concat(toLines ? toLines(c.items) : c.items.map(x => x.str)); }
+          p = fromPdfLines(lines);
+          if (!p.txs.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this PDF was not recognised. No USD transaction line was found (expected lines like “01/10/2025 Sell BTC 0.5 $35,000.00 $25.00”). Nothing was computed. Please export a CSV or Excel file instead.</p>'; return; }
+          pdfNote = '<p class="warn">PDF import is best effort: ' + p.txs.length + ' line' + (p.txs.length > 1 ? 's' : '') + ' read. Please check every line against your statement (to verify).</p>';
+        } else if (/\.(xlsx|xls)$/.test(name)) {
+          if (!W.XLSX) { out.innerHTML = '<p class="warn">Excel reading is not available. Please reload the page.</p>'; return; }
+          p = fromWorkbook(W.XLSX, data);
+        } else p = fromCSVText(data);
+      } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
       const res = last = compute(p.txs), T = res.totals;
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td><td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
-      out.innerHTML = `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, FIFO)<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
+      out.innerHTML = pdfNote + `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, FIFO)<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
         + (T.income.count ? `<p class="hint">${T.income.count} reward/income line${T.income.count > 1 ? 's' : ''} (${usd(T.income.usd)}) added as lots at their USD value; income itself is not computed here (to verify).</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')

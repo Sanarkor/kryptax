@@ -27,6 +27,11 @@ State taxes are not included.
 | Digital assets use boxes G/H/I (short) and J/K/L (long), not C/F. Without a 1099-DA: box I or box L. | i8949 2025 "What's New", "Box C or Box I", "Box F or Box L" |
 | Rewards: staking rewards are income at their USD fair market value when you gain control of them, and that value becomes your basis. | Rev. Rul. 2023-14; FAQ Q24–Q25 |
 
+## Import (v1.1)
+
+- CSV, Excel (.xlsx/.xls, read with the SheetJS shipped with the app) and PDF.
+- PDF import is **best effort, to verify**. Text is read in the browser with the same pdf.js (`isEvalSupported: false`), and only lines like `MM/DD/YYYY Type ASSET quantity $total [$fee] [-> qty ASSET]` are used. If no line matches, nothing is computed.
+
 ## To be verified (not coded in v1)
 
 - **Wash sales.** Section 1091 is written for "stock or securities". Bill H.R. 9172 (introduced June 8, 2026) would extend it to digital assets, but it was still only introduced in October 2026. Kryptax does not apply it; check the current law.
