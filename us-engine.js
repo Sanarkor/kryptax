@@ -24,7 +24,9 @@
     total: ['total', 'total usd', 'total (usd)', 'value', 'value usd', 'value (usd)', 'subtotal', 'usd value', 'proceeds'],
     fee: ['fee', 'fees', 'fee usd', 'fee (usd)', 'fees (usd)', 'commission'],
     toAsset: ['received asset', 'to asset', 'asset received', 'buy asset'],
-    toQty: ['received quantity', 'to quantity', 'quantity received', 'buy quantity']
+    toQty: ['received quantity', 'to quantity', 'quantity received', 'buy quantity'],
+    wallet: ['wallet', 'platform', 'source', 'exchange', 'account', 'wallet / platform', 'from wallet'],
+    toWallet: ['to wallet', 'destination', 'destination wallet', 'to account']
   };
   const norm = s => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
   function mapHeader(head) {
@@ -38,7 +40,9 @@
     if (/^(sell|sold|sale|advanced trade sell)/.test(t)) return 'SELL';
     if (/convert|exchange|swap|trade/.test(t)) return 'CONVERT';
     if (/stak|reward|airdrop|interest|income|earn|mining|learn/.test(t)) return 'INCOME';
-    if (/send|receive|deposit|withdraw|transfer/.test(t)) return 'TRANSFER';
+    if (/send|sent|withdraw|transfer out/.test(t)) return 'OUT';
+    if (/receive|deposit|transfer in/.test(t)) return 'IN';
+    if (/transfer/.test(t)) return 'TRANSFER';
     return null;
   }
   const num = v => { if (v == null || String(v).trim() === '') return NaN; const n = E.parseNum(String(v)); return isFinite(n) ? Math.abs(n) : NaN; };
@@ -61,7 +65,7 @@
       if (!type || !isFinite(date) || !asset || !(qty > 0)) { if (r.some(x => String(x).trim() !== '')) out.skipped.push({ line, why: !type ? 'unknown type' : !isFinite(date) ? 'unreadable date' : 'missing asset or quantity' }); return; }
       const price = num(g('price')), total0 = num(g('total')), fee = num(g('fee'));
       const total = isFinite(total0) ? total0 : isFinite(price) ? price * qty : NaN;
-      out.txs.push({ line, date, type, asset, qty, usd: total, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')) });
+      out.txs.push({ line, date, type, asset, qty, usd: total, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')), wallet: String(g('wallet') || '').trim(), toWallet: String(g('toWallet') || '').trim() });
     });
     out.txs.sort((a, b) => a.date - b.date || a.line - b.line);
     return out;
@@ -92,32 +96,83 @@
     return sd > anniv;
   }
   const r2 = v => v == null || !isFinite(v) ? null : Math.round(v * 100) / 100;
-  /* FIFO, one wallet. Returns 8949-style rows + totals. A row whose basis or proceeds is unknown is flagged "to verify" and left out of the totals. */
+  /* FIFO per wallet (Rev. Proc. 2024-28 and Treas. Reg. 1.1012-1(j): units are tracked wallet by wallet / account by account;
+     https://www.irs.gov/pub/irs-drop/rp-24-28.pdf). Without a Wallet column, everything is one wallet (same as before).
+     Transfers between your own wallets are not taxable (FAQ Q38): the lots move with their original acquisition date and cost.
+     A send (OUT) is paired with a receive (IN) of the same asset, within 3 days, received quantity between 98% and 100%.
+     Unpaired transfers are never ignored: they are listed "to verify".
+     A row whose basis or proceeds is unknown is flagged "to verify" and left out of the totals. */
+  const PAIR_MS = 3 * 864e5, PAIR_MIN = 0.98;
+  function pairTransfers(txs) {
+    const ins = txs.filter(t => t.type === 'IN'), used = new Set(), pairs = new Map();
+    for (const o of txs.filter(t => t.type === 'OUT')) {
+      let best = null;
+      for (const i of ins) {
+        if (used.has(i) || i.asset !== o.asset || Math.abs(i.date - o.date) > PAIR_MS || i.qty > o.qty * (1 + 1e-9) || i.qty < o.qty * PAIR_MIN) continue;
+        if (o.wallet && i.wallet && o.wallet === i.wallet) continue;
+        if (!best || Math.abs(i.date - o.date) < Math.abs(best.date - o.date)) best = i;
+      }
+      if (best) { used.add(best); pairs.set(o, best); }
+    }
+    return { pairs, used };
+  }
   function compute(txs) {
-    const lots = {}, rows = [], notes = [], income = [];
-    const add = (asset, qty, cost, date, line) => (lots[asset] = lots[asset] || []).push({ qty, cost, date, line });
+    const lots = {}, rows = [], notes = [], income = [], key = (w, a) => (w || '') + '|' + a, wallets = new Set();
+    const add = (w, asset, qty, cost, date, line) => { wallets.add(w || ''); (lots[key(w, asset)] = lots[key(w, asset)] || []).push({ qty, cost, date, line }); };
+    /* takes qty units FIFO from a wallet; returns the pieces [{qty, cost, date}] and the quantity not found */
+    const take = (w, asset, qty) => {
+      const L = lots[key(w, asset)] || [], out = []; let left = qty;
+      while (left > 1e-12 && L.length) {
+        const lot = L[0], q = Math.min(lot.qty, left), c = isFinite(lot.cost) ? lot.cost * q / lot.qty : NaN;
+        out.push({ qty: q, cost: c, date: lot.date, line: lot.line });
+        lot.cost = isFinite(lot.cost) ? lot.cost - c : lot.cost; lot.qty -= q; if (lot.qty <= 1e-12) L.shift(); left -= q;
+      }
+      return { pieces: out, missing: left > 1e-12 ? left : 0 };
+    };
+    const { pairs, used } = pairTransfers(txs), transfers = { paired: 0, toVerify: 0 };
     for (const t of txs) {
-      if (t.type === 'BUY') add(t.asset, t.qty, isFinite(t.usd) ? t.usd + t.fee : NaN, t.date, t.line);
-      else if (t.type === 'INCOME') { income.push(t); add(t.asset, t.qty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line); }
-      else if (t.type === 'TRANSFER') notes.push({ line: t.line, msg: 'Transfer ignored (v1 assumes one wallet): check it is between your own accounts.' });
+      if (t.wallet) wallets.add(t.wallet);
+      if (t.type === 'BUY') add(t.wallet, t.asset, t.qty, isFinite(t.usd) ? t.usd + t.fee : NaN, t.date, t.line);
+      else if (t.type === 'INCOME') { income.push(t); add(t.wallet, t.asset, t.qty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line); }
+      else if (t.type === 'OUT' && pairs.has(t)) {
+        const i = pairs.get(t), r = take(t.wallet, t.asset, t.qty), gap = t.qty - i.qty; transfers.paired++;
+        let moved = i.qty; // received units keep their original date and cost (FIFO pieces from the sending wallet)
+        for (const p of r.pieces) { const q = Math.min(p.qty, moved); if (q > 1e-12) add(i.wallet, t.asset, q, isFinite(p.cost) ? p.cost * q / p.qty : NaN, p.date, p.line); moved -= q; }
+        if (moved > 1e-12) add(i.wallet, t.asset, moved, NaN, i.date, i.line);
+        notes.push({ line: t.line, kind: 'transfer', ok: true, msg: `Transfer ${+t.qty.toPrecision(10)} ${t.asset}${t.wallet || i.wallet ? ' from ' + (t.wallet || '?') + ' to ' + (i.wallet || '?') : ''} (lines ${t.line} → ${i.line}): not taxable, original dates and cost kept.` });
+        if (r.missing > 1e-12) notes.push({ line: t.line, kind: 'transfer', msg: `Transfer line ${t.line}: ${+r.missing.toPrecision(10)} ${t.asset} sent but not found in ${t.wallet || 'the wallet'} (missing cost basis, to verify).` });
+        if (gap > 1e-12 || t.fee > 0) notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line}${gap > 1e-12 ? ': ' + (+gap.toPrecision(10)) + ' ' + t.asset + ' not received' : ''}${t.fee > 0 ? ' ($' + t.fee.toFixed(2) + ')' : ''} — tax treatment to verify (not counted as a sale here).` });
+      } else if (t.type === 'OUT' || t.type === 'TRANSFER') {
+        if (t.type === 'TRANSFER' && t.toWallet && t.toWallet !== t.wallet) { // one-line transfer with a destination wallet
+          const r = take(t.wallet, t.asset, t.qty); transfers.paired++;
+          for (const p of r.pieces) add(t.toWallet, t.asset, p.qty, p.cost, p.date, p.line);
+          if (r.missing > 1e-12) add(t.toWallet, t.asset, r.missing, NaN, t.date, t.line);
+          notes.push({ line: t.line, kind: 'transfer', ok: true, msg: `Transfer ${+t.qty.toPrecision(10)} ${t.asset} from ${t.wallet || '?'} to ${t.toWallet} (line ${t.line}): not taxable, original dates and cost kept.` });
+          if (t.fee > 0) notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line} ($${t.fee.toFixed(2)}) — tax treatment to verify.` });
+        } else { // unpaired send: units leave the wallet, no gain computed, flagged
+          take(t.wallet, t.asset, t.qty); transfers.toVerify++;
+          notes.push({ line: t.line, kind: 'transfer', msg: `Line ${t.line}: ${+t.qty.toPrecision(10)} ${t.asset} sent${t.wallet ? ' from ' + t.wallet : ''} with no matching receive — own wallet, gift or payment? To verify (no gain computed).` });
+        }
+      } else if (t.type === 'IN') {
+        if (used.has(t)) continue; // handled with its send
+        transfers.toVerify++; add(t.wallet, t.asset, t.qty, NaN, t.date, t.line);
+        notes.push({ line: t.line, kind: 'transfer', msg: `Line ${t.line}: ${+t.qty.toPrecision(10)} ${t.asset} received${t.wallet ? ' in ' + t.wallet : ''} with no matching send — original date and cost unknown, to verify.` });
+      }
       else if (t.type === 'SELL' || t.type === 'CONVERT') {
-        const proceeds = isFinite(t.usd) ? t.usd - t.fee : NaN; let left = t.qty; const L = lots[t.asset] || [];
-        while (left > 1e-12) {
-          const lot = L[0]; const q = lot ? Math.min(lot.qty, left) : left, part = q / t.qty;
-          const cost = lot ? (isFinite(lot.cost) ? lot.cost * q / lot.qty : NaN) : NaN;
-          const pr = isFinite(proceeds) ? proceeds * part : NaN;
-          const row = { line: t.line, desc: (+q.toPrecision(10)) + ' ' + t.asset, asset: t.asset, qty: q, acquired: lot ? lot.date : null, sold: t.date,
-            proceeds: r2(pr), cost: r2(cost), gain: isFinite(pr) && isFinite(cost) ? r2(pr - cost) : null, term: lot ? (isLong(lot.date, t.date) ? 'long' : 'short') : null,
+        const proceeds = isFinite(t.usd) ? t.usd - t.fee : NaN, r = take(t.wallet, t.asset, t.qty);
+        const pieces = r.pieces.concat(r.missing > 1e-12 ? [{ qty: r.missing, cost: NaN, date: null, none: true }] : []);
+        for (const p of pieces) {
+          const q = p.qty, pr = isFinite(proceeds) ? proceeds * q / t.qty : NaN, cost = p.cost;
+          const row = { line: t.line, desc: (+q.toPrecision(10)) + ' ' + t.asset, asset: t.asset, wallet: t.wallet || '', qty: q, acquired: p.none ? null : p.date, sold: t.date,
+            proceeds: r2(pr), cost: r2(cost), gain: isFinite(pr) && isFinite(cost) ? r2(pr - cost) : null, term: p.none ? null : (isLong(p.date, t.date) ? 'long' : 'short'),
             convert: t.type === 'CONVERT', status: 'ok' };
-          if (!lot) row.status = 'to verify: no purchase found for these units (missing cost basis)';
+          if (p.none) row.status = 'to verify: no purchase found for these units (missing cost basis)';
           else if (!isFinite(cost)) row.status = 'to verify: purchase price unknown (missing cost basis)';
           else if (!isFinite(pr)) row.status = 'to verify: USD value of the sale unknown';
           rows.push(row);
-          if (lot) { lot.cost = isFinite(lot.cost) ? lot.cost - lot.cost * q / lot.qty : lot.cost; lot.qty -= q; if (lot.qty <= 1e-12) L.shift(); }
-          left -= q;
         }
         if (t.type === 'CONVERT') { // the asset received is acquired at its fair market value = USD value of the exchange (FAQ Q18)
-          if (t.toAsset && t.toQty > 0) add(t.toAsset, t.toQty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line);
+          if (t.toAsset && t.toQty > 0) add(t.wallet, t.toAsset, t.toQty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line);
           else notes.push({ line: t.line, msg: 'Exchange without received asset/quantity: the new lot is missing (to verify).' });
         }
       }
@@ -128,6 +183,7 @@
       short: { proceeds: sum(S, 'proceeds'), cost: sum(S, 'cost'), gain: sum(S, 'gain') }, long: { proceeds: sum(Lg, 'proceeds'), cost: sum(Lg, 'cost'), gain: sum(Lg, 'gain') } };
     totals.gain = r2(totals.short.gain + totals.long.gain);
     totals.income = { count: income.length, usd: r2(income.reduce((a, t) => a + (isFinite(t.usd) ? t.usd : 0), 0)), unknown: income.filter(t => !isFinite(t.usd)).length };
+    totals.transfers = transfers; wallets.delete(''); totals.wallets = [...wallets];
     return { rows, totals, notes };
   }
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
@@ -136,7 +192,8 @@
   function toCSV(res) {
     const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
     const head = ['(a) Description', '(b) Date acquired', '(c) Date sold', '(d) Proceeds USD', '(e) Cost basis USD', '(h) Gain or loss USD', 'Term', 'Form 8949 box (no 1099-DA, to verify)', 'Status'];
-    const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.status]);
+    const hasW = res.rows.some(r => r.wallet); if (hasW) head.push('Wallet');
+    const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.status].concat(hasW ? [r.wallet] : []));
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
@@ -169,12 +226,16 @@
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
       const res = last = compute(p.txs), T = res.totals;
-      const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td><td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
+      const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
+      const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       out.innerHTML = pdfNote + `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, FIFO)<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
         + (T.income.count ? `<p class="hint">${T.income.count} reward/income line${T.income.count > 1 ? 's' : ''} (${usd(T.income.usd)}) added as lots at their USD value; income itself is not computed here (to verify).</p>` : '')
+        + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (FIFO in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
+        + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
+        + (tvN.length ? `<div class="warn"><p>${tvN.length} item${tvN.length > 1 ? 's' : ''} to verify:</p><ul>${tvN.slice(0, 20).map(n => '<li>' + esc(n.msg) + '</li>').join('')}</ul></div>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
-        + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th><th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
+        + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (Form 8949 lines)</button></p>`;
     });
     out.addEventListener('click', e => {
