@@ -180,4 +180,12 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const sol = U.compute(k.txs, { fileTz: 'UTC', taxTz: 'America/Los_Angeles' }).rows.find(r => r.asset === 'SOL');
   eq(new Date(sol.sold).getUTCFullYear(), 2024, 'Kraken: UTC time 01/01/2025 02:00 is still 2024 in Pacific time');
   eq(U.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n2024-01-01,Buy,BTC,1,100\n').platform, undefined, 'Generic file: no platform claimed'); }
+// v2.1 Form 1099-DA comparison
+{
+  const T = { short: { proceeds: 100, cost: 60 }, long: { proceeds: 50.5, cost: null } };
+  const o = U.daCompare(T, 150.5, 60);
+  eq([o.dProceeds, o.dCost, o.flag], [0, 0, false], '1099-DA totals match');
+  const o2 = U.daCompare(T, 140, undefined);
+  eq([o2.dProceeds, o2.dCost, o2.flag], [10.5, undefined, true], '1099-DA gap flagged to verify');
+}
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
