@@ -58,6 +58,27 @@ eq(pr.rows.map(r => [r.proceeds, r.cost, r.term]), [[34975, 15025, 'long'], [149
 eq(pr.totals.income.usd, 250, 'pdf staking line kept');
 eq(U.fromPdfLines(pdfLines('us_inconnu_fictif.pdf.txt')).txs.length, 0, 'unrecognised pdf → nothing computed');
 eq(U.fromPdfLines(['21 juil. 2026 Vente BBB 5 80,00€']).txs.length, 0, 'euro statement line not read as USD');
+
+// several wallets (Rev. Proc. 2024-28: per wallet/account); own transfers keep date and cost (FAQ Q38)
+const w = run(fs.readFileSync(__dirname + '/testdata/us/us_wallets_fictif.csv'));
+const wl = l => w.rows.filter(x => x.line === l);
+eq(wl(6).map(x => [x.wallet, x.cost, x.acquired === D('2024-01-05'), x.term, x.gain]), [['Hardware wallet', 9980, true, 'long', 20020]], 'transferred lot keeps date and cost (0.499 of 20000)');
+eq(wl(7).map(x => [x.wallet, x.cost, x.gain, x.term]), [['Exchange B', 20000, 10000, 'long']], 'FIFO inside Exchange B only (not the cheaper Exchange A lot)');
+eq(w.totals.transfers, { paired: 1, toVerify: 2 }, '1 paired transfer, 2 unpaired to verify');
+eq(w.notes.filter(n => /Network fee/.test(n.msg)).length, 1, 'network fee (0.001 BTC) flagged to verify');
+eq(w.notes.filter(n => /no matching (send|receive)/.test(n.msg)).length, 2, 'unpaired send and receive listed, never silent');
+eq(wl(10).map(x => [x.cost, /to verify/.test(x.status)]), [[null, true]], 'sale of units received without a send → missing basis');
+eq(w.totals.wallets, ['Exchange A', 'Exchange B', 'Hardware wallet'], 'wallets listed');
+eq(U.toCSV(w).split('\n')[0].endsWith(',Status,Wallet'), true, 'CSV has a Wallet column');
+// no wallet column → one wallet, unchanged
+eq(U.toCSV(r).split('\n')[0].endsWith(',Status'), true, 'no Wallet column when the file has none');
+const nw = run('Date,Type,Asset,Quantity,Total (USD)\n2024-01-01,Buy,BTC,1,100\n2024-02-01,Buy,BTC,1,300\n2024-03-01,Sell,BTC,1,500\n');
+eq(nw.rows.map(x => [x.wallet, x.cost]), [['', 100]], 'without wallets: single FIFO as before');
+// pairing limits: too late or too different → not paired
+const lim = run('Date,Type,Asset,Quantity,Total (USD),Wallet\n2024-01-01,Buy,ETH,1,100,A\n2024-02-01,Send,ETH,1,,A\n2024-02-05,Receive,ETH,1,,B\n');
+eq(lim.totals.transfers, { paired: 0, toVerify: 2 }, 'receive 4 days later is not paired');
+const one = run('Date,Type,Asset,Quantity,Total (USD),Wallet,To wallet\n2024-01-01,Buy,ETH,1,100,A,\n2024-02-01,Transfer,ETH,1,,A,B\n2025-03-01,Sell,ETH,1,400,B,\n');
+eq(one.rows.map(x => [x.wallet, x.cost, x.term]), [['B', 100, 'long']], 'one-line transfer with To wallet');
 // English only, no French legal words in the module texts
 const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8');
 eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), false, 'no French legal text in the U.S.A. module');
