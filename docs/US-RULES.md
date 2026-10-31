@@ -69,3 +69,7 @@ State taxes are not included.
 - **Fees on crypto-to-crypto exchanges.** These are digital asset transaction costs (Treas. Reg. 1.1001-7). v1 subtracts them from proceeds; check the exact allocation.
 - **Leap days.** For an acquisition on Feb 29, the anniversary is computed as Mar 1.
 - **Other limits.** Capital loss limits, carryovers, tax rates, NIIT and state taxes are not computed.
+
+## Missing purchases entered by the user (v1.9)
+
+When a sale needs more units than the purchases in the file, the extra units are flagged « to verify: no purchase found » and left out of the totals. The result offers an optional form, one line per such sale: total cost in USD and date acquired. When both are filled (and the date is not after the sale), the units are included with that cost, the term is computed with the same holding-period rule (Pub. 544), and the line is marked « entered by you (to verify) » in the result, the CSV and the PDF. Without input, nothing changes. The user remains responsible for these values (to verify against their records).
