@@ -46,6 +46,7 @@ const cases = {
     const rows = Array.from(KF.parseCSV(new Uint8Array(fs.readFileSync(path.join(DIR, 'plusvalue_fictif.csv'))))), head = rows[0], m = KF.guessMap(head), mp = {};
     for (const k in m) if (typeof m[k] === 'number') mp[k] = m[k]; // comme les listes déroulantes du dialogue (colonnes uniquement)
     const o = { dmode: '', tz: 'UTC', nmode: '', platform: 'Relevé', cur: mp.eur != null ? KF.headCur(head[mp.eur]) : 'EUR', source: 'plusvalue_fictif.csv', strict: true, head, line0: 2 };
+    if (mp.fee != null) o.feeInKind = false; // comme app.js (dialogue d'import) : colonne de frais explicite prise en compte
     const txs = KP.importRows(rows.slice(1), mp, o, id).txs; E.detectSwaps(txs); return snap(txs, priceFrom(txs)); }
   ,seuil_305_fictif: () => snap([ // 310 € de prix de cession, 10 € de frais : ligne 218 = 300 € -> exonéré (≤ 305 €)
     { id: 1, date: Date.UTC(2025, 0, 10, 12), type: 'BUY', asset: 'AAA', qty: 1, eur: 100, fee: 0 },
