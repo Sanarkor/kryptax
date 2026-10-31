@@ -1,6 +1,9 @@
 /* Kryptax — interface. Tout est stocké dans localStorage, rien n'est envoyé. */
 (function () {
   'use strict';
+  /* Région par défaut (sans réseau) : FR si une langue du navigateur commence par « fr » ou si le fuseau horaire est français, sinon US */
+  const FR_TZ = ['Europe/Paris', 'Indian/Reunion', 'America/Martinique', 'America/Guadeloupe', 'America/Cayenne', 'Indian/Mayotte', 'Pacific/Tahiti', 'Pacific/Noumea', 'Pacific/Marquesas', 'Pacific/Gambier', 'Pacific/Wallis', 'America/Miquelon', 'America/St_Barthelemy', 'America/Marigot', 'Indian/Kerguelen'];
+  function autoRegion(langs, tz) { const l = [].concat(langs || []).some(x => typeof x === 'string' && /^fr(\b|[-_]|$)/i.test(x.trim())); return l || FR_TZ.includes(tz) ? 'FR' : 'US'; }
   const SHOW_PREC = false; // précision des cours masquée (écran et PDF) pour l'instant : passer à true pour la réafficher
   const KOFI_NOTE = true; // mention légale « Dons » affichée (#kofinote) : les dons passent par Ko-fi (lien dans la fenêtre #merci)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
@@ -36,12 +39,13 @@
         if (attr) { el.setAttribute(attr, u ? enA : k.a); if (en === '') continue; }
         if (en === null) { if (!attr) el.hidden = u ? true : k.hid; continue; }
         el.innerHTML = u ? en : k.h; } };
-    const set = v => { const u = v === 'US';
+    const set = (v, save) => { const u = v === 'US';
       [[fr, !u], [us, u]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); } });
       document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
-      if (page) page.hidden = !u; if (m) m.hidden = u; try { localStorage.setItem(K, u ? 'US' : 'FR'); } catch (e) {} };
-    let v0 = 'FR'; try { v0 = localStorage.getItem(K) === 'US' ? 'US' : 'FR'; } catch (e) {}
-    if (fr && us) { if (v0 === 'US') set('US'); fr.addEventListener('click', () => set('FR')); us.addEventListener('click', () => set('US')); } }
+      if (page) page.hidden = !u; if (m) m.hidden = u; if (save) try { localStorage.setItem(K, u ? 'US' : 'FR'); } catch (e) {} };
+    let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR') v0 = s; } catch (e) {}
+    if (!v0) { let L = [], Z = ''; try { L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; } catch (e) {} try { Z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {} v0 = autoRegion(L, Z); }
+    if (fr && us) { if (v0 === 'US') set('US'); fr.addEventListener('click', () => set('FR', true)); us.addEventListener('click', () => set('US', true)); } }
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
   /* Encre réelle d'un glyphe (px, depuis l'origine) : rendu canvas puis balayage des pixels (robuste au gras synthétique, au zoom, aux polices de remplacement) */
   function inkX(ch, font, px) {
