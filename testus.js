@@ -130,4 +130,11 @@ eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src
   eq(/<section id="usimp" class="usimp"><div class="sechead"><h2>1\. Import<\/h2>/.test(us) && /<label class="btn"><span class="lbl-l">/.test(us) && /id="usfile"[^>]*hidden/.test(us) && /class="fhelp"/.test(us), true, 'US import box: same structure as the France box');
   eq(/Date, Type, Asset, Quantity, Total or Price, Fee/.test(us) && /<details class="usdet"><summary>Details<\/summary>/.test(us) && /stays in this browser/.test(us), true, 'US import box: short texts + Details');
   eq(/\b(2086|2042|3AN|CGI|BOI)\b|[àéèùç]/i.test(us), false, 'US import box: English only'); }
+{ const T = [{ line: 2, date: Date.UTC(2024, 0, 2), type: 'BUY', asset: 'BTC', qty: 2, usd: 20000, fee: 0, wallet: '' }, { line: 3, date: Date.UTC(2024, 5, 2), type: 'SELL', asset: 'BTC', qty: 0.5, usd: 6000, fee: 0, wallet: '' }, { line: 4, date: Date.UTC(2025, 5, 2), type: 'SELL', asset: 'BTC', qty: 0.5, usd: 8000, fee: 0, wallet: '' }, { line: 5, date: Date.UTC(2025, 6, 2), type: 'INCOME', rawType: 'Staking', asset: 'BTC', qty: 0.01, usd: 300, fee: 0, wallet: '' }];
+  const r = U.compute(T), a = U.forYear(r, 2024), b = U.forYear(r, 2025);
+  eq(JSON.stringify(U.years(r)), '[2024,2025]', 'tax years listed');
+  eq(a.totals.sales + '|' + a.totals.short.gain + '|' + a.totals.income.count, '1|1000|0', 'year 2024: 1 short-term sale, gain $1,000');
+  eq(b.totals.sales + '|' + b.totals.long.gain + '|' + b.totals.income.usd, '1|3000|300', 'year 2025: 1 long-term sale, gain $3,000, income $300');
+  eq(a.totals.gain + b.totals.gain, r.totals.gain, 'years add up to all years');
+  eq(U.forYear(r, 2023).totals.sales, 0, 'year without sale: 0'); eq(U.forYear(r, 0), r, 'all years = unchanged'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
