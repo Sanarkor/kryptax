@@ -73,4 +73,9 @@ chk(!new RegExp(['rev', 'olut'].join(''), 'i').test(txt), 'PDF : aucune mention 
 chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » bien visible en en-tête');
 { const X2 = require('./export.js'); const S = (require('fs').readFileSync(__dirname + '/export.js', 'utf8').match(/const SHORT = \[([^\]]*)\]/) || [, ''])[1];
   const n = (S.match(/\(€\)'/g) || []).length; chk(n === 12 && !/211 Date[^']*€/.test(S), 'PDF : « (€) » dans les 12 en-têtes de montants (212 à 224), pas sur la date (' + n + ')'); }
+// Seuil 305 € dans le PDF : même règle que l'écran (somme des lignes 218, frais déduits). Cession fictive de 310 € avec 10 € de frais -> exonérée.
+{ const T3 = [{ id: 1, date: E.fromParis(2025, 0, 10), type: 'BUY', asset: 'AAA', qty: 1, eur: 100, fee: 0 }, { id: 2, date: E.fromParis(2025, 5, 10), type: 'SELL', asset: 'AAA', qty: 1, eur: 310, fee: 10 }];
+  const Y3 = E.byYear(E.compute(T3, () => null)), x3 = X.exportData(Y3, {}, () => [], T3, 2025);
+  const t3 = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, x3, X.title(2025)).output('arraybuffer')) }).toString();
+  chk(Y3[2025].exonere === true && x3.totals[0].exonere === true && /<= 305|≤ 305/.test(t3) && !/3AN|3BN/.test(t3.replace(/3AN\/3BN/g, '')) && /exon/i.test(t3), 'PDF : 310 € avec 10 € de frais (218 = 300 €) exonéré, comme à l’écran'); }
 process.exit(ok ? 0 : 1);
