@@ -22,6 +22,12 @@ eq(r.cessions[0].l212, 0.5 * 2000 + 5 * 400, 'Multi 212'); eq(r.cessions[0].l218
 eq(r.cessions[0].l224, 792 - 1000 * 800 / 3000, 'Multi 224 (frais hors quotient)');
 r = E.compute(tx2, () => null); eq(r.cessions[0].status === 'à renseigner' ? 1 : 0, 1, 'Cours manquant -> à renseigner');
 eq(E.parseNum('€1,234.56'), 1234.56, 'nombre EN'); eq(E.parseNum('1 234,56 €'), 1234.56, 'nombre FR'); eq(E.parseNum('0,5'), 0.5, 'virgule décimale');
+// parseNum : notation scientifique (les petites quantités crypto), signe moins Unicode, unités en suffixe. Valeurs mises à l'échelle : eq() tolère 1e-6.
+eq(E.parseNum('1e-8') * 1e8, 1, 'notation scientifique 1e-8'); eq(E.parseNum('1.5E-07') * 1e7, 1.5, 'notation scientifique 1.5E-07');
+eq(E.parseNum('1,5E-7') * 1e7, 1.5, 'notation scientifique à virgule 1,5E-7'); eq(E.parseNum('2.5e3'), 2500, 'notation scientifique 2.5e3');
+eq(E.parseNum('1e-8 BTC') * 1e8, 1, 'notation scientifique avec unité'); eq(E.parseNum('-1.2e-5') * 1e5, -1.2, 'notation scientifique négative');
+eq(E.parseNum('−0.5'), -0.5, 'signe moins Unicode (U+2212)'); eq(Number.isNaN(E.parseNum('–')) ? 1 : 0, 1, 'tiret seul = cellule vide');
+eq(E.parseNum('0.5 BTC'), 0.5, 'unité en suffixe'); eq(E.parseNum('3ETH'), 3, 'actif collé au nombre (E non pris pour un exposant)'); eq(E.parseNum('1 234,56 EUR'), 1234.56, 'nombre FR avec EUR');
 eq(new Date(E.parseDate('13/01/2024 15:45')).getMonth(), 0, 'date FR'); eq(new Date(E.parseDate('Jan 13, 2024, 3:45:12 PM')).getHours(), 15, 'date EN');
 // Format relevé .xlsx (valeurs fictives)
 eq(E.parseNum('68â_x0080_¯116,39â_x0082_¬'), 68116.39, 'montant mojibake'); eq(E.currencyOf(E.fixText('20,19$')) === 'USD' ? 1 : 0, 1, 'devise USD');
@@ -431,6 +437,9 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/<p class="kofifoot"><button type="button" id="whyopen"[^>]*>.*Pourquoi Kryptax \?.*<\/button><button type="button" id="kofi2"[^>]*aria-haspopup="dialog" aria-label="Soutenir Kryptax, merci"><span aria-hidden="true">☕ Soutenir Kryptax 🙏<\/span><\/button><\/p>/.test(IH) && /<button type="button" id="kofi" class="btn kofi" aria-haspopup="dialog" aria-label="Soutenir Kryptax, merci">☕ Soutenir Kryptax 🙏<\/button>/.test(IH) && /<dialog id="merci"[^>]*>[\s\S]*Merci pour ton soutien 🙏<\/h2><p id="mercitext">Bientôt, tu pourras faire un don au développeur\. En attendant, Kryptax reste gratuit pour tout le monde\.<\/p>[\s\S]*id="merciok" class="btn">Fermer<\/button>/.test(IH) && !/ko-fi\.com/i.test(IH + AP) && /<dialog id="why" aria-labelledby="whytitle">[\s\S]*Pourquoi j'ai créé Kryptax<\/h2><p>Débutant dans la crypto en 2026[\s\S]*plusieurs dizaines d'euros rien que pour obtenir un simple PDF\.[\s\S]*Si ça t'a servi, un petit café fait toujours plaisir ☕<\/p>/.test(IH) && !new RegExp(['rev', 'olut'].join(''), 'i').test(IH) && !/srcbtn|Code source/.test(IH + AP) && /const KOFI_NOTE = false;/.test(AP) && /\['#kofi', '#kofi2'\]\.forEach/.test(AP) ? 1 : 0, 1, 'Soutenir : 2 boutons sans lien externe → fenêtre « Merci pour ton soutien », bio à jour, mention « Dons » masquée');
     eq(/function savePdf\(\) \{ showKofi\(\);/.test(AP) && /<div id="kofinote" hidden>/.test(IH) ? 1 : 0, 1, 'Soutenir : bouton affiché après l’enregistrement du PDF, mention « Dons » masquée'); }
   eq(require('fs').readFileSync(__dirname + '/index.html', 'utf8').includes('<p>Éditeur : Damien M. alias « Sanarkor ». Hébergement : GitHub Pages (GitHub, Inc.).</p>') ? 1 : 0, 1, 'Mentions : éditeur Damien M. alias « Sanarkor »');
+  { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
+    eq(AP.includes('t.year >= 2025 ? 0.314 : 0.30') && !AP.includes('t.year >= 2026 ? 0.314') ? 1 : 0, 1, 'Prélèvement estimé : 31,4 % dès les plus-values 2025, 30 % avant');
+    eq(AP.includes('30 % avant 2025, 31,4 % à partir de 2025') && IH.includes('30 % avant 2025, 31,4 % à partir de 2025') && !(AP + IH).includes('avant 2026, 31,4') ? 1 : 0, 1, 'Textes : 30 % avant 2025, 31,4 % à partir de 2025 (note et pied de page)'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
