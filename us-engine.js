@@ -11,7 +11,8 @@
    - FIFO when units are not specifically identified: FAQ Q41; Treas. Reg. 1.1012-1(j)(3)(i) (quoted in Notice 2026-20, https://www.irs.gov/pub/irs-drop/n-26-20.pdf).
    - Digital asset rows go to Form 8949 boxes G/H/I (short) and J/K/L (long), not C/F: i8949 2025 "What's New".
    Lot methods: FIFO (default), HIFO, manual choice per sale (specific identification) — Treas. Reg. 1.1012-1(j), Notice 2026-20.
-   Not coded (shown as "to verify"): wash sales, income amounts. */
+   Income (staking, rewards, airdrops, interest): USD value when received = ordinary income and cost basis of the new lot
+   (Rev. Rul. 2023-14, FAQ Q24-Q25). No tax rate is applied. Not coded (shown as "to verify"): wash sales. */
 (function (root) {
   'use strict';
   const E = typeof require !== 'undefined' && typeof module !== 'undefined' ? require('./engine.js') : root.KryptaxEngine;
@@ -66,7 +67,7 @@
       if (!type || !isFinite(date) || !asset || !(qty > 0)) { if (r.some(x => String(x).trim() !== '')) out.skipped.push({ line, why: !type ? 'unknown type' : !isFinite(date) ? 'unreadable date' : 'missing asset or quantity' }); return; }
       const price = num(g('price')), total0 = num(g('total')), fee = num(g('fee'));
       const total = isFinite(total0) ? total0 : isFinite(price) ? price * qty : NaN;
-      out.txs.push({ line, date, type, asset, qty, usd: total, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')), wallet: String(g('wallet') || '').trim(), toWallet: String(g('toWallet') || '').trim() });
+      out.txs.push({ line, date, type, rawType: String(g('type') || ''), asset, qty, usd: total, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')), wallet: String(g('wallet') || '').trim(), toWallet: String(g('toWallet') || '').trim() });
     });
     out.txs.sort((a, b) => a.date - b.date || a.line - b.line);
     return out;
@@ -123,6 +124,16 @@
      - MANUAL: the user picks a lot (specific identification) per sale; the rest of the sale uses FIFO.
      Adequate identification must exist no later than the time of sale (records) — to verify; Kryptax cannot check it.
      Notice 2026-20 extends the Notice 2025-7 relief for making an adequate identification through December 31, 2026. */
+  /* Income label. Sources (irs.gov):
+     - Rev. Rul. 2023-14 (https://www.irs.gov/pub/irs-drop/rr-23-14.pdf): staking rewards = fair market value included in gross income
+       in the year the taxpayer gains dominion and control; value determined at that date and time.
+     - FAQ Q24-Q25 (https://www.irs.gov/individuals/international-taxpayers/frequently-asked-questions-on-virtual-currency-transactions):
+       airdrop after a hard fork = ordinary income at fair market value when received; basis = that income.
+     - Interest / other rewards: no specific IRS text checked here — to verify. */
+  function incomeType(raw) {
+    const t = String(raw || '').toLowerCase();
+    return /stak/.test(t) ? 'Staking' : /airdrop/.test(t) ? 'Airdrop' : /reward|mining|learn/.test(t) ? 'Reward' : /interest|earn/.test(t) ? 'Interest' : 'Income';
+  }
   function compute(txs, opts) {
     opts = opts || {}; const method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
     const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
@@ -205,8 +216,10 @@
       short: { proceeds: sum(S, 'proceeds'), cost: sum(S, 'cost'), gain: sum(S, 'gain') }, long: { proceeds: sum(Lg, 'proceeds'), cost: sum(Lg, 'cost'), gain: sum(Lg, 'gain') } };
     totals.gain = r2(totals.short.gain + totals.long.gain);
     totals.income = { count: income.length, usd: r2(income.reduce((a, t) => a + (isFinite(t.usd) ? t.usd : 0), 0)), unknown: income.filter(t => !isFinite(t.usd)).length };
+    const incomeRows = income.map(t => ({ line: t.line, date: t.date, asset: t.asset, qty: t.qty, usd: isFinite(t.usd) ? r2(t.usd) : null, type: incomeType(t.rawType), wallet: t.wallet || '',
+      status: isFinite(t.usd) ? 'ok' : 'to verify: USD value when received is missing (not in the total)' }));
     totals.transfers = transfers; totals.method = method; wallets.delete(''); totals.wallets = [...wallets];
-    return { rows, totals, notes, sales };
+    return { rows, totals, notes, sales, income: incomeRows };
   }
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -218,8 +231,14 @@
     const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.status].concat(hasW ? [r.wallet] : []));
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
+  function incomeCSV(res) {
+    const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), hasW = res.income.some(r => r.wallet);
+    const head = ['Date received', 'Asset', 'Quantity', 'Value USD (ordinary income - to verify)', 'Type', 'Status'].concat(hasW ? ['Wallet'] : []);
+    const L = res.income.map(r => [mdy(r.date), r.asset, +r.qty.toPrecision(12), r.usd == null ? '' : r.usd.toFixed(2), r.type, r.status].concat(hasW ? [r.wallet] : []));
+    return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
+  }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, mdy, usd };
+  const api = { pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -272,7 +291,10 @@
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       out.innerHTML = pdfNote + `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
-        + (T.income.count ? `<p class="hint">${T.income.count} reward/income line${T.income.count > 1 ? 's' : ''} (${usd(T.income.usd)}) added as lots at their USD value; income itself is not computed here (to verify).</p>` : '')
+        + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
+          + (T.income.unknown ? `<p class="warn">${T.income.unknown} income line${T.income.unknown > 1 ? 's' : ''} without a USD value: to verify, not included in the income total.</p>` : '')
+          + `<div class="scroll"><table class="us8949 usincome"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value USD</th><th>Type</th></tr>${res.income.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${mdy(r.date)}</td><td>${esc(r.asset)}</td><td>${+r.qty.toPrecision(10)}</td><td>${r.usd == null ? 'to verify' : usd(r.usd)}</td><td>${r.type}</td></tr>`).join('')}</table></div>`
+          + `<p><button type="button" id="usinccsv" class="small">Download CSV (income)</button></p>` : '')
         + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (lots tracked in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
         + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
         + (tvN.length ? `<div class="warn"><p>${tvN.length} item${tvN.length > 1 ? 's' : ''} to verify:</p><ul>${tvN.slice(0, 20).map(n => '<li>' + esc(n.msg) + '</li>').join('')}</ul></div>` : '')
@@ -284,8 +306,8 @@
         + `<p><button type="button" id="uscsv" class="small">Download CSV (Form 8949 lines)</button></p>`;
     }
     out.addEventListener('click', e => {
-      if (e.target.id !== 'uscsv' || !last) return;
-      const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([toCSV(last)], { type: 'text/csv' })); a.download = 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last)], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;
