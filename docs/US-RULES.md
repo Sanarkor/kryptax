@@ -9,7 +9,7 @@ State taxes are not included.
 - IRS Virtual Currency FAQs: https://www.irs.gov/individuals/international-taxpayers/frequently-asked-questions-on-virtual-currency-transactions
   (the IRS says they apply to transactions before Jan. 1, 2025; the same principles are restated in the i8949 "Digital Assets" section)
 - Notice 2026-20: https://www.irs.gov/pub/irs-drop/n-26-20.pdf
-- Rev. Proc. 2024-28 (listed on https://www.irs.gov/filing/digital-assets)
+- Rev. Proc. 2024-28: https://www.irs.gov/pub/irs-drop/rp-24-28.pdf
 - Rev. Rul. 2023-14 (staking): https://www.irs.gov/pub/irs-drop/rr-23-14.pdf
 - FAQ Q23–Q25 and Rev. Rul. 2019-24 (airdrop after a hard fork)
 
@@ -25,6 +25,8 @@ State taxes are not included.
 | FIFO when units are not specifically identified. | FAQ Q41; Treas. Reg. 1.1012-1(j)(3)(i), quoted in Notice 2026-20 |
 | Columns (a) description with units, (b) date acquired, (c) date sold, (d) proceeds, (e) basis, (h) gain or loss. | i8949 "Column (a)" to "Column (h)" |
 | Digital assets use boxes G/H/I (short) and J/K/L (long), not C/F. Without a 1099-DA: box I or box L. | i8949 2025 "What's New", "Box C or Box I", "Box F or Box L" |
+| Several wallets (v1.2): for acquisitions and dispositions on or after January 1, 2025, the specific identification or FIFO rules apply to the units held in a single wallet or account (wallet-by-wallet, not a "universal" multi-wallet approach). Kryptax runs FIFO separately in each wallet. | Rev. Proc. 2024-28, sections 1-2 (Treas. Reg. 1.1012-1(j)) |
+| A transfer between your own wallets or accounts is not taxable. | FAQ Q38 |
 | Rewards: staking rewards are income at their USD fair market value when you gain control of them, and that value becomes your basis. | Rev. Rul. 2023-14; FAQ Q24–Q25 |
 
 ## Import (v1.1)
@@ -35,6 +37,8 @@ State taxes are not included.
 ## To be verified (not coded in v1)
 
 - **Wash sales.** Section 1091 is written for "stock or securities". Bill H.R. 9172 (introduced June 8, 2026) would extend it to digital assets, but it was still only introduced in October 2026. Kryptax does not apply it; check the current law.
+- **Transfers between your own wallets.** Kryptax pairs a send with a receive of the same asset, within 3 days, with 98–100% of the quantity received. The received units keep their original acquisition date and cost. This follows from the transfer not being taxable (FAQ Q38); it is not an explicit IRS text, so it is to verify. Network fees on transfers (units not received, or a fee) are flagged and not counted as a sale; their tax treatment is to verify. An unpaired send or receive is always listed "to verify". An unpaired send removes the units with no gain computed; an unpaired receive adds a lot with an unknown cost.
+- **Before 2025.** Kryptax applies wallet-by-wallet tracking to all dates. Before 2025, a universal (multi-wallet) approach was possible, and Rev. Proc. 2024-28 gives a safe harbor to allocate unused basis to wallets as of January 1, 2025. Kryptax does not do this allocation: to verify.
 - **Specific identification and several wallets.** The rules are Treas. Reg. 1.1012-1(j), Rev. Proc. 2024-28 (wallet-by-wallet basis from Jan. 1, 2025) and Notice 2026-20 (books-and-records identification for broker-held units, through Dec. 31, 2026). v1 handles one wallet with FIFO only.
 - **Form 1099-DA.** If you received one, use its proceeds and basis, plus adjustments in columns (f) and (g) (codes B, E, and so on). v1 does not read 1099-DA, so the box letter is only a hint.
 - **Income.** Staking, airdrops and rewards are added as lots at their USD value, but the income itself is not computed or reported by v1.
