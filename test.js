@@ -480,6 +480,15 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     const c1 = E.compute(imp({ feeInKind: false }), () => null).cessions[0], c0 = E.compute(imp({}), () => null).cessions[0];
     eq(c1.l214, 2, 'Frais CSV : ligne 214 = 2 € (colonne Fees)'); eq(c1.l218, 398, 'Frais CSV : ligne 218 = 400 - 2 = 398 €'); eq(c1.l220, 101, 'Frais CSV : prix d’acquisition 220 = 100 + 1 € de frais');
     eq(c1.l224, 297, 'Frais CSV : plus-value 224 = 398 - 101 = 297 €'); eq(c0.l214, 0, 'Sans le correctif (frais en nature) : ligne 214 = 0 (ancien comportement CSV, toujours celui du relevé PDF)'); }
+  { // staking (fictif) : achat 1 ETH 1 000 €, staking 0,1 ETH = 200 €, vente 0,5 ETH 1 000 € — coût 0 € inchangé, avertissement court, signalement sans cours
+    const T = [{ id: 1, date: Date.UTC(2025, 0, 5), type: 'BUY', asset: 'ETH', qty: 1, eur: 1000, fee: 0 }, { id: 2, date: Date.UTC(2025, 1, 5), type: 'STAKING', asset: 'ETH', qty: 0.1, eur: 200, fee: 0 }, { id: 3, date: Date.UTC(2025, 2, 5), type: 'SELL', asset: 'ETH', qty: 0.5, eur: 1000, fee: 0 }], P = a => a === 'ETH' ? 2000 : null;
+    const d = E.compute(T, P);
+    eq(d.cessions[0].l212, 2200, 'Staking : 212 inclut la récompense'); eq(d.total220, 1000, 'Staking : 220 = 1000 (coût 0 €, inchangé)'); eq(+d.cessions[0].l224.toFixed(2), 545.45, 'Staking : PV 545,45 (inchangée)');
+    eq(d.warnings.some(w => /150 VH bis III-B/.test(w.msg) && /BOI-RPPM-PVBMC-30-20/.test(w.msg) && /À vérifier/.test(w.msg) && !/confirm/.test(w.msg)) ? 1 : 0, 1, 'Staking : avertissement court cite l’article et le BOFiP, « à vérifier »');
+    eq(d.warnings.some(w => /sans cours connu/.test(w.msg)) ? 1 : 0, 0, 'Staking avec valeur : pas de signalement sans cours');
+    const U = [T[0], Object.assign({}, T[1], { eur: 0 }), T[2]], du = E.compute(U, (a, ts) => ts === T[2].date ? 2000 : null);
+    eq(du.warnings.some(w => /sans cours connu/.test(w.msg) && /STAKING/.test(w.msg)) ? 1 : 0, 1, 'Récompense sans cours : signalée'); eq(du.total220, 1000, 'Récompense sans cours : 220 inchangé');
+    eq(E.compute(U, P).warnings.some(w => /sans cours connu/.test(w.msg)) ? 1 : 0, 0, 'Récompense sans montant mais cours connu : pas signalée'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
