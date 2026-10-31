@@ -65,6 +65,13 @@
     p = String(p || '').toUpperCase().replace(/[\/\s-]/g, ''); const m = /^(.+?)(ZUSD|USD)$/.exec(p); if (!m) return null;
     let b = m[1]; if (KR_BASE[b]) return KR_BASE[b]; if (m[2] === 'ZUSD' && b.length === 4 && b[0] === 'X') b = b.slice(1); return b || null;
   }
+  /* v2.1 Form 1099-DA check (IRS Instructions for Form 1099-DA): box 1f = gross proceeds reduced by transaction costs; box 1g = cost basis (required only for covered securities, i.e. acquired after 2025 in the same custodial account); rewards and staking payments are not reported on it. */
+  function daCompare(T, f1, g1) {
+    const P = r2((T.short.proceeds || 0) + (T.long.proceeds || 0)), C = r2((T.short.cost || 0) + (T.long.cost || 0)), o = { proceeds: P, cost: C };
+    if (isFinite(f1)) o.dProceeds = r2(P - f1); if (isFinite(g1)) o.dCost = r2(C - g1);
+    o.flag = (isFinite(o.dProceeds) && Math.abs(o.dProceeds) >= 0.01) || (isFinite(o.dCost) && Math.abs(o.dCost) >= 0.01);
+    return o;
+  }
   function platformRows(rows) {
     for (let i = 0; i < Math.min(25, rows.length); i++) {
       const h = (rows[i] || []).map(norm), ix = k => h.indexOf(k);
@@ -298,7 +305,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -306,7 +313,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {};
+    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {}, da = {};
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -322,6 +329,7 @@
     out.addEventListener('change', e => {
       const t = e.target; if (!cur) return;
       if (t.id === 'usmethod') { method = t.value; render(); return; }
+      if (t.classList.contains('usda')) { const v = parseFloat(String(t.value || '').replace(/[$,\s]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) da[k] = v; else delete da[k]; render(); return; }
       if (t.classList.contains('usmc') || t.classList.contains('usmd')) {
         const line = +t.dataset.line, c = out.querySelector('.usmc[data-line="' + line + '"]'), d = out.querySelector('.usmd[data-line="' + line + '"]');
         const cost = parseFloat(String(c && c.value || '').replace(/[$,\s]/g, '')), dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d && d.value || '');
@@ -338,7 +346,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; year = null; method = 'FIFO'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -365,8 +373,18 @@
         } else p = fromCSVText(data);
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; if (p.fileTz && tzSel) { fileTz = p.fileTz; tzSel.value = p.fileTz; } render();
+      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; da = {}; if (p.fileTz && tzSel) { fileTz = p.fileTz; tzSel.value = p.fileTz; } render();
     });
+    function daBlock(T, y) {
+      const k = y || 'all', f = da[k + 'p'], g = da[k + 'b'], o = daCompare(T, f, g);
+      const inp = (key, v, lab) => '<label class="usdal">' + lab + ' <input class="usda" data-k="' + key + '" inputmode="decimal" placeholder="$0.00" value="' + (v == null ? '' : esc(v)) + '"></label>';
+      const line = (lab, mine, d) => '<li>' + lab + ': Kryptax ' + usd(mine) + (d == null ? '' : ' — difference ' + usd(d) + (Math.abs(d) >= 0.01 ? ' <b>(to verify)</b>' : ' (matches)')) + '</li>';
+      return '<details class="usdabox"' + (f != null || g != null ? ' open' : '') + '><summary>Compare with Form 1099-DA (optional)</summary>'
+        + '<p>Enter the totals your platform reported' + (y ? ' for ' + esc(y) : '') + '.</p>'
+        + inp('p', f, 'Box 1f proceeds') + inp('b', g, 'Box 1g cost basis')
+        + '<ul>' + line('Proceeds', o.proceeds, o.dProceeds) + line('Cost basis', o.cost, o.dCost) + '</ul>'
+        + '<p class="usnote">Box 1f is proceeds after transaction costs. Box 1g may be blank for assets bought before 2026 or moved in from elsewhere (noncovered). Rewards and staking are not on Form 1099-DA. Sales marked to verify are not in the Kryptax totals. A difference does not mean an error — to verify. Source: IRS Instructions for Form 1099-DA.</p></details>';
+    }
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
@@ -387,6 +405,7 @@
           const iso = v => { if (v == null) return ''; const d = new Date(v); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); };
           return `<details class="note usmiss"${M.some(r => !r.user) ? ' open' : ''}><summary>Missing purchases: enter the cost (optional)</summary><p class="hint">Units sold with no purchase in your file are left out of the totals. If you know them, enter the total cost in USD and the date acquired; the line is then included and marked “entered by you” (to verify).</p>`
             + M.map(r => { const mc = mcost[r.line] || {}; return `<div class="grid"><p><b>Sale line ${r.line}</b>: ${esc(r.desc)} sold ${mdy(r.sold)}${r.wallet ? ' (' + esc(r.wallet) + ')' : ''}</p><label>Total cost (USD)<input class="usmc" data-line="${r.line}" inputmode="decimal" value="${mc.cost != null ? esc(String(mc.cost)) : ''}" placeholder="e.g. 250.00"></label><label>Date acquired<input type="date" class="usmd" data-line="${r.line}" value="${esc(iso(mc.date))}" max="${iso(r.sold)}"></label></div>`; }).join('') + '</details>'; })()
+        + daBlock(T, year)
         + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
