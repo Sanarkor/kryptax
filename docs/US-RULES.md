@@ -110,3 +110,8 @@ Sources: IRS, Instructions for Form 8949 (2025), irs.gov/instructions/i8949, and
 - Columns (f) and (g) are left blank (no adjustment computed). With a Form 1099-DA, column (d) and (e) should match the form and corrections go in (f)/(g) — to verify.
 - Exception 1 (reporting directly on Schedule D lines 1a/8a) is not handled.
 - Lines to verify (missing cost or value) are listed apart and are not in the Part totals.
+
+## Form 1099-DA comparison in the exports (v2.3)
+
+- When the user typed a box 1f and/or box 1g total, the CSV gets a "Form 1099-DA comparison" section and the PDF summary gets one line per entered box: Form 1099-DA amount, Kryptax amount, difference, "to verify" or "matches", plus the same caveats as on screen.
+- Nothing is added when nothing was entered. Same IRS source as v2.1.
