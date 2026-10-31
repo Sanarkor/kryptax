@@ -439,7 +439,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(require('fs').readFileSync(__dirname + '/index.html', 'utf8').includes('<p>Éditeur : Damien M. alias « Sanarkor ». Hébergement : GitHub Pages (GitHub, Inc.).</p>') ? 1 : 0, 1, 'Mentions : éditeur Damien M. alias « Sanarkor »');
   { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
     eq(AP.includes('t.year >= 2025 ? 0.314 : 0.30') && !AP.includes('t.year >= 2026 ? 0.314') ? 1 : 0, 1, 'Prélèvement estimé : 31,4 % dès les plus-values 2025, 30 % avant');
-    eq(AP.includes('30 % avant 2025, 31,4 % à partir de 2025') && IH.includes('30 % avant 2025, 31,4 % à partir de 2025') && !(AP + IH).includes('avant 2026, 31,4') ? 1 : 0, 1, 'Textes : 30 % avant 2025, 31,4 % à partir de 2025 (note et pied de page)'); }
+    eq(AP.includes('18,6 % cette année, soit 31,4 % au total') && IH.includes('18,6 % cette année, soit 31,4 % au total') && !(AP + IH).includes('30 % avant') ? 1 : 0, 1, 'Textes : taux de l’année en cours seulement, 31,4 % (note et pied de page)'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
