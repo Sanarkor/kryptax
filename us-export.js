@@ -18,7 +18,7 @@
     const head = ['(a) Description', '(b) Acquired', '(c) Sold', '(d) Proceeds', '(e) Cost', '(h) Gain/loss', 'Term'].concat(hasW ? ['Wallet'] : []).concat(['Box*']);
     const rows = res.rows.map(r => {
       const tv = r.status !== 'ok';
-      return { tv, cells: [r.desc + (tv ? ' - TO VERIFY: ' + r.status.replace(/^to verify:\s*/, '') : ''), mdy(r.acquired), mdy(r.sold), usd(r.proceeds), usd(r.cost), usd(r.gain),
+      return { tv, cells: [r.desc + (tv ? ' - TO VERIFY: ' + r.status.replace(/^to verify:\s*/, '') : '') + (r.user ? ' - COST AND DATE ENTERED BY YOU (to verify)' : ''), mdy(r.acquired), mdy(r.sold), usd(r.proceeds), usd(r.cost), usd(r.gain),
         r.term === 'long' ? 'Long' : r.term === 'short' ? 'Short' : '?'].concat(hasW ? [r.wallet || '?'] : []).concat([r.term === 'long' ? 'L?' : r.term === 'short' ? 'I?' : '?']).map(ascii) };
     });
     const info = [

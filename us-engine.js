@@ -151,7 +151,7 @@
   function compute(txs, opts) {
     opts = opts || {};
     if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: shiftTz(t.date, opts.fileTz || 'UTC', opts.taxTz || 'UTC') }));
-    const method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
+    const manualCost = opts.manualCost || {}, method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
     const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
     const nextIdx = L => { if (method !== 'HIFO') return 0; let b = 0; for (let i = 1; i < L.length; i++) if (unit(L[i]) > unit(L[b]) + 1e-9) b = i; return b; };
     const lots = {}, rows = [], notes = [], income = [], key = (w, a) => (w || '') + '|' + a, wallets = new Set();
@@ -215,7 +215,11 @@
             proceeds: r2(pr), cost: r2(cost), gain: isFinite(pr) && isFinite(cost) ? r2(pr - cost) : null, term: p.none ? null : (isLong(p.date, t.date) ? 'long' : 'short'),
             convert: t.type === 'CONVERT', status: 'ok' };
           if (p.fallback) row.status = 'to verify: not enough units in the chosen lot (FIFO used for the rest)';
-          if (p.none) row.status = 'to verify: no purchase found for these units (missing cost basis)';
+          const mc = p.none && manualCost[t.line];
+          if (mc && isFinite(mc.cost) && mc.cost >= 0 && isFinite(mc.date) && mc.date <= t.date) { // v1.9: cost and date acquired entered by the user for the missing units
+            row.acquired = mc.date; row.cost = r2(mc.cost); row.gain = isFinite(pr) ? r2(pr - mc.cost) : null; row.term = isLong(mc.date, t.date) ? 'long' : 'short'; row.user = true;
+            if (!isFinite(pr)) row.status = 'to verify: USD value of the sale unknown';
+          } else if (p.none) row.status = 'to verify: no purchase found for these units (missing cost basis)';
           else if (!isFinite(cost)) row.status = 'to verify: purchase price unknown (missing cost basis)';
           else if (!isFinite(pr)) row.status = 'to verify: USD value of the sale unknown';
           rows.push(row);
@@ -258,7 +262,7 @@
     const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
     const head = ['(a) Description', '(b) Date acquired', '(c) Date sold', '(d) Proceeds USD', '(e) Cost basis USD', '(h) Gain or loss USD', 'Term', 'Form 8949 box (no 1099-DA, to verify)', 'Status'];
     const hasW = res.rows.some(r => r.wallet); if (hasW) head.push('Wallet');
-    const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.status].concat(hasW ? [r.wallet] : []));
+    const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.user && r.status === 'ok' ? 'ok - cost and date acquired entered by you (to verify)' : r.status].concat(hasW ? [r.wallet] : []));
     return (res.totals.tz ? q('# Times in file: ' + res.totals.tz.file + '; tax dates: ' + res.totals.tz.tax + ' (to verify)') + '\n' : '') + [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function incomeCSV(res) {
@@ -276,7 +280,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null;
+    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {};
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -292,6 +296,12 @@
     out.addEventListener('change', e => {
       const t = e.target; if (!cur) return;
       if (t.id === 'usmethod') { method = t.value; render(); return; }
+      if (t.classList.contains('usmc') || t.classList.contains('usmd')) {
+        const line = +t.dataset.line, c = out.querySelector('.usmc[data-line="' + line + '"]'), d = out.querySelector('.usmd[data-line="' + line + '"]');
+        const cost = parseFloat(String(c && c.value || '').replace(/[$,\s]/g, '')), dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d && d.value || '');
+        if (isFinite(cost) && cost >= 0 && dm) mcost[line] = { cost, date: Date.UTC(+dm[1], +dm[2] - 1, +dm[3], 12) }; else { delete mcost[line]; return; }
+        render(); return;
+      }
       if (t.id === 'usyear') { year = +t.value || 0; render(); return; }
       if (t.classList.contains('uspick') || t.classList.contains('usqty')) {
         const line = +t.dataset.line, sel = out.querySelector('.uspick[data-line="' + line + '"]'), qi = out.querySelector('.usqty[data-line="' + line + '"]');
@@ -302,7 +312,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; year = null; method = 'FIFO'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; year = null; method = 'FIFO'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -329,13 +339,13 @@
         } else p = fromCSVText(data);
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      cur = p; pdfN = pdfNote; picks = {}; year = null; render();
+      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; render();
     });
     function render() {
-      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
+      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
       const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
-      const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
+      const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
       const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (Form 8949 lines)</button></p>`;
       out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
@@ -347,6 +357,10 @@
         + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (lots tracked in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
         + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
         + (tvN.length ? `<div class="warn"><p>${tvN.length} item${tvN.length > 1 ? 's' : ''} to verify:</p><ul>${tvN.slice(0, 20).map(n => '<li>' + esc(n.msg) + '</li>').join('')}</ul></div>` : '')
+        + (()=>{ const M = full.rows.filter(r => r.status.startsWith('to verify: no purchase found') || r.user); if (!M.length) return '';
+          const iso = v => { if (v == null) return ''; const d = new Date(v); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); };
+          return `<details class="note usmiss"${M.some(r => !r.user) ? ' open' : ''}><summary>Missing purchases: enter the cost (optional)</summary><p class="hint">Units sold with no purchase in your file are left out of the totals. If you know them, enter the total cost in USD and the date acquired; the line is then included and marked “entered by you” (to verify).</p>`
+            + M.map(r => { const mc = mcost[r.line] || {}; return `<div class="grid"><p><b>Sale line ${r.line}</b>: ${esc(r.desc)} sold ${mdy(r.sold)}${r.wallet ? ' (' + esc(r.wallet) + ')' : ''}</p><label>Total cost (USD)<input class="usmc" data-line="${r.line}" inputmode="decimal" value="${mc.cost != null ? esc(String(mc.cost)) : ''}" placeholder="e.g. 250.00"></label><label>Date acquired<input type="date" class="usmd" data-line="${r.line}" value="${esc(iso(mc.date))}" max="${iso(r.sold)}"></label></div>`; }).join('') + '</details>'; })()
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
         + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
