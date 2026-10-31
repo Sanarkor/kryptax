@@ -232,3 +232,5 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 .usmode{max-width:768px;margin:24px auto;padding:0 18px;box-sizing:border-box;text-align:center}
 .usmode[hidden],main[hidden]{display:none}
 .topbar h1{white-space:nowrap}@media (max-width:479.98px){header .topbar h1{font-size:clamp(2.2rem,12.5vw,3.4rem)}.regions{gap:5px}.region{padding:.3em .45em;font-size:.78rem}}
+.usmode .usnote{text-align:left}.uszone{display:block;margin:14px 0;padding:16px;border:2px dashed currentColor;border-radius:12px;cursor:pointer;text-align:left;opacity:.95}.uszone b{display:block;margin-bottom:6px}.uszone span{display:block;font-size:.85rem;opacity:.8;overflow-wrap:anywhere}.uszone input{margin-top:10px;max-width:100%}
+#usresult{text-align:left}#usresult .scroll{max-width:100%;overflow-x:auto}.us8949{border-collapse:collapse;font-size:.78rem;width:100%}.us8949 th,.us8949 td{padding:4px 5px;border-bottom:1px solid rgba(127,127,127,.3);white-space:nowrap;text-align:right}.us8949 th:first-child,.us8949 td:first-child{text-align:left}.us8949 tr.tv td{opacity:.75;font-style:italic}
