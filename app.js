@@ -10,7 +10,7 @@
   /* Boutons FRANCE / U.S.A. (en-tête) : U.S.A. = page en construction en anglais, sans aucune référence fiscale française ; FRANCE reste inchangé.
      EN : [sélecteur, texte anglais | null = masqué en U.S.A.]. Le texte français d'origine est gardé et restauré au retour en FRANCE. */
   const EN = [
-    ['header .sub', 'Crypto gains helper'], ['header .sub2', 'Free, open-source and anonymous: keep full control of your data.'],
+    ['header .sub', 'Form 8949 & Schedule D for U.S. crypto taxes'], ['header .sub2', 'Free, open-source and anonymous: keep full control of your data.'],
     ['.regions', null, 'aria-label', 'Country'],
     ['footer .law', null], ['footer .disclaim', 'Kryptax is a free, open-source tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
     ['#whyopen .fl', 'Why Kryptax?'], ['#whyopen .fs', 'Why?'],
