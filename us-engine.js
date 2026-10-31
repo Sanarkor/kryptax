@@ -91,6 +91,20 @@
     for (const l of lines) { const m = String(l).replace(/\s+/g, ' ').trim().match(PDF_RX); if (m) rows.push([m[1], m[2], m[3], m[4], m[5], m[6] || '', m[8] || '', m[7] || '']); }
     const p = parseRows(rows); p.matched = rows.length - 1; return p;
   }
+  /* Time zones (v1.8): file times are wall-clock times in the file's zone; tax dates are calendar days in the taxpayer's zone (this browser). No network: Intl only. */
+  const US_TZ = [['America/New_York', 'Eastern'], ['America/Chicago', 'Central'], ['America/Denver', 'Mountain'], ['America/Los_Angeles', 'Pacific'], ['America/Anchorage', 'Alaska'], ['Pacific/Honolulu', 'Hawaii'], ['UTC', 'UTC']];
+  const tzFmt = {};
+  function tzOffset(zone, inst) { // wall-clock (as UTC ms) minus instant, in ms
+    if (!zone || zone === 'UTC') return 0;
+    const f = tzFmt[zone] || (tzFmt[zone] = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const P = {}; f.formatToParts(new Date(inst)).forEach(x => { P[x.type] = +x.value; });
+    return Date.UTC(P.year, P.month - 1, P.day, P.hour % 24, P.minute, P.second) - Math.floor(inst / 1000) * 1000;
+  }
+  function shiftTz(w, from, to) { // wall time in `from` -> wall time in `to`
+    if (!isFinite(w) || (from || 'UTC') === (to || 'UTC')) return w;
+    let i = w - tzOffset(from, w); i = w - tzOffset(from, i);
+    return i + tzOffset(to, i);
+  }
   /* Long term = sold strictly after the 1-year anniversary of the acquisition date (calendar days, UTC). */
   function isLong(acq, sold) {
     const a = new Date(acq), s = new Date(sold), anniv = Date.UTC(a.getUTCFullYear() + 1, a.getUTCMonth(), a.getUTCDate());
@@ -135,7 +149,9 @@
     return /stak/.test(t) ? 'Staking' : /airdrop/.test(t) ? 'Airdrop' : /reward|mining|learn/.test(t) ? 'Reward' : /interest|earn/.test(t) ? 'Interest' : 'Income';
   }
   function compute(txs, opts) {
-    opts = opts || {}; const method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
+    opts = opts || {};
+    if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: shiftTz(t.date, opts.fileTz || 'UTC', opts.taxTz || 'UTC') }));
+    const method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
     const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
     const nextIdx = L => { if (method !== 'HIFO') return 0; let b = 0; for (let i = 1; i < L.length; i++) if (unit(L[i]) > unit(L[b]) + 1e-9) b = i; return b; };
     const lots = {}, rows = [], notes = [], income = [], key = (w, a) => (w || '') + '|' + a, wallets = new Set();
@@ -218,6 +234,7 @@
     totals.income = { count: income.length, usd: r2(income.reduce((a, t) => a + (isFinite(t.usd) ? t.usd : 0), 0)), unknown: income.filter(t => !isFinite(t.usd)).length };
     const incomeRows = income.map(t => ({ line: t.line, date: t.date, asset: t.asset, qty: t.qty, usd: isFinite(t.usd) ? r2(t.usd) : null, type: incomeType(t.rawType), wallet: t.wallet || '',
       status: isFinite(t.usd) ? 'ok' : 'to verify: USD value when received is missing (not in the total)' }));
+    if (opts.fileTz || opts.taxTz) totals.tz = { file: opts.fileTz || 'UTC', tax: opts.taxTz || 'UTC' };
     totals.transfers = transfers; totals.method = method; wallets.delete(''); totals.wallets = [...wallets];
     return { rows, totals, notes, sales, income: incomeRows };
   }
@@ -242,7 +259,7 @@
     const head = ['(a) Description', '(b) Date acquired', '(c) Date sold', '(d) Proceeds USD', '(e) Cost basis USD', '(h) Gain or loss USD', 'Term', 'Form 8949 box (no 1099-DA, to verify)', 'Status'];
     const hasW = res.rows.some(r => r.wallet); if (hasW) head.push('Wallet');
     const L = res.rows.map(r => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds.toFixed(2), r.cost == null ? '' : r.cost.toFixed(2), r.gain == null ? '' : r.gain.toFixed(2), r.term || '', r.term === 'long' ? 'L' : r.term === 'short' ? 'I' : '', r.status].concat(hasW ? [r.wallet] : []));
-    return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
+    return (res.totals.tz ? q('# Times in file: ' + res.totals.tz.file + '; tax dates: ' + res.totals.tz.tax + ' (to verify)') + '\n' : '') + [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function incomeCSV(res) {
     const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), hasW = res.income.some(r => r.wallet);
@@ -251,7 +268,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -260,6 +277,11 @@
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
     let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null;
+    let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
+    let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
+    if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
+      tzSel.innerHTML = L.map(z => `<option value="${esc(z[0])}"${z[0] === fileTz ? ' selected' : ''}>${esc(z[1] === 'UTC' ? 'UTC' : z[1] + ' (' + z[0] + ')')}</option>`).join('');
+      tzSel.addEventListener('change', () => { fileTz = tzSel.value; if (cur) render(); }); }
     const lotLabel = l => `line ${l.line} · ${mdy(l.date)} · ${+l.qty.toPrecision(8)} left · ${isFinite(l.unit) ? usd(l.unit) + '/unit' : 'cost unknown'}`;
     function manualHtml(res) {
       if (!res.sales.length) return '';
@@ -310,13 +332,13 @@
       cur = p; pdfN = pdfNote; picks = {}; year = null; render();
     });
     function render() {
-      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
+      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
       const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
       const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (Form 8949 lines)</button></p>`;
-      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
+      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
         + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
           + (T.income.unknown ? `<p class="warn">${T.income.unknown} income line${T.income.unknown > 1 ? 's' : ''} without a USD value: to verify, not included in the income total.</p>` : '')

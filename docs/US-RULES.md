@@ -42,6 +42,12 @@ State taxes are not included.
 
 `us-export.js` builds a PDF with jsPDF (already shipped; `export.js` is not used): title, generation date (UTC), lot method, wallets, short / long / total, income total if any, then all Form 8949-style lines on as many pages as needed. Lines "to verify" are highlighted and marked "TO VERIFY". Every page has the footer "Estimate - not tax advice - to be verified - state taxes not included". The box letter (G/H/I short term, J/K/L long term; I or L without a Form 1099-DA, see i8949 above) is printed only as an indication, to verify (Form 1099-DA not read).
 
+## Time zones (v1.8)
+
+- Holding period: "start counting on the day following the day you acquired the property. The day you disposed of the property is part of your holding period." Example: bought June 17, 2024; sold June 17, 2025 = not longer than 1 year; sold June 19, 2025 = longer than 1 year (Pub. 544, "Holding period", https://www.irs.gov/publications/p544). Kryptax treats a sale the day after the anniversary (June 18, 2025 in this example) as long term; the example does not cover that day: to verify.
+- These are calendar days. Kryptax reads the file times in the zone you choose ("Time zone of your file": this browser's zone by default, UTC, or a U.S. zone) and computes dates, tax year and short/long term on calendar days in this browser's time zone (Intl, no network). Which zone applies to you (for example your residence): to verify. Daylight saving time is handled by the browser's time zone data.
+- The two zones are shown on the result screen, in the CSV (first line) and in the PDF.
+
 ## Title (v1.7)
 
 "Form 8949 & Schedule D for U.S. crypto taxes": i8949 "Purpose of Form" (use Form 8949 to report sales and exchanges of capital assets, including digital assets reported on Form 1099-DA) and "Schedule D" (use Schedule D to figure the overall gain or loss from transactions reported on Form 8949). The Form 1040 digital asset question is not mentioned (not checked).
