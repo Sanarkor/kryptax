@@ -10,7 +10,8 @@
    - Holding period starts the day after acquisition and includes the disposal day; more than 1 year = long term: FAQ Q6, i8949 "Short-Term or Long-Term".
    - FIFO when units are not specifically identified: FAQ Q41; Treas. Reg. 1.1012-1(j)(3)(i) (quoted in Notice 2026-20, https://www.irs.gov/pub/irs-drop/n-26-20.pdf).
    - Digital asset rows go to Form 8949 boxes G/H/I (short) and J/K/L (long), not C/F: i8949 2025 "What's New".
-   Not coded (shown as "to verify"): wash sales, specific identification, several wallets (Rev. Proc. 2024-28), income amounts. */
+   Lot methods: FIFO (default), HIFO, manual choice per sale (specific identification) — Treas. Reg. 1.1012-1(j), Notice 2026-20.
+   Not coded (shown as "to verify"): wash sales, income amounts. */
 (function (root) {
   'use strict';
   const E = typeof require !== 'undefined' && typeof module !== 'undefined' ? require('./engine.js') : root.KryptaxEngine;
@@ -116,16 +117,25 @@
     }
     return { pairs, used };
   }
-  function compute(txs) {
+  /* Lot methods (Treas. Reg. 1.1012-1(j)(3), cited in Notice 2026-20, https://www.irs.gov/pub/irs-drop/n-26-20.pdf):
+     - FIFO: default when units are not adequately identified (1.1012-1(j)(3)(i)).
+     - HIFO: highest unit cost first; the regulation treats such a method as a standing order (1.1012-1(j)(3)(ii)).
+     - MANUAL: the user picks a lot (specific identification) per sale; the rest of the sale uses FIFO.
+     Adequate identification must exist no later than the time of sale (records) — to verify; Kryptax cannot check it.
+     Notice 2026-20 extends the Notice 2025-7 relief for making an adequate identification through December 31, 2026. */
+  function compute(txs, opts) {
+    opts = opts || {}; const method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
+    const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
+    const nextIdx = L => { if (method !== 'HIFO') return 0; let b = 0; for (let i = 1; i < L.length; i++) if (unit(L[i]) > unit(L[b]) + 1e-9) b = i; return b; };
     const lots = {}, rows = [], notes = [], income = [], key = (w, a) => (w || '') + '|' + a, wallets = new Set();
     const add = (w, asset, qty, cost, date, line) => { wallets.add(w || ''); (lots[key(w, asset)] = lots[key(w, asset)] || []).push({ qty, cost, date, line }); };
     /* takes qty units FIFO from a wallet; returns the pieces [{qty, cost, date}] and the quantity not found */
     const take = (w, asset, qty) => {
       const L = lots[key(w, asset)] || [], out = []; let left = qty;
       while (left > 1e-12 && L.length) {
-        const lot = L[0], q = Math.min(lot.qty, left), c = isFinite(lot.cost) ? lot.cost * q / lot.qty : NaN;
+        const ix = nextIdx(L), lot = L[ix], q = Math.min(lot.qty, left), c = isFinite(lot.cost) ? lot.cost * q / lot.qty : NaN;
         out.push({ qty: q, cost: c, date: lot.date, line: lot.line });
-        lot.cost = isFinite(lot.cost) ? lot.cost - c : lot.cost; lot.qty -= q; if (lot.qty <= 1e-12) L.shift(); left -= q;
+        lot.cost = isFinite(lot.cost) ? lot.cost - c : lot.cost; lot.qty -= q; if (lot.qty <= 1e-12) L.splice(ix, 1); left -= q;
       }
       return { pieces: out, missing: left > 1e-12 ? left : 0 };
     };
@@ -159,13 +169,25 @@
         notes.push({ line: t.line, kind: 'transfer', msg: `Line ${t.line}: ${+t.qty.toPrecision(10)} ${t.asset} received${t.wallet ? ' in ' + t.wallet : ''} with no matching send — original date and cost unknown, to verify.` });
       }
       else if (t.type === 'SELL' || t.type === 'CONVERT') {
-        const proceeds = isFinite(t.usd) ? t.usd - t.fee : NaN, r = take(t.wallet, t.asset, t.qty);
+        const proceeds = isFinite(t.usd) ? t.usd - t.fee : NaN, avail = (lots[key(t.wallet, t.asset)] || []).map(l => ({ line: l.line, date: l.date, qty: l.qty, unit: isFinite(l.cost) ? l.cost / l.qty : NaN }));
+        sales.push({ line: t.line, wallet: t.wallet || '', asset: t.asset, qty: t.qty, date: t.date, lots: avail });
+        let r = { pieces: [], missing: t.qty }, short = 0; const pk = method === 'MANUAL' && picks[t.line];
+        if (pk && pk.qty > 0) { // specific identification: take from the chosen lot(s) first
+          const L = lots[key(t.wallet, t.asset)] || []; let want = Math.min(pk.qty, t.qty), got = 0;
+          for (let i = 0; i < L.length && want - got > 1e-12; i++) { const lot = L[i]; if (lot.line !== pk.lot) continue;
+            const q = Math.min(lot.qty, want - got), c = isFinite(lot.cost) ? lot.cost * q / lot.qty : NaN;
+            r.pieces.push({ qty: q, cost: c, date: lot.date, line: lot.line, picked: true }); lot.cost = isFinite(lot.cost) ? lot.cost - c : lot.cost; lot.qty -= q; got += q; if (lot.qty <= 1e-12) { L.splice(i, 1); i--; } }
+          short = want - got > 1e-12 ? want - got : 0;
+          const rest = take(t.wallet, t.asset, t.qty - got); r.pieces = r.pieces.concat(rest.pieces.map(x => Object.assign(x, { fallback: short > 0 }))); r.missing = rest.missing;
+          if (short) notes.push({ line: t.line, kind: 'lots', msg: `Sale line ${t.line}: the chosen lot (line ${pk.lot}) has only ${+(want - short).toPrecision(10)} ${t.asset} left in this wallet; ${+short.toPrecision(10)} taken by FIFO instead — to verify.` });
+        } else r = take(t.wallet, t.asset, t.qty);
         const pieces = r.pieces.concat(r.missing > 1e-12 ? [{ qty: r.missing, cost: NaN, date: null, none: true }] : []);
         for (const p of pieces) {
           const q = p.qty, pr = isFinite(proceeds) ? proceeds * q / t.qty : NaN, cost = p.cost;
           const row = { line: t.line, desc: (+q.toPrecision(10)) + ' ' + t.asset, asset: t.asset, wallet: t.wallet || '', qty: q, acquired: p.none ? null : p.date, sold: t.date,
             proceeds: r2(pr), cost: r2(cost), gain: isFinite(pr) && isFinite(cost) ? r2(pr - cost) : null, term: p.none ? null : (isLong(p.date, t.date) ? 'long' : 'short'),
             convert: t.type === 'CONVERT', status: 'ok' };
+          if (p.fallback) row.status = 'to verify: not enough units in the chosen lot (FIFO used for the rest)';
           if (p.none) row.status = 'to verify: no purchase found for these units (missing cost basis)';
           else if (!isFinite(cost)) row.status = 'to verify: purchase price unknown (missing cost basis)';
           else if (!isFinite(pr)) row.status = 'to verify: USD value of the sale unknown';
@@ -183,8 +205,8 @@
       short: { proceeds: sum(S, 'proceeds'), cost: sum(S, 'cost'), gain: sum(S, 'gain') }, long: { proceeds: sum(Lg, 'proceeds'), cost: sum(Lg, 'cost'), gain: sum(Lg, 'gain') } };
     totals.gain = r2(totals.short.gain + totals.long.gain);
     totals.income = { count: income.length, usd: r2(income.reduce((a, t) => a + (isFinite(t.usd) ? t.usd : 0), 0)), unknown: income.filter(t => !isFinite(t.usd)).length };
-    totals.transfers = transfers; wallets.delete(''); totals.wallets = [...wallets];
-    return { rows, totals, notes };
+    totals.transfers = transfers; totals.method = method; wallets.delete(''); totals.wallets = [...wallets];
+    return { rows, totals, notes, sales };
   }
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -197,14 +219,31 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, mdy, usd };
+  const api = { pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, mdy, usd };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
     const box = doc.getElementById('usmode'); if (!box || box.dataset.ready) return; box.dataset.ready = '1';
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
-    let last = null;
+    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {};
+    const lotLabel = l => `line ${l.line} · ${mdy(l.date)} · ${+l.qty.toPrecision(8)} left · ${isFinite(l.unit) ? usd(l.unit) + '/unit' : 'cost unknown'}`;
+    function manualHtml(res) {
+      if (!res.sales.length) return '';
+      return '<div class="grid">' + res.sales.map(sl => { const pk = picks[sl.line] || {};
+        return `<label>Sale line ${sl.line}: ${esc(+sl.qty.toPrecision(10) + ' ' + sl.asset)} on ${mdy(sl.date)}${sl.wallet ? ' (' + esc(sl.wallet) + ')' : ''}<select class="uspick" data-line="${sl.line}"><option value="">Default (FIFO)</option>${sl.lots.map(l => `<option value="${l.line}"${pk.lot === l.line ? ' selected' : ''}>${esc(lotLabel(l))}</option>`).join('')}</select></label>`
+          + `<label>Quantity from this lot<input class="usqty" data-line="${sl.line}" inputmode="decimal" value="${pk.lot ? esc(String(pk.qty)) : ''}" placeholder="${esc(String(+sl.qty.toPrecision(10)))}"></label>`; }).join('') + '</div>';
+    }
+    out.addEventListener('change', e => {
+      const t = e.target; if (!cur) return;
+      if (t.id === 'usmethod') { method = t.value; render(); return; }
+      if (t.classList.contains('uspick') || t.classList.contains('usqty')) {
+        const line = +t.dataset.line, sel = out.querySelector('.uspick[data-line="' + line + '"]'), qi = out.querySelector('.usqty[data-line="' + line + '"]');
+        const sale = last.sales.find(x => x.line === line), lot = sel && sel.value ? +sel.value : 0;
+        if (!lot) delete picks[line]; else { const q = parseFloat(String(qi && qi.value || '').replace(',', '.')); picks[line] = { lot, qty: q > 0 ? q : sale.qty }; }
+        render();
+      }
+    });
     inp.addEventListener('change', async () => {
       const f = inp.files && inp.files[0]; if (!f) return;
       const name = f.name.toLowerCase(), data = new Uint8Array(await f.arrayBuffer()), W = typeof window !== 'undefined' ? window : root;
@@ -225,19 +264,25 @@
         } else p = fromCSVText(data);
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      const res = last = compute(p.txs), T = res.totals;
+      cur = p; pdfN = pdfNote; picks = {}; render();
+    });
+    function render() {
+      const p = cur, pdfNote = pdfN, res = last = compute(p.txs, { method, picks }), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
       const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
-      out.innerHTML = pdfNote + `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, FIFO)<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
+      out.innerHTML = pdfNote + `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
         + (T.income.count ? `<p class="hint">${T.income.count} reward/income line${T.income.count > 1 ? 's' : ''} (${usd(T.income.usd)}) added as lots at their USD value; income itself is not computed here (to verify).</p>` : '')
-        + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (FIFO in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
+        + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (lots tracked in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
         + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
         + (tvN.length ? `<div class="warn"><p>${tvN.length} item${tvN.length > 1 ? 's' : ''} to verify:</p><ul>${tvN.slice(0, 20).map(n => '<li>' + esc(n.msg) + '</li>').join('')}</ul></div>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
+        + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
+        + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
+        + (method === 'MANUAL' ? manualHtml(res) : '')
         + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (Form 8949 lines)</button></p>`;
-    });
+    }
     out.addEventListener('click', e => {
       if (e.target.id !== 'uscsv' || !last) return;
       const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([toCSV(last)], { type: 'text/csv' })); a.download = 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);

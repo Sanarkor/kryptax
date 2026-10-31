@@ -79,6 +79,20 @@ const lim = run('Date,Type,Asset,Quantity,Total (USD),Wallet\n2024-01-01,Buy,ETH
 eq(lim.totals.transfers, { paired: 0, toVerify: 2 }, 'receive 4 days later is not paired');
 const one = run('Date,Type,Asset,Quantity,Total (USD),Wallet,To wallet\n2024-01-01,Buy,ETH,1,100,A,\n2024-02-01,Transfer,ETH,1,,A,B\n2025-03-01,Sell,ETH,1,400,B,\n');
 eq(one.rows.map(x => [x.wallet, x.cost, x.term]), [['B', 100, 'long']], 'one-line transfer with To wallet');
+
+// lot methods (Treas. Reg. 1.1012-1(j)(3); Notice 2026-20)
+const lt = U.fromCSVText(fs.readFileSync(__dirname + '/testdata/us/us_lots_fictif.csv')).txs;
+const fifo = U.compute(lt), hifo = U.compute(lt, { method: 'HIFO' });
+eq([fifo.totals.gain, hifo.totals.gain], [2000, 1500], 'FIFO and HIFO give different gains');
+eq(hifo.rows.filter(x => x.line === 5).map(x => x.cost), [3000], 'HIFO takes the highest unit cost first');
+eq(fifo.totals.method + hifo.totals.method, 'FIFOHIFO', 'method reported');
+eq(fifo.sales[0].lots.map(l => [l.line, l.qty, l.unit]), [[2, 1, 1000], [3, 1, 3000], [4, 1, 2000]], 'available lots listed for a sale');
+const man = U.compute(lt, { method: 'MANUAL', picks: { 5: { lot: 4, qty: 1 } } });
+eq(man.rows.filter(x => x.line === 5).map(x => [x.cost, x.status]), [[2000, 'ok']], 'manual choice: chosen lot used');
+eq(man.rows.filter(x => x.line === 6).map(x => x.cost), [1000, 1500], 'other sale stays FIFO');
+const sh = U.compute(lt, { method: 'MANUAL', picks: { 5: { lot: 4, qty: 1 }, 6: { lot: 4, qty: 1 } } });
+eq(sh.rows.filter(x => x.line === 6 && /to verify/.test(x.status)).length > 0 && sh.notes.some(n => /chosen lot/.test(n.msg)), true, 'not enough units in the chosen lot → to verify');
+eq(U.compute(lt, { picks: { 5: { lot: 4, qty: 1 } } }).totals.gain, 2000, 'picks ignored unless manual');
 // English only, no French legal words in the module texts
 const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8');
 eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), false, 'no French legal text in the U.S.A. module');
