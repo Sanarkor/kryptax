@@ -4,12 +4,44 @@
   const SHOW_PREC = false; // précision des cours masquée (écran et PDF) pour l'instant : passer à true pour la réafficher
   const KOFI_NOTE = true; // mention légale « Dons » affichée (#kofinote) : les dons passent par Ko-fi (lien dans la fenêtre #merci)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
-  /* Bouton FRANCE / US (en-tête) : le mode US est une page en construction qui masque l'import et les résultats ; FRANCE reste inchangé. */
-  { const b = $('#region'), us = $('#usmode'), m = document.querySelector('main'), K = 'kx-region';
-    const set = v => { const u = v === 'US'; if (b) { b.textContent = u ? 'US' : 'FRANCE'; b.setAttribute('aria-pressed', u ? 'true' : 'false'); b.setAttribute('aria-label', u ? 'Pays : US. Revenir au mode France' : 'Pays : France. Basculer vers le mode US'); }
-      if (us) us.hidden = !u; if (m) m.hidden = u; try { localStorage.setItem(K, u ? 'US' : 'FR'); } catch (e) {} };
+  /* Boutons FRANCE / U.S.A. (en-tête) : U.S.A. = page en construction en anglais, sans aucune référence fiscale française ; FRANCE reste inchangé.
+     EN : [sélecteur, texte anglais | null = masqué en U.S.A.]. Le texte français d'origine est gardé et restauré au retour en FRANCE. */
+  const EN = [
+    ['header .sub', 'Crypto gains helper'], ['header .sub2', 'Free, open-source and anonymous: keep full control of your data.'],
+    ['.regions', null, 'aria-label', 'Country'],
+    ['footer .law', null], ['footer .disclaim', 'Kryptax is a free, open-source tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
+    ['#whyopen .fl', 'Why Kryptax?'], ['#whyopen .fs', 'Why?'],
+    ['#kofi2 > span', '☕ Support Kryptax 🙏'], ['#kofi2', '', 'aria-label', 'Support Kryptax, thank you'],
+    ['#whyclose', '', 'aria-label', 'Close'], ['#whytitle', 'Why I built Kryptax'],
+    ['#why .pv-in > p:nth-of-type(2)', 'I started with crypto in 2026 and found that getting a simple report often costs money. So I built my own tool and I give it to everyone.'],
+    ['#why .pv-in > p:nth-of-type(3)', 'Free, open-source, no account, and your data stays on your device. The U.S.A. version is under construction: we’re building it together. If it helped you, a small coffee is always appreciated ☕'],
+    ['#merciclose', '', 'aria-label', 'Close'], ['#mercititle', 'Thanks for your support 🙏'],
+    ['#mercitext', 'If Kryptax helped you, you can buy the developer a small coffee on Ko-fi (external site, opens in a new tab).'],
+    ['#merci .merci-legal', 'Kryptax stays free. A donation is a simple voluntary thank-you, with nothing in return, and it cannot be refunded or cancelled.'],
+    ['#mercikofi', '☕ Donate on Ko-fi'], ['#merciok', 'Close'],
+    ['#privopen', 'Legal notice and privacy'],
+    ['#privtitle', 'Legal notice and privacy'],
+    ['#privacy .pv-in > :nth-child(2)', 'Your files stay with you'], ['#privacy .pv-in > :nth-child(3)', 'Everything runs in your browser. No file, transaction or amount is sent to a Kryptax server: Kryptax has no server, it is a simple web page.'],
+    ['#privacy .pv-in > :nth-child(4)', 'Crypto prices'], ['#privacy .pv-in > :nth-child(5)', 'To find the value of a crypto at a given date, your browser asks public price sources directly, with no account or key. Only the symbol and the date or period are sent, never your amounts, quantities or name. Like any website, these services see your IP address.'],
+    ['#privacy .pv-in > :nth-child(6)', 'Data kept in this browser'], ['#privacy .pv-in > :nth-child(7)', 'Your transactions, entries and prices already found are saved in this browser’s local storage, on this device only. The reset button erases everything.'],
+    ['#privacy .pv-in > :nth-child(8)', 'No account, no tracking'], ['#privacy .pv-in > :nth-child(9)', 'No account, no ads, no cookies, no trackers, no audience measurement.'],
+    ['#privacy .pv-in > :nth-child(10)', 'Responsibility'], ['#privacy .pv-in > :nth-child(11)', 'Kryptax is a free, open-source tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
+    ['#kofinote > h3', 'Donations'], ['#kofinote > p', 'A “Support Kryptax” button leads to Ko-fi (external site, opens in a new tab). A donation is a small thank-you given from the heart: it is free and voluntary, gives no right to any service or benefit, and because it is made of your own free will it cannot be refunded or cancelled. Kryptax sends no data to Ko-fi: only your browser opens the page, if you click.'],
+    ['#privacy .pv-in > :nth-child(13)', 'Publisher and hosting'], ['#privacy .pv-in > :nth-child(14)', 'Publisher: Damien M. aka “Sanarkor”. Hosting: GitHub Pages (GitHub, Inc.).'],
+    ['#privclose', 'Close']];
+  { const fr = $('#regfr'), us = $('#regus'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
+    const tr = u => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
+        if (!keep.has(el)) keep.set(el, { h: el.innerHTML, hid: el.hidden, a: attr ? el.getAttribute(attr) : null });
+        const k = keep.get(el);
+        if (attr) { el.setAttribute(attr, u ? enA : k.a); if (en === '') continue; }
+        if (en === null) { if (!attr) el.hidden = u ? true : k.hid; continue; }
+        el.innerHTML = u ? en : k.h; } };
+    const set = v => { const u = v === 'US';
+      [[fr, !u], [us, u]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); } });
+      document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
+      if (page) page.hidden = !u; if (m) m.hidden = u; try { localStorage.setItem(K, u ? 'US' : 'FR'); } catch (e) {} };
     let v0 = 'FR'; try { v0 = localStorage.getItem(K) === 'US' ? 'US' : 'FR'; } catch (e) {}
-    if (b) { set(v0); b.addEventListener('click', () => set(b.textContent === 'US' ? 'FR' : 'US')); } }
+    if (fr && us) { if (v0 === 'US') set('US'); fr.addEventListener('click', () => set('FR')); us.addEventListener('click', () => set('US')); } }
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
   /* Encre réelle d'un glyphe (px, depuis l'origine) : rendu canvas puis balayage des pixels (robuste au gras synthétique, au zoom, aux polices de remplacement) */
   function inkX(ch, font, px) {
