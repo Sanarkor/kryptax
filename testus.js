@@ -142,4 +142,20 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq(/U\.S\.A\. mode/.test(us) || /Estimate only — not tax advice/.test(us), false, 'no "U.S.A. mode" title, no duplicate warning');
   eq(/<span class="headbtns"><button type="button" id="ushelpbtn" class="small ghost"[^>]*>Instructions<\/button><button type="button" id="usreset" class="small ghost"[^>]*>↺ Reset<\/button>/.test(us) && /id="ushelppanel" class="help" hidden/.test(us), true, 'Instructions + Reset buttons like France');
   eq(/Schedule D/.test(us) && /FIFO/.test(us) && /to verify/.test(us), true, 'US instructions: steps + to verify'); }
+{ // v1.8 time zones (fictitious)
+  const W = (y, m, d, h, mi) => Date.UTC(y, m - 1, d, h, mi || 0);
+  eq(U.shiftTz(W(2025, 1, 1, 3, 30), 'UTC', 'America/Los_Angeles'), W(2024, 12, 31, 19, 30), 'UTC 01/01/2025 03:30 = Pacific 12/31/2024 19:30');
+  eq(U.shiftTz(W(2024, 12, 31, 22, 0), 'America/New_York', 'UTC'), W(2025, 1, 1, 3, 0), 'Eastern 12/31 22:00 = UTC 01/01 03:00');
+  eq(U.shiftTz(W(2025, 7, 1, 12, 0), 'UTC', 'America/New_York'), W(2025, 7, 1, 8, 0), 'summer (DST): UTC-4');
+  eq(U.shiftTz(W(2025, 1, 15, 12, 0), 'UTC', 'America/New_York'), W(2025, 1, 15, 7, 0), 'winter: UTC-5');
+  eq(U.shiftTz(W(2025, 3, 9, 7, 30), 'UTC', 'America/New_York'), W(2025, 3, 9, 3, 30), 'DST start day 03/09/2025: 07:30 UTC = 03:30 EDT');
+  eq(U.shiftTz(W(2025, 11, 2, 12, 0), 'Pacific/Honolulu', 'Pacific/Honolulu'), W(2025, 11, 2, 12, 0), 'same zone: unchanged');
+  const T = [{ line: 2, date: W(2024, 1, 2, 12), type: 'BUY', asset: 'BTC', qty: 1, usd: 10000, fee: 0, wallet: '' }, { line: 3, date: W(2025, 1, 1, 3, 30), type: 'SELL', asset: 'BTC', qty: 0.5, usd: 8000, fee: 0, wallet: '' }];
+  const a = U.compute(T, { fileTz: 'UTC', taxTz: 'UTC' }), b = U.compute(T, { fileTz: 'UTC', taxTz: 'America/Los_Angeles' });
+  eq(JSON.stringify(U.years(a)) + JSON.stringify(U.years(b)), '[2025][2024]', 'sale near midnight: tax year 2025 in UTC, 2024 in Pacific');
+  eq(b.totals.tz.file + '|' + b.totals.tz.tax, 'UTC|America/Los_Angeles', 'time zones kept in the result');
+  eq(/^# Times in file: UTC; tax dates: America\/Los_Angeles/.test(U.toCSV(b)), true, 'CSV shows the time zones');
+  eq(/^\(a\) Description/.test(U.toCSV(U.compute(T))), true, 'CSV without time zone option: unchanged');
+  const H = [{ line: 2, date: W(2024, 6, 17, 20), type: 'BUY', asset: 'ETH', qty: 1, usd: 1000, fee: 0, wallet: '' }, { line: 3, date: W(2025, 6, 18, 2), type: 'SELL', asset: 'ETH', qty: 1, usd: 2000, fee: 0, wallet: '' }];
+  eq(U.compute(H, { fileTz: 'UTC', taxTz: 'UTC' }).rows[0].term + '|' + U.compute(H, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows[0].term, 'long|short', 'holding period by calendar day in the tax zone (Pub. 544 example dates)'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
