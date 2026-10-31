@@ -323,7 +323,19 @@
       out.push([]); out.push(['Not on Form 8949 - to verify (missing cost or value; not in the totals)']); out.push(head);
       for (const r of F.toVerify) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.status]));
     }
+    const D = daLines(res, opts.da);
+    if (D) { out.push([]); out.push(['Form 1099-DA comparison (totals you entered) - to verify']); out.push(['Item', 'Form 1099-DA', 'Kryptax', 'Difference', 'Note']);
+      for (const l of D.lines) out.push([l.label, m(l.form), m(l.mine), m(l.diff), l.flag ? 'to verify' : 'matches']); out.push([D.note]); }
     return out.map(r => r.map(q).join(',')).join('\n') + '\n';
+  }
+  /* 1099-DA comparison lines, only when the user typed a total (box 1f and/or 1g). */
+  const DANOTE = 'Box 1f is proceeds after transaction costs. Box 1g may be blank for noncovered assets (bought before 2026 or moved in). Rewards and staking are not on Form 1099-DA. Sales to verify are not in the Kryptax totals. A difference does not mean an error - to verify. Source: IRS Instructions for Form 1099-DA.';
+  function daLines(res, d) {
+    if (!d || (!isFinite(d.p) && !isFinite(d.b))) return null;
+    const o = daCompare(res.totals, d.p, d.b), lines = [];
+    if (isFinite(d.p)) lines.push({ label: 'Proceeds (box 1f)', form: d.p, mine: o.proceeds, diff: o.dProceeds, flag: Math.abs(o.dProceeds) >= 0.01 });
+    if (isFinite(d.b)) lines.push({ label: 'Cost basis (box 1g)', form: d.b, mine: o.cost, diff: o.dCost, flag: Math.abs(o.dCost) >= 0.01 });
+    return { lines, flag: o.flag, note: DANOTE };
   }
   function incomeCSV(res) {
     const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), hasW = res.income.some(r => r.wallet);
@@ -332,7 +344,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -413,6 +425,7 @@
         + '<ul>' + line('Proceeds', o.proceeds, o.dProceeds) + line('Cost basis', o.cost, o.dCost) + '</ul>'
         + '<p class="usnote">Box 1f is proceeds after transaction costs. Box 1g may be blank for assets bought before 2026 or moved in from elsewhere (noncovered). Rewards and staking are not on Form 1099-DA. Sales marked to verify are not in the Kryptax totals. A difference does not mean an error — to verify. Source: IRS Instructions for Form 1099-DA.</p></details>';
     }
+    const daNow = () => ({ p: da[(year || 'all') + 'p'], b: da[(year || 'all') + 'b'] });
     function catSel() {
       const F = form8949(last, cat), o = (v, l) => `<option value="${v}"${cat === v ? ' selected' : ''}>${l}</option>`;
       return `<div class="grid uscat"><label>Form 8949 box (from your Form 1099-DA) <select id="uscat">${o('', 'Not chosen — to verify')}${o('none', 'No Form 1099-DA → box I / L')}${o('nobasis', 'Form 1099-DA, basis not reported to the IRS → box H / K')}${o('basis', 'Form 1099-DA, basis reported to the IRS → box G / J')}</select></label></div>`
@@ -450,9 +463,9 @@
     }
     out.addEventListener('click', e => {
       if (e.target.id === 'uspdfmain' || e.target.id === 'uscsvmain') { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
-      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat }); return; }
+      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, da: daNow() }); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
-      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last, { cat })], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last, { cat, da: daNow() })], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;

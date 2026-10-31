@@ -34,6 +34,8 @@
       'Total gain or loss: ' + usd(T.gain)
     ];
     if (T.income && T.income.count) info.push('Income (staking / airdrops / interest): ' + usd(T.income.usd) + ' (' + (T.income.count - T.income.unknown) + ' of ' + T.income.count + ' lines' + (T.income.unknown ? '; ' + T.income.unknown + ' without USD value, to verify' : '') + ') - ordinary income, to verify; no tax rates applied');
+    const DA = eng().daLines(res, opts.da);
+    if (DA) { for (const l of DA.lines) info.push('Form 1099-DA ' + l.label + ': ' + usd(l.form) + ' vs Kryptax ' + usd(l.mine) + ' - difference ' + usd(l.diff) + (l.flag ? ' (TO VERIFY)' : ' (matches)')); info.push(DA.note); }
     return { title: 'Kryptax - U.S. summary (estimate)', info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows, parts, tv };
   }
 
