@@ -126,4 +126,8 @@ eq(U.incomeType('Learning reward') + U.incomeType('Earn interest'), 'RewardInter
 // English only, no French legal words in the module texts
 const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8') + fs.readFileSync(__dirname + '/us-export.js', 'utf8');
 eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), false, 'no French legal text in the U.S.A. module');
+{ const h = fs.readFileSync(__dirname + '/index.html', 'utf8'), us = (h.match(/<section id="usmode"[\s\S]*?<div id="usresult"/) || [''])[0];
+  eq(/<section id="usimp" class="usimp"><div class="sechead"><h2>1\. Import<\/h2>/.test(us) && /<label class="btn"><span class="lbl-l">/.test(us) && /id="usfile"[^>]*hidden/.test(us) && /class="fhelp"/.test(us), true, 'US import box: same structure as the France box');
+  eq(/Date, Type, Asset, Quantity, Total or Price, Fee/.test(us) && /<details class="usdet"><summary>Details<\/summary>/.test(us) && /stays in this browser/.test(us), true, 'US import box: short texts + Details');
+  eq(/\b(2086|2042|3AN|CGI|BOI)\b|[àéèùç]/i.test(us), false, 'US import box: English only'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
