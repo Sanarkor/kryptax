@@ -44,7 +44,12 @@
   function parseNum(v, mode) {
     if (v == null) return NaN;
     if (typeof v === 'number') return v;
-    let s = fixText(String(v)).replace(/[\s\u00a0\u202f]/g, '').replace(/[€$£A-Za-z]/g, '');
+    // Signes moins typographiques (−, ‒, –, —) ramenés à « - » ; un tiret seul reste une cellule vide.
+    let s = fixText(String(v)).replace(/[\s\u00a0\u202f]/g, '').replace(/[\u2212\u2012-\u2014]/g, '-').replace(/[€$£]/g, '');
+    // Notation scientifique (« 1e-8 », « 1,5E-07 », « 1e-8BTC ») : à lire avant de retirer les lettres, sinon l'exposant est perdu.
+    const sci = /^([-+]?(?:\d+[.,]?\d*|[.,]\d+))[eE]([-+]?\d+)[A-Za-z]*$/.exec(s);
+    if (sci) { const n = parseFloat(sci[1].replace(',', '.') + 'e' + sci[2]); return isFinite(n) ? n : NaN; }
+    s = s.replace(/[A-Za-z]/g, '');
     if (s === '' || s === '-') return NaN;
     let neg = /^\(.*\)$/.test(s); s = s.replace(/[()]/g, '');
     const c = s.lastIndexOf(','), d = s.lastIndexOf('.');
