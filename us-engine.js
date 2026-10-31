@@ -264,6 +264,12 @@
         render();
       }
     });
+    const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
+    if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+      zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
+      zone.addEventListener('dragover', e => { if (has(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; } });
+      zone.addEventListener('dragleave', () => { if (--depth <= 0) off(); });
+      zone.addEventListener('drop', e => { off(); if (!has(e)) return; e.preventDefault(); e.stopPropagation(); try { inp.files = e.dataTransfer.files; inp.dispatchEvent(new Event('change')); } catch (x) {} }); }
     inp.addEventListener('change', async () => {
       const f = inp.files && inp.files[0]; if (!f) return;
       const name = f.name.toLowerCase(), data = new Uint8Array(await f.arrayBuffer()), W = typeof window !== 'undefined' ? window : root;
