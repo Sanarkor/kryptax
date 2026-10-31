@@ -323,6 +323,10 @@
       out.push([]); out.push(['Not on Form 8949 - to verify (missing cost or value; not in the totals)']); out.push(head);
       for (const r of F.toVerify) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.status]));
     }
+    const K = carryLines(res, opts.carry);
+    if (K) { out.push([]); out.push(['Capital loss carryover (amounts you entered) - to verify']); out.push(['Item', 'Amount']);
+      out.push(['Schedule D line 6 - short-term carryover', m(-K.s)]); out.push(['Net short-term, this file + carryover (Schedule D line 7 if no other items)', m(K.net7)]);
+      out.push(['Schedule D line 14 - long-term carryover', m(-K.l)]); out.push(['Net long-term, this file + carryover (Schedule D line 15 if no other items)', m(K.net15)]); out.push([K.note]); }
     const D = daLines(res, opts.da);
     if (D) { out.push([]); out.push(['Form 1099-DA comparison (totals you entered) - to verify']); out.push(['Item', 'Form 1099-DA', 'Kryptax', 'Difference', 'Note']);
       for (const l of D.lines) out.push([l.label, m(l.form), m(l.mine), m(l.diff), l.flag ? 'to verify' : 'matches']); out.push([D.note]); }
@@ -330,6 +334,15 @@
   }
   /* 1099-DA comparison lines, only when the user typed a total (box 1f and/or 1g). */
   const DANOTE = 'Box 1f is proceeds after transaction costs. Box 1g may be blank for noncovered assets (bought before 2026 or moved in). Rewards and staking are not on Form 1099-DA. Sales to verify are not in the Kryptax totals. A difference does not mean an error - to verify. Source: IRS Instructions for Form 1099-DA.';
+  /* v2.4 capital loss carryover (Instructions for Schedule D (Form 1040) 2025, Capital Loss Carryover Worksheet - Lines 6 and 14):
+     the user types the amounts from that worksheet (line 8 -> Schedule D line 6, line 13 -> line 14). Kryptax only adds them to its Part totals;
+     no worksheet, no $3,000 limit (line 21) and no tax computed. */
+  function carryLines(res, c) {
+    if (!c || (!isFinite(c.s) && !isFinite(c.l))) return null;
+    const T = res.totals, s = isFinite(c.s) ? Math.abs(c.s) : 0, l = isFinite(c.l) ? Math.abs(c.l) : 0;
+    return { s, l, net7: r2((T.short.gain || 0) - s), net15: r2((T.long.gain || 0) - l),
+      note: 'Carryover amounts typed by you from the Capital Loss Carryover Worksheet (Instructions for Schedule D). Net amounts include only the sales in this file: if you have other capital gains or losses, Schedule D lines 7 and 15 differ - to verify. No loss limit and no tax computed.' };
+  }
   function daLines(res, d) {
     if (!d || (!isFinite(d.p) && !isFinite(d.b))) return null;
     const o = daCompare(res.totals, d.p, d.b), lines = [];
@@ -344,7 +357,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -352,7 +365,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {}, da = {}, cat = '';
+    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {}, da = {}, cat = '', carry = {};
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -369,6 +382,7 @@
       const t = e.target; if (!cur) return;
       if (t.id === 'usmethod') { method = t.value; render(); return; }
       if (t.id === 'uscat') { cat = t.value; render(); return; }
+      if (t.classList.contains('uscl')) { const v = parseFloat(String(t.value || '').replace(/[$,()\s-]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) carry[k] = v; else delete carry[k]; render(); return; }
       if (t.classList.contains('usda')) { const v = parseFloat(String(t.value || '').replace(/[$,\s]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) da[k] = v; else delete da[k]; render(); return; }
       if (t.classList.contains('usmc') || t.classList.contains('usmd')) {
         const line = +t.dataset.line, c = out.querySelector('.usmc[data-line="' + line + '"]'), d = out.querySelector('.usmd[data-line="' + line + '"]');
@@ -413,7 +427,7 @@
         } else p = fromCSVText(data);
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; da = {}; if (p.fileTz && tzSel) { fileTz = p.fileTz; tzSel.value = p.fileTz; } render();
+      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; da = {}; carry = {}; if (p.fileTz && tzSel) { fileTz = p.fileTz; tzSel.value = p.fileTz; } render();
     });
     function daBlock(T, y) {
       const k = y || 'all', f = da[k + 'p'], g = da[k + 'b'], o = daCompare(T, f, g);
@@ -424,6 +438,14 @@
         + inp('p', f, 'Box 1f proceeds') + inp('b', g, 'Box 1g cost basis')
         + '<ul>' + line('Proceeds', o.proceeds, o.dProceeds) + line('Cost basis', o.cost, o.dCost) + '</ul>'
         + '<p class="usnote">Box 1f is proceeds after transaction costs. Box 1g may be blank for assets bought before 2026 or moved in from elsewhere (noncovered). Rewards and staking are not on Form 1099-DA. Sales marked to verify are not in the Kryptax totals. A difference does not mean an error — to verify. Source: IRS Instructions for Form 1099-DA.</p></details>';
+    }
+    const clNow = () => ({ s: carry[(year || 'all') + 's'], l: carry[(year || 'all') + 'l'] });
+    function carryBlock(res) {
+      const c = clNow(), K = carryLines(res, c), inp = (k, v, lab) => '<label class="usdal">' + lab + ' <input class="uscl" data-k="' + k + '" inputmode="decimal" placeholder="$0.00" value="' + (v == null ? '' : esc(v)) + '"></label>';
+      return '<details class="usdabox"' + (K ? ' open' : '') + '><summary>Capital loss carryover (optional)</summary>'
+        + '<p>Only if you have a loss carried over from last year. Enter the amounts from the Capital Loss Carryover Worksheet in the Instructions for Schedule D.</p>'
+        + inp('s', c.s, 'Short-term (worksheet line 8 → Schedule D line 6)') + inp('l', c.l, 'Long-term (worksheet line 13 → Schedule D line 14)')
+        + (K ? '<ul><li>Net short-term: ' + usd(K.net7) + '</li><li>Net long-term: ' + usd(K.net15) + '</li></ul><p class="usnote">' + esc(K.note) + '</p>' : '') + '</details>';
     }
     const daNow = () => ({ p: da[(year || 'all') + 'p'], b: da[(year || 'all') + 'b'] });
     function catSel() {
@@ -452,6 +474,7 @@
           return `<details class="note usmiss"${M.some(r => !r.user) ? ' open' : ''}><summary>Missing purchases: enter the cost (optional)</summary><p class="hint">Units sold with no purchase in your file are left out of the totals. If you know them, enter the total cost in USD and the date acquired; the line is then included and marked “entered by you” (to verify).</p>`
             + M.map(r => { const mc = mcost[r.line] || {}; return `<div class="grid"><p><b>Sale line ${r.line}</b>: ${esc(r.desc)} sold ${mdy(r.sold)}${r.wallet ? ' (' + esc(r.wallet) + ')' : ''}</p><label>Total cost (USD)<input class="usmc" data-line="${r.line}" inputmode="decimal" value="${mc.cost != null ? esc(String(mc.cost)) : ''}" placeholder="e.g. 250.00"></label><label>Date acquired<input type="date" class="usmd" data-line="${r.line}" value="${esc(iso(mc.date))}" max="${iso(r.sold)}"></label></div>`; }).join('') + '</details>'; })()
         + daBlock(T, year)
+        + carryBlock(res)
         + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
@@ -463,9 +486,9 @@
     }
     out.addEventListener('click', e => {
       if (e.target.id === 'uspdfmain' || e.target.id === 'uscsvmain') { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
-      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, da: daNow() }); return; }
+      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, da: daNow(), carry: clNow() }); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
-      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last, { cat, da: daNow() })], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last, { cat, da: daNow(), carry: clNow() })], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;
