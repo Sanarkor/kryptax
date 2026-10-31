@@ -15,6 +15,7 @@
     FEE: 'Frais payés en crypto',
     IGNORE: 'Ignorer (ex. transfert entre mes portefeuilles)'
   };
+  const REWARDS = ['STAKING', 'AIRDROP', 'INTEREST'];
   const CHECK = ['STAKING', 'AIRDROP', 'INTEREST', 'RECEIVE', 'SEND'];
   const FIAT = { EUR: 1 }; const FIATS = ['EUR', 'USD', 'GBP', 'CHF'];
   const STABLE_NOTE = ['USDT', 'USDC', 'DAI', 'EURC'];
@@ -195,7 +196,10 @@
     const cessions = [], warnings = []; let blocked = false; const o = opening ? stateTs(opening) : -Infinity;
     for (const t of sortTx(txs)) {
       if (t.date <= o) continue;
-      if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
+      if (REWARDS.includes(t.type)) { // récompenses : coût 0 € (inchangé) ; avertissement court + signalement si aucun cours connu à la réception
+        if (!(Math.abs(t.eur || 0) > 0) && !(priceFn(t.asset, t.date) > 0)) warnings.push({ t, msg: 'Récompense ' + t.type + ' sans cours connu à la réception : valeur inconnue, comptée 0 € — à vérifier.' });
+        warnings.push({ t, msg: 'Revenu ' + t.type + ' : acquis à 0 € de coût ici. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.' });
+      } else if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
       if ((t.type === 'RECEIVE' || t.type === 'SEND') && !t.xferWith && !t.sendChoice) warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
       if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // relevé de compte : la valeur payée inclut déjà les frais
       if (isCess(t)) {
@@ -381,6 +385,6 @@
     }
     return out;
   }
-  const api = { isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, REWARDS, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);

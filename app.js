@@ -638,7 +638,13 @@
   }
   function precOf(yc) { let n = 0, m = 0; const L = (yc || []).map(c => { const p = KP.cessionPrec(livePrice, c); if (p.n) { n++; const q = p.own || p; if (q.k === 'minute' || q.k === 'seconde') m++; } return p.n ? KP.precLabel(p) : ''; }); return { L, n, m }; }
   const precText = P => `Cours de la crypto vendue pris à la minute pour ${P.m} cession${P.m > 1 ? 's' : ''} sur ${P.n} (sinon cours horaire, journalier si le relevé n’a pas l’heure, ou estimé ≈).`;
-  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = SHOW_PREC ? (P.L[i] || '') : ''; }); x.prec = (SHOW_PREC && P.n ? precText(P) : '') + (lastIgn.length ? (SHOW_PREC && P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : ''); return x; }
+  function rwUnk() { return txs.filter(t => E.REWARDS.includes(t.type) && !(Math.abs(t.eur || 0) > 0) && !(priceFn(t.asset, t.date) > 0)); }
+  function rwOpt() { // récompenses : avertissement court + celles sans cours connu (écran)
+    if (!txs.some(t => E.REWARDS.includes(t.type))) return ''; const u = rwUnk();
+    return (u.length ? `<p class="warn" id="rwunk">⚠️ Récompenses sans cours connu à la réception, comptées 0 € : ${u.map(t => esc(t.asset + ' ' + dt(t.date))).join(', ')} — à vérifier.</p>` : '') + `<p id="rwnote">Récompenses (staking, airdrops, intérêts) : coût d’acquisition 0 €. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.</p>`;
+  }
+  function rwNote() { const u = rwUnk(); return u.length ? ' Récompenses sans cours connu à la réception, comptées 0 € (à vérifier) : ' + u.map(t => t.asset + ' ' + dt(t.date)).join(', ') + '.' : ''; }
+  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = SHOW_PREC ? (P.L[i] || '') : ''; }); x.prec = (SHOW_PREC && P.n ? precText(P) : '') + (lastIgn.length ? (SHOW_PREC && P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : '') + rwNote(); x.prec = x.prec.trim(); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
@@ -730,7 +736,7 @@
     const head = sp.n ? `ℹ️ ${pl(sp.n, 'opération particulière détectée', 'opérations particulières détectées')} (${ex.slice(0, 2).map(x => x.label.split(' ')[0]).join(', ')}${ex.length > 2 ? '…' : ''}) : non ${sp.n > 1 ? 'traitées' : 'traitée'} comme des cessions. Voir le PDF`
       : `ℹ️ ${pl(sp.pay, 'paiement en crypto détecté', 'paiements en crypto détectés')} : à vérifier. Voir le PDF`;
     const li = sp.cats.map(x => `<li>${esc(x.label[0].toUpperCase() + x.label.slice(1))} : ${x.n}${x.key === 'paiements' ? ' — compté comme une vente, à vérifier' : ''}</li>`).join('');
-    return `<details class="note spec" id="special"><summary>${esc(head)}</summary><ul>${li}</ul><p>Kryptax ne calcule pas leur imposition propre (revenus, etc.).</p></details>`;
+    return `<details class="note spec" id="special"><summary>${esc(head)}</summary><ul>${li}</ul><p>Kryptax ne calcule pas leur imposition propre (revenus, etc.).</p>${rwOpt()}</details>`;
   }
   let lastOut = null, lastY = null, fyear = null;
   function cmpBlock(Y) {
