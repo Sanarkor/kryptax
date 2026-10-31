@@ -42,6 +42,10 @@ State taxes are not included.
 
 `us-export.js` builds a PDF with jsPDF (already shipped; `export.js` is not used): title, generation date (UTC), lot method, wallets, short / long / total, income total if any, then all Form 8949-style lines on as many pages as needed. Lines "to verify" are highlighted and marked "TO VERIFY". Every page has the footer "Estimate - not tax advice - to be verified - state taxes not included". The box letter (G/H/I short term, J/K/L long term; I or L without a Form 1099-DA, see i8949 above) is printed only as an indication, to verify (Form 1099-DA not read).
 
+## Title (v1.7)
+
+"Form 8949 & Schedule D for U.S. crypto taxes": i8949 "Purpose of Form" (use Form 8949 to report sales and exchanges of capital assets, including digital assets reported on Form 1099-DA) and "Schedule D" (use Schedule D to figure the overall gain or loss from transactions reported on Form 8949). The Form 1040 digital asset question is not mentioned (not checked).
+
 ## Result screen (v1.6)
 
 - Tax year selector: sales are grouped by the year of the sale date, income by the year received (default: the latest year; "All years" also available). Dates are read in UTC, like the rest of the module; if your local date differs near midnight on Dec 31, to verify.

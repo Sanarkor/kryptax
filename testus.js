@@ -137,4 +137,5 @@ eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src
   eq(b.totals.sales + '|' + b.totals.long.gain + '|' + b.totals.income.usd, '1|3000|300', 'year 2025: 1 long-term sale, gain $3,000, income $300');
   eq(a.totals.gain + b.totals.gain, r.totals.gain, 'years add up to all years');
   eq(U.forYear(r, 2023).totals.sales, 0, 'year without sale: 0'); eq(U.forYear(r, 0), r, 'all years = unchanged'); }
+eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(fs.readFileSync(__dirname + '/app.js', 'utf8')), true, 'U.S.A. title: Form 8949 & Schedule D');
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
