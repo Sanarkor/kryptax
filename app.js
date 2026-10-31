@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const SHOW_PREC = false; // précision des cours masquée (écran et PDF) pour l'instant : passer à true pour la réafficher
-  const KOFI_NOTE = false; // mention légale « Dons » masquée tant que le paiement Ko-fi n'est pas connecté : passer à true pour la réafficher (#kofinote)
+  const KOFI_NOTE = true; // mention légale « Dons » affichée (#kofinote) : les dons passent par Ko-fi (lien dans la fenêtre #merci)
   const E = window.KryptaxEngine, KP = window.KryptaxPipeline, $ = s => document.querySelector(s);
   /* Signature sous le logo : taille calculée pour que « … Grok Bot » tienne entièrement sous « ptax », quelle que soit la police */
   /* Encre réelle d'un glyphe (px, depuis l'origine) : rendu canvas puis balayage des pixels (robuste au gras synthétique, au zoom, aux polices de remplacement) */
@@ -649,7 +649,7 @@
     } catch (e) { box.innerHTML = '<p class="hint">Aperçu indisponible sur cet appareil : utilisez « Ouvrir dans le navigateur » ou « Enregistrer le PDF ».</p>'; }
     box.setAttribute('aria-busy', 'false');
   }
-  /* Boutons « Soutenir » : petite fenêtre de remerciement (aucun lien externe tant que les dons ne sont pas ouverts) */
+  /* Boutons « Soutenir » : petite fenêtre de remerciement avec le lien Ko-fi (nouvel onglet, aucune donnée transmise) */
   { const n = $('#kofinote'); if (n) n.hidden = !KOFI_NOTE; }
   { const d = $('#merci'), x = $('#merciclose'), ok = $('#merciok'); let from = null;
     if (d && x && ok) {
@@ -658,7 +658,7 @@
       ['#kofi', '#kofi2'].forEach(s => { const b = $(s); if (b) b.addEventListener('click', open); });
       x.addEventListener('click', close); ok.addEventListener('click', close); d.addEventListener('close', () => { if (from) from.focus(); });
       d.addEventListener('click', e => { if (e.target !== d) return; const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close(); });
-      d.addEventListener('keydown', e => { if (e.key !== 'Tab') return; const f = [...d.querySelectorAll('button')], a0 = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a0) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a0.focus(); } });
+      d.addEventListener('keydown', e => { if (e.key !== 'Tab') return; const f = [...d.querySelectorAll('button, a[href]')], a0 = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a0) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a0.focus(); } });
     } }
   const showKofi = () => { const k = $('#kofi'); if (k) k.hidden = false; };
   function savePdf() { showKofi();
