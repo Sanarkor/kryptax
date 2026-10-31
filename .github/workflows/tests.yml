@@ -1,0 +1,34 @@
+# Tests Kryptax : les 4 suites (moteur, formats, export PDF, golden) sous plusieurs fuseaux horaires.
+# Aucune dépendance npm : Node seul + poppler-utils (pdftotext / pdftoppm pour testexport.js).
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tz: [Europe/Paris, UTC, America/Los_Angeles, Asia/Tokyo]
+    env:
+      TZ: ${{ matrix.tz }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: poppler-utils
+        run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+      - name: node test.js
+        run: node test.js > out-test.txt; s=$?; cat out-test.txt; ! grep -q "ÉCHEC" out-test.txt && exit $s
+      - name: node testformats.js
+        run: node testformats.js > out-formats.txt; s=$?; cat out-formats.txt; ! grep -q "ÉCHEC" out-formats.txt && exit $s
+      - name: node testexport.js
+        run: node testexport.js > out-export.txt; s=$?; cat out-export.txt; ! grep -q "ÉCHEC" out-export.txt && exit $s
+      - name: node testgolden.js
+        run: node testgolden.js > out-golden.txt; s=$?; cat out-golden.txt; ! grep -q "ÉCHEC" out-golden.txt && exit $s

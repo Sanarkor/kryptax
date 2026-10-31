@@ -1,0 +1,9 @@
+# Dépendances et fichiers locaux (le site n'a besoin d'aucun de ces fichiers)
+node_modules/
+tmp/
+*.bak
+*.bak-*
+*.minute-local
+*.ppm
+out-*.txt
+.DS_Store

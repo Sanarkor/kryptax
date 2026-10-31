@@ -1,0 +1,14 @@
+{
+  "name": "kryptax",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Aide au calcul du formulaire 2086 (plus-values crypto), 100 % dans le navigateur. Aucune dépendance : Node seul pour les tests.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test.js && node testformats.js && node testexport.js && node testgolden.js",
+    "test:fr": "node test.js && node testformats.js && node testexport.js && node testgolden.js",
+    "test:golden": "node testgolden.js",
+    "test:golden:update": "UPDATE_GOLDEN=1 node testgolden.js",
+    "test:tz": "for z in Europe/Paris UTC America/Los_Angeles Asia/Tokyo; do echo \"== TZ=$z\"; TZ=$z npm run -s test:fr || exit 1; done"
+  }
+}
