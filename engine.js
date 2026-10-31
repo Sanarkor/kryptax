@@ -74,6 +74,9 @@
   /* Heure murale de Paris -> instant UTC (deux passes : décalage de l'instant obtenu, correct aux bascules). */
   function fromParis(y, mo, d, h, mi, s) { const g = Date.UTC(y, mo, d, h || 0, mi || 0, s || 0); let t = g - parisOff(g); t = g - parisOff(t); return t; }
   const parisYear = ts => parisParts(ts).year;
+  const parisDay = ts => { const p = parisParts(ts); return p.year * 10000 + p.month * 100 + p.day; }; // jour civil à Paris (indépendant du fuseau du navigateur)
+  /* Seuil d'exonération (art. 150 VH bis CGI) : total annuel des prix de cession nets de frais et soultes, somme des lignes 218 de la 2086. Règle unique (écran et PDF). */
+  const EXEMPT_LIMIT = 305, isExempt = total218 => total218 <= EXEMPT_LIMIT;
   const p2 = n => String(n).padStart(2, '0');
   const fmtParis = (ts, sec) => { const p = parisParts(ts); return `${p2(p.day)}/${p2(p.month)}/${p.year} ${p2(p.hour)}:${p2(p.minute)}${sec ? ':' + p2(p.second) : ''}`; };
   // Dates : ISO, JJ/MM/AAAA hh:mm(:ss), MM/JJ/AAAA, "Jan 13, 2024, 3:45:12 PM". tz : 'UTC' (relevés et exports crypto) ou 'Paris' (heure murale de Paris) ; défaut Paris.
@@ -278,7 +281,7 @@
       const Y = y[k]; Y.total218 = Y.cessions.reduce((s, c) => s + c.l218, 0);
       Y.incomplete = Y.cessions.some(c => c.l224 == null);
       Y.total224 = Y.cessions.reduce((s, c) => s + (c.l224 || 0), 0);
-      Y.exonere = Y.total218 <= 305;
+      Y.exonere = isExempt(Y.total218);
     }
     return y;
   }
@@ -347,7 +350,7 @@
   }
   function crossCheck(txs, fiat) {
     const sells = txs.filter(t => t.type === 'SELL' || t.type === 'EXCH_OUT'), used = new Set(), res = { confirmed: [], swapButFiat: [], sellNoFiat: [], fiatNoSell: [] };
-    const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+    const sameDay = (a, b) => parisDay(a) === parisDay(b); // jour civil en heure de Paris
     for (const t of sells) {
       const f = fiat.find(x => !used.has(x) && x.asset === t.asset && (x.hasTime ? Math.abs(x.date - t.date) <= 2000 : sameDay(x.date, t.date)));
       if (f) { used.add(f); t.fiatConfirmed = true; (t.type === 'SELL' ? res.confirmed : res.swapButFiat).push({ t, f }); }
@@ -378,6 +381,6 @@
     }
     return out;
   }
-  const api = { isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);

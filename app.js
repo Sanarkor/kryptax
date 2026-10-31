@@ -437,8 +437,8 @@
   let runCtl = null, scopedYear = null;
   /* Périmètre des cours : cessions jusqu'à la fin de l'année choisie (ou de la dernière année avec cessions) ; une année plus récente relance le calcul. */
   function scopeUntil() {
-    const now = new Date().getFullYear(), ys = txs.filter(E.isCess).map(t => E.parisYear(t.date)).filter(y => y <= now);
-    scopedYear = fyear || (ys.length ? Math.max(...ys) : now); return new Date(scopedYear + 1, 0, 1).getTime();
+    const now = E.parisYear(Date.now()), ys = txs.filter(E.isCess).map(t => E.parisYear(t.date)).filter(y => y <= now);
+    scopedYear = fyear || (ys.length ? Math.max(...ys) : now); return E.fromParis(scopedYear + 1, 0, 1); // 1er janvier, heure de Paris
   }
   function binSymsCached() { try { const o = JSON.parse(localStorage.getItem('kryptax.binsyms') || 'null'); return o && Date.now() - o.t < 864e5 && o.L.length > 50 ? new Set(o.L) : null; } catch (e) { return null; } } // liste publique des paires Binance (non sensible), 24 h
   /* Relance automatique tant qu'un cours n'est qu'estimé (≈) ou absent : 1 s après la fin du calcul, plafond AUTO_MAX, backoff léger après la 5e. */
@@ -681,7 +681,7 @@
     if (d.showModal) d.showModal(); else d.setAttribute('open', ''); $('#pvsave').focus();
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
-      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise; box.innerHTML = '';
+      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false }).promise; box.innerHTML = '';
       const w = Math.max(320, box.clientWidth || 340), dpr = Math.min(3, window.devicePixelRatio || 1);
       for (let i = 1; i <= doc.numPages; i++) {
         const pg = await doc.getPage(i), v0 = pg.getViewport({ scale: 1 }), v = pg.getViewport({ scale: Math.max(w * dpr / v0.width, 1.5) });
