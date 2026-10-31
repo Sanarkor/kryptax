@@ -170,4 +170,14 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq(U.compute(tx(), { manualCost: { 3: { cost: NaN, date: D('2022-05-01') } } }).rows.some(x => x.user), false, 'no cost: ignored, still flagged');
   eq(/entered by you/.test(U.toCSV(b)), true, 'CSV marks entered data');
   eq(/entered by you/.test(U.toCSV(a)), false, 'CSV without input: no mark'); }
+{ // v2.0: Kraken trades export (structure from support.kraken.com, fictitious values)
+  const k = U.fromCSVText(fs.readFileSync(__dirname + '/testdata/us/kraken_trades_fictif.csv', 'utf8'));
+  eq([k.platform, k.fileTz, k.missingCols.length], ['Kraken trades export', 'UTC', 0], 'Kraken: format recognised, times in UTC');
+  eq(k.txs.map(t => t.type + ' ' + t.asset + ' ' + t.qty + ' ' + t.usd + ' ' + t.fee).join('|'), 'BUY BTC 0.01 600 1.56|BUY ETH 0.1 300 0.78|BUY SOL 5 750 1.95|SELL SOL 2 400 1.04|SELL BTC 0.005 400 1.04', 'Kraken: pairs XXBTZUSD/XETHZUSD/SOLUSD, cost and fee in USD');
+  eq(k.skipped.map(x => x.line + ':' + x.why).join('|'), '5:pair not quoted in USD (XETHXXBT)|6:margin trade (not handled)', 'Kraken: non-USD pair and margin trade skipped and listed');
+  const kr = U.compute(k.txs, { fileTz: 'UTC', taxTz: 'UTC' }), btc = kr.rows.find(r => r.asset === 'BTC');
+  eq([btc.proceeds, btc.cost, btc.gain, btc.term], [398.96, 300.78, 98.18, 'long'], 'Kraken: BTC sale, basis includes buy fee, proceeds net of fee');
+  const sol = U.compute(k.txs, { fileTz: 'UTC', taxTz: 'America/Los_Angeles' }).rows.find(r => r.asset === 'SOL');
+  eq(new Date(sol.sold).getUTCFullYear(), 2024, 'Kraken: UTC time 01/01/2025 02:00 is still 2024 in Pacific time');
+  eq(U.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n2024-01-01,Buy,BTC,1,100\n').platform, undefined, 'Generic file: no platform claimed'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
