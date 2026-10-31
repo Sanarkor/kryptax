@@ -84,3 +84,13 @@ Not added (structure not verifiable on the platform's official help pages, or no
 - Coinbase transaction history CSV: the official help page explains how to download statements but does not document the columns.
 - Gemini transaction history (.xlsx): the official help page explains the download only.
 - Kraken Ledgers export: documented officially, but rows carry amounts in the asset only, with no USD value, so a cost basis cannot be computed from it alone.
+
+## Form 1099-DA comparison (v2.1)
+
+Source: IRS, Instructions for Form 1099-DA (irs.gov/instructions/i1099da, checked 2026-11-01).
+
+- Box 1f = gross proceeds, reduced by transaction costs. Kryptax proceeds are also net of fees, so the two are compared.
+- Box 1g = cost or other basis. Brokers must report it only for covered securities (digital assets acquired after 2025 and kept in the same custodial account). It may be blank otherwise.
+- Rewards and staking payments are not reported on Form 1099-DA.
+- The user types the box 1f and box 1g totals for the year. Kryptax shows its own totals (sales marked to verify excluded) and the difference. Any difference of $0.01 or more is flagged "to verify". No tax is computed.
+- Not done: per-transaction matching, import of the 1099-DA file, box 2 / box 9 / 8949 checkbox codes (G, H, J, K, Y) logic, wash sales.

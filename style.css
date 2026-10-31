@@ -239,3 +239,5 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 @media (max-width:767.98px){.usmode .usimp{padding:11px 12px}}
 .usexp{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.usexp .btn{flex:1 1 150px}.usreshead{margin:14px 0 6px;text-align:left}#usresult{text-align:left}
 .usmiss .grid{margin:8px 0}.usmiss input{max-width:100%;box-sizing:border-box}.us8949 tr.ususer td{font-style:italic}
+
+.usdabox{margin:.6em 0;max-width:100%}.usdabox summary{cursor:pointer;font-weight:600}.usdal{display:block;margin:.3em 0}.usdal input{width:9em;max-width:100%}
