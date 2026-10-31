@@ -471,6 +471,15 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq((AP.match(/getDocument\(\{[^}]*isEvalSupported: false/g) || []).length === (AP.match(/getDocument\(/g) || []).length ? 1 : 0, 1, 'pdf.js : isEvalSupported:false à chaque appel');
     const IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8');
     eq(/object-src 'none'; base-uri 'none'; form-action 'none'">/.test(IH) && IH.includes('<meta name="referrer" content="no-referrer">') && !/<form/i.test(IH) ? 1 : 0, 1, 'CSP : object-src, base-uri, form-action, referrer, aucun formulaire'); }
+  { // Frais d'un CSV/Excel importé par le dialogue : colonne « Fees » explicite comptée (ligne 214), même avec la plateforme par défaut « Relevé »
+    const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), KP = require('./pipeline.js');
+    eq(AP.includes('if (mp.fee != null) o.feeInKind = false;') && AP.includes("{ platform: 'Relevé', feeInKind: true, source: file.name") ? 1 : 0, 1, 'Frais : colonne explicite comptée en CSV/Excel, relevé PDF inchangé (frais en nature)');
+    const head = ['Symbol', 'Type', 'Quantity', 'Price', 'Value', 'Fees', 'Date'], mp = { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 };
+    const rows = [['AAA', 'Achat', '10', '10,00€', '100,00€', '1,00€', '10 mars 2026, 10:00:00'], ['AAA', 'Vente', '10', '40,00€', '400,00€', '2,00€', '10 juin 2026, 10:00:00']];
+    let n = 0; const imp = o => KP.importRows(rows, mp, Object.assign({ platform: 'Relevé', tz: 'UTC', cur: 'EUR', strict: true, head }, o), () => 'q' + (++n)).txs;
+    const c1 = E.compute(imp({ feeInKind: false }), () => null).cessions[0], c0 = E.compute(imp({}), () => null).cessions[0];
+    eq(c1.l214, 2, 'Frais CSV : ligne 214 = 2 € (colonne Fees)'); eq(c1.l218, 398, 'Frais CSV : ligne 218 = 400 - 2 = 398 €'); eq(c1.l220, 101, 'Frais CSV : prix d’acquisition 220 = 100 + 1 € de frais');
+    eq(c1.l224, 297, 'Frais CSV : plus-value 224 = 398 - 101 = 297 €'); eq(c0.l214, 0, 'Sans le correctif (frais en nature) : ligne 214 = 0 (ancien comportement CSV, toujours celui du relevé PDF)'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, open-source et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}

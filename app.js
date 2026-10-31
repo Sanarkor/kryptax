@@ -216,6 +216,7 @@
       if (mp.eur == null && mp.price == null) return alert('Choisissez la colonne du montant en € (ou du prix) : sans elle, les achats et ventes seraient comptés à 0 €.');
       o.cur = mp.eur != null ? KF.headCur(head[mp.eur]) : mp.price != null ? KF.headCur(head[mp.price]) : 'EUR';
       o.xlsx = isXlsx; o.source = name; o.strict = true; o.head = head; o.line0 = hi0 + 2;
+      if (mp.fee != null) o.feeInKind = false; // colonne de frais explicite (CSV/Excel) : frais comptés (ligne 214 à la vente, ajoutés au prix d'acquisition à l'achat). Sans colonne : règle du relevé inchangée.
       const res = KP.importRows(rows.slice(1), mp, o, uid);
       if (res.fatal) { box.remove(); return showErr(name + ' : fichier refusé, ' + res.fatal + '. Corrigez les colonnes puis réimportez.'); }
       if (!res.txs.length) { box.remove(); return showErr(name + ' : aucune opération lisible. ' + KP.badSummary(res, hi0 + 2)); }
