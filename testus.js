@@ -197,4 +197,11 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const o2 = U.daCompare(T, 140, undefined);
   eq([o2.dProceeds, o2.dCost, o2.flag], [10.5, undefined, true], '1099-DA gap flagged to verify');
 }
+// v2.3 1099-DA comparison in the CSV and PDF, only when entered
+{ const c0 = U.toCSV(r, { cat: 'none' }), c1 = U.toCSV(r, { cat: 'none', da: { p: 88900, b: undefined } }).split('\n');
+  eq(/1099-DA/.test(c0.replace(/No Form 1099-DA received/, '')), false, 'CSV: no 1099-DA section when nothing entered');
+  eq([c1.includes('Form 1099-DA comparison (totals you entered) - to verify'), c1.includes('Proceeds (box 1f),88900.00,88938.00,38.00,to verify'), c1.some(l => /Cost basis \(box 1g\)/.test(l))], [true, true, false], 'CSV: 1099-DA proceeds gap flagged to verify, basis line only if entered');
+  eq(U.toCSV(r, { da: { p: 88938, b: 46055 } }).includes('Cost basis (box 1g),46055.00,46055.00,0.00,matches'), true, 'CSV: matching basis');
+  const X = require('./us-export.js'), d0 = X.summaryData(r, {}), d1 = X.summaryData(r, { da: { p: 88900 } });
+  eq([d0.info.some(l => /Form 1099-DA Proceeds/.test(l)), d1.info.some(l => l === 'Form 1099-DA Proceeds (box 1f): $88,900.00 vs Kryptax $88,938.00 - difference $38.00 (TO VERIFY)')], [false, true], 'PDF: 1099-DA line only when entered'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
