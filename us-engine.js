@@ -221,6 +221,19 @@
     totals.transfers = transfers; totals.method = method; wallets.delete(''); totals.wallets = [...wallets];
     return { rows, totals, notes, sales, income: incomeRows };
   }
+  /* Tax year view: sales by the year of the sale date, income by the year received (UTC dates, like mdy; your local date may differ — to verify). */
+  function years(res) { return [...new Set(res.rows.map(r => new Date(r.sold).getUTCFullYear()).concat(res.income.map(r => new Date(r.date).getUTCFullYear())))].filter(isFinite).sort(); }
+  function forYear(res, y) {
+    if (!y) return res;
+    const inY = t => t != null && new Date(t).getUTCFullYear() === y, rows = res.rows.filter(r => inY(r.sold)), income = res.income.filter(r => inY(r.date));
+    const ok = rows.filter(r => r.status === 'ok'), sum = (L, k) => r2(L.reduce((a, r) => a + r[k], 0)), S = ok.filter(r => r.term === 'short'), Lg = ok.filter(r => r.term === 'long');
+    const totals = Object.assign({}, res.totals, { year: y, sales: new Set(rows.map(r => r.line)).size, rows: rows.length, toVerify: rows.length - ok.length,
+      short: { proceeds: sum(S, 'proceeds'), cost: sum(S, 'cost'), gain: sum(S, 'gain') }, long: { proceeds: sum(Lg, 'proceeds'), cost: sum(Lg, 'cost'), gain: sum(Lg, 'gain') },
+      income: { count: income.length, usd: r2(income.reduce((a, r) => a + (r.usd == null ? 0 : r.usd), 0)), unknown: income.filter(r => r.usd == null).length } });
+    totals.gain = r2(totals.short.gain + totals.long.gain);
+    const lines = new Set(rows.map(r => r.line));
+    return Object.assign({}, res, { rows, income, totals, sales: res.sales.filter(x => lines.has(x.line)) });
+  }
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   /* CSV of 8949-style lines (columns a, b, c, d, e, h + term/box hint + status) */
@@ -238,7 +251,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd };
+  const api = { years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -246,7 +259,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {};
+    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null;
     const lotLabel = l => `line ${l.line} · ${mdy(l.date)} · ${+l.qty.toPrecision(8)} left · ${isFinite(l.unit) ? usd(l.unit) + '/unit' : 'cost unknown'}`;
     function manualHtml(res) {
       if (!res.sales.length) return '';
@@ -257,6 +270,7 @@
     out.addEventListener('change', e => {
       const t = e.target; if (!cur) return;
       if (t.id === 'usmethod') { method = t.value; render(); return; }
+      if (t.id === 'usyear') { year = +t.value || 0; render(); return; }
       if (t.classList.contains('uspick') || t.classList.contains('usqty')) {
         const line = +t.dataset.line, sel = out.querySelector('.uspick[data-line="' + line + '"]'), qi = out.querySelector('.usqty[data-line="' + line + '"]');
         const sale = last.sales.find(x => x.line === line), lot = sel && sel.value ? +sel.value : 0;
@@ -290,13 +304,16 @@
         } else p = fromCSVText(data);
       } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
       if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      cur = p; pdfN = pdfNote; picks = {}; render();
+      cur = p; pdfN = pdfNote; picks = {}; year = null; render();
     });
     function render() {
-      const p = cur, pdfNote = pdfN, res = last = compute(p.txs, { method, picks }), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
+      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
+      const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
       const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${esc(r.desc)}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
-      out.innerHTML = pdfNote + `<div class="note total-global"><b>${T.sales} sale${T.sales > 1 ? 's' : ''}</b> (${T.rows} line${T.rows > 1 ? 's' : ''}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b></div>`
+      const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
+      const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (Form 8949 lines)</button></p>`;
+      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
         + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
           + (T.income.unknown ? `<p class="warn">${T.income.unknown} income line${T.income.unknown > 1 ? 's' : ''} without a USD value: to verify, not included in the income total.</p>` : '')
@@ -313,6 +330,7 @@
         + `<p><button type="button" id="uscsv" class="small">Download CSV (Form 8949 lines)</button>${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
     }
     out.addEventListener('click', e => {
+      if (e.target.id === 'uspdfmain' || e.target.id === 'uscsvmain') { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
       if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
       const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last)], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
