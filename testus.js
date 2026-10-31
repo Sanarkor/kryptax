@@ -37,9 +37,15 @@ eq(p.rows.map(x => [x.qty, x.cost, x.proceeds]), [[10, 10, 20], [5, null, 10]], 
 // missing columns
 eq(U.fromCSVText('Foo,Bar\n1,2\n').missingCols, ['date', 'type', 'asset', 'qty'], 'missing columns reported');
 // CSV export
-const csv = U.toCSV(r).split('\n');
-eq(csv[0].startsWith('(a) Description,(b) Date acquired,(c) Date sold,(d) Proceeds USD'), true, 'CSV header');
-eq(csv[1], '0.5 BTC,01/10/2024,01/10/2025,34975.00,15025.00,19950.00,short,I,ok', 'CSV first line');
+const csv = U.toCSV(r, { cat: 'none' }).split('\n');
+eq(csv[3], '(a) Description of property,(b) Date acquired,(c) Date sold or disposed of,(d) Proceeds (sales price),(e) Cost or other basis,(f) Code(s),(g) Amount of adjustment,(h) Gain or (loss),Note', 'CSV header = Form 8949 columns (a)-(h)');
+eq(csv[4], '0.5 BTC,01/10/2024,01/10/2025,34975.00,15025.00,,,19950.00,', 'CSV first line');
+eq([csv[2], csv.includes('Totals (Schedule D line 3),,,53963.00,31030.00,,,22933.00'), csv.includes('Part II - Long-term (held more than 1 year) - Box L'), csv.includes('Totals (Schedule D line 10),,,34975.00,15025.00,,,19950.00')], ['Part I - Short-term (held 1 year or less) - Box I', true, true, true], 'no 1099-DA: Part I box I (Schedule D line 3), Part II box L (line 10)');
+eq(/DOGE.*to verify: no purchase/.test(csv.slice(csv.indexOf('Not on Form 8949 - to verify (missing cost or value; not in the totals)')).join('\n')), true, 'lines to verify listed apart, not in the Part totals');
+{ const g = U.form8949(r, 'basis'), h = U.form8949(r, 'nobasis'), n = U.form8949(r, '');
+  eq([g.parts.map(P => P.box + P.scheduleD), h.parts.map(P => P.box + P.scheduleD)], [['GSchedule D line 1b', 'JSchedule D line 8b'], ['HSchedule D line 2', 'KSchedule D line 9']], 'boxes G/J and H/K with Schedule D lines');
+  eq([n.parts[0].box, n.parts[0].boxText, /to verify/.test(n.parts[1].scheduleD), /not chosen - to verify/.test(U.toCSV(r))], [null, 'G, H or I - to verify', true, true], 'situation not chosen: to verify');
+  eq(/,[A-F]\b/.test(U.toCSV(r, { cat: 'none' })), false, 'never box A-F for digital assets'); }
 
 // Excel (SheetJS shipped with the app): header found below a title, 2nd sheet, Date cells and MM/DD/YYYY text
 const X = require('./xlsx.mini.min.js');
@@ -69,9 +75,9 @@ eq(w.notes.filter(n => /Network fee/.test(n.msg)).length, 1, 'network fee (0.001
 eq(w.notes.filter(n => /no matching (send|receive)/.test(n.msg)).length, 2, 'unpaired send and receive listed, never silent');
 eq(wl(10).map(x => [x.cost, /to verify/.test(x.status)]), [[null, true]], 'sale of units received without a send → missing basis');
 eq(w.totals.wallets, ['Exchange A', 'Exchange B', 'Hardware wallet'], 'wallets listed');
-eq(U.toCSV(w).split('\n')[0].endsWith(',Status,Wallet'), true, 'CSV has a Wallet column');
+eq(U.toCSV(w).split('\n').some(l => l.endsWith(',Wallet,Note')), true, 'CSV has a Wallet column');
 // no wallet column → one wallet, unchanged
-eq(U.toCSV(r).split('\n')[0].endsWith(',Status'), true, 'no Wallet column when the file has none');
+eq(U.toCSV(r).split('\n').some(l => l.includes('Wallet')), false, 'no Wallet column when the file has none');
 const nw = run('Date,Type,Asset,Quantity,Total (USD)\n2024-01-01,Buy,BTC,1,100\n2024-02-01,Buy,BTC,1,300\n2024-03-01,Sell,BTC,1,500\n');
 eq(nw.rows.map(x => [x.wallet, x.cost]), [['', 100]], 'without wallets: single FIFO as before');
 // pairing limits: too late or too different → not paired
@@ -111,8 +117,11 @@ eq(U.incomeType('Learning reward') + U.incomeType('Earn interest'), 'RewardInter
   const sd = X.summaryData(w, { now });
   eq([sd.head.includes('Wallet'), sd.rows.filter(x => x.tv).length, sd.info[0], /Lot method: FIFO/.test(sd.info[1])], [true, 1, 'Generated: 2026-10-31 21:00 UTC', true], 'summary data (wallets, to verify, date, method)');
   const t1 = pdfText(w, { now }), p1 = t1.split('\f').filter(p => p.trim());
-  eq([/Kryptax . U\.S\. summary \(estimate\)/.test(t1), /Total gain or loss: \$30,020\.00/.test(t1), /TO VERIFY/.test(t1), /indication only, to verify \(Form 1099-DA not read\)/.test(t1), /Hardware wallet/.test(t1)], [true, true, true, true, true], 'PDF text: title, totals, to verify, box note, wallet');
+  eq([/Kryptax . U\.S\. summary \(estimate\)/.test(t1), /Total gain or loss: \$30,020\.00/.test(t1), /TO VERIFY/.test(t1), /never A-F/.test(t1), /Hardware wallet/.test(t1)], [true, true, true, true, true], 'PDF text: title, totals, to verify, box note, wallet');
   eq(p1.every(p => p.includes(X.FOOT)), true, 'footer on every page');
+  { const t8 = pdfText(r, { now, cat: 'none' });
+    eq([/Part I - Short-term \(held 1 year or less\) - Box I/.test(t8), /Totals \(Schedule D line 3\)\s+\$53,963\.00\s+\$31,030\.00\s+\$22,933\.00/.test(t8), /Part II - Long-term \(held more than 1 year\) - Box L/.test(t8), /Totals \(Schedule D line 10\)/.test(t8), /Not on Form 8949 - to verify/.test(t8), /No Form 1099-DA received/.test(t8)], [true, true, true, true, true, true], 'PDF: Parts I/II, boxes, Schedule D totals, lines to verify apart');
+    eq(/G, H or I - to verify/.test(pdfText(r, { now })), true, 'PDF: situation not chosen, to verify'); }
   eq(/Income \(staking \/ airdrops \/ interest\): \$495\.00/.test(pdfText(ic, { now })), true, 'PDF shows income total');
   eq(/Lot method: HIFO/.test(pdfText(U.compute(lt, { method: 'HIFO' }), { now })), true, 'PDF shows the lot method');
   // 2000 fictitious sales: clean pagination
@@ -154,8 +163,8 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const a = U.compute(T, { fileTz: 'UTC', taxTz: 'UTC' }), b = U.compute(T, { fileTz: 'UTC', taxTz: 'America/Los_Angeles' });
   eq(JSON.stringify(U.years(a)) + JSON.stringify(U.years(b)), '[2025][2024]', 'sale near midnight: tax year 2025 in UTC, 2024 in Pacific');
   eq(b.totals.tz.file + '|' + b.totals.tz.tax, 'UTC|America/Los_Angeles', 'time zones kept in the result');
-  eq(/^# Times in file: UTC; tax dates: America\/Los_Angeles/.test(U.toCSV(b)), true, 'CSV shows the time zones');
-  eq(/^\(a\) Description/.test(U.toCSV(U.compute(T))), true, 'CSV without time zone option: unchanged');
+  eq(/\n# Times in file: UTC; tax dates: America\/Los_Angeles/.test(U.toCSV(b)), true, 'CSV shows the time zones');
+  eq(/Times in file/.test(U.toCSV(U.compute(T))), false, 'CSV without time zone option: no time zone line');
   const H = [{ line: 2, date: W(2024, 6, 17, 20), type: 'BUY', asset: 'ETH', qty: 1, usd: 1000, fee: 0, wallet: '' }, { line: 3, date: W(2025, 6, 18, 2), type: 'SELL', asset: 'ETH', qty: 1, usd: 2000, fee: 0, wallet: '' }];
   eq(U.compute(H, { fileTz: 'UTC', taxTz: 'UTC' }).rows[0].term + '|' + U.compute(H, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows[0].term, 'long|short', 'holding period by calendar day in the tax zone (Pub. 544 example dates)'); }
 { // v1.9: cost and date entered by the user for missing units
