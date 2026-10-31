@@ -93,6 +93,16 @@ eq(man.rows.filter(x => x.line === 6).map(x => x.cost), [1000, 1500], 'other sal
 const sh = U.compute(lt, { method: 'MANUAL', picks: { 5: { lot: 4, qty: 1 }, 6: { lot: 4, qty: 1 } } });
 eq(sh.rows.filter(x => x.line === 6 && /to verify/.test(x.status)).length > 0 && sh.notes.some(n => /chosen lot/.test(n.msg)), true, 'not enough units in the chosen lot → to verify');
 eq(U.compute(lt, { picks: { 5: { lot: 4, qty: 1 } } }).totals.gain, 2000, 'picks ignored unless manual');
+
+// income (Rev. Rul. 2023-14; FAQ Q24-Q25): USD value when received, lot at the same cost
+const ic = run(fs.readFileSync(__dirname + '/testdata/us/us_income_fictif.csv'));
+eq(ic.income.map(x => x.type), ['Staking', 'Airdrop', 'Interest', 'Reward', 'Income'], 'income types recognised');
+eq([ic.totals.income.usd, ic.totals.income.unknown], [495, 1], 'income total excludes the missing value (no silent $0)');
+eq(ic.income[3].usd === null && /to verify/.test(ic.income[3].status), true, 'missing value → to verify');
+eq(ic.rows.map(x => [x.cost, x.gain]), [[300, 100]], 'income lot cost = USD value when received');
+const icsv = U.incomeCSV(ic).split('\n');
+eq([icsv[0].startsWith('Date received,Asset,Quantity,Value USD'), icsv[1], icsv[4].split(',')[3]], [true, '01/15/2025,ETH,0.1,300.00,Staking,ok', ''], 'separate income CSV');
+eq(U.incomeType('Learning reward') + U.incomeType('Earn interest'), 'RewardInterest', 'income type labels');
 // English only, no French legal words in the module texts
 const src = fs.readFileSync(__dirname + '/us-engine.js', 'utf8');
 eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), false, 'no French legal text in the U.S.A. module');
