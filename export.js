@@ -63,13 +63,14 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcu
       y.cessions.forEach((c, i) => { const o = { year: y.year, n: i + 1, date: d(c.date), asset: c.asset, qty: +c.qty.toPrecision(10), status: c.status };
         NUM.forEach(k => o[k] = c[k] == null || !isFinite(c[k]) ? null : +c[k].toFixed(2)); o.calc = calc224(c); o.frac = frac(c); out.cessions.push(o); });
       const sum = k => +y.cessions.reduce((a, c) => a + (c[k] || 0), 0).toFixed(2), net = sum('l224'), l213 = sum('l213');
-      out.totals.push({ year: y.year, n: y.cessions.length, l213, l214: sum('l214'), l218: sum('l218'), l224: net, incomplete: y.cessions.some(c => c.l224 == null),
-        exonere: l213 <= 305, box: l213 <= 305 ? 'aucune (≤ 305 €)' : net >= 0 ? '3AN' : '3BN', report: l213 <= 305 ? 0 : Math.round(Math.abs(net)) });
+      const l218 = sum('l218'), ex = typeof y.exonere === 'boolean' ? y.exonere : l218 <= 305; // même règle que l'écran (E.byYear : somme des lignes 218)
+      out.totals.push({ year: y.year, n: y.cessions.length, l213, l214: sum('l214'), l218, l224: net, incomplete: y.cessions.some(c => c.l224 == null),
+        exonere: ex, box: ex ? 'aucune (≤ 305 €)' : net >= 0 ? '3AN' : '3BN', report: ex ? 0 : Math.round(Math.abs(net)) });
     }
     return out;
   }
   const globalText = t => `${t.year} : total des cessions (213) ${t.l213.toFixed(2)} € ; frais (214) ${t.l214.toFixed(2)} € ; prix nets (218) ${t.l218.toFixed(2)} € ; plus-value nette globale (224) ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}. ` +
-    (t.exonere ? `Total des cessions ≤ 305 € : exonéré, rien à reporter.` : `Total des cessions > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €. Les prélèvements sociaux s\'ajoutent à l\'impôt (${t.year >= 2025 ? '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' : '30 % au total'}). Taux à vérifier sur impots.gouv.fr.`);
+    (t.exonere ? `Total des prix de cession nets (218) ≤ 305 € : exonéré, rien à reporter.` : `Total des prix de cession nets (218) > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €. Les prélèvements sociaux s\'ajoutent à l\'impôt (${t.year >= 2025 ? '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' : '30 % au total'}). Taux à vérifier sur impots.gouv.fr.`);
   const SHORT = ['211 Date de la cession (heure de Paris)', '212 Valeur globale du portefeuille (€)', '213 Prix de cession (€)', '214 Frais de cession (€)', '215 Prix net des frais (213-214) (€)', '216 Soulte (€)', '217 Prix net des soultes (213-216) (€)', '218 Prix net frais et soultes (€)', '220 Prix total d\'acquisition (€)', '221 Fractions de capital initial (€)', '222 Soultes antérieures (€)', '223 Prix total d\'acquisition net (220-221-222) (€)', '224 Plus ou moins-value (€)'];
   // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
@@ -113,7 +114,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcu
     const lines = [];
     for (const t of x.totals) {
       lines.push([`Total global plus-value nette${multi ? ' ' + t.year : ''}`, frs(t.l224) + ' €' + (t.incomplete ? ' (incomplet)' : '')]);
-      lines.push(['Total des prix de cession (213)', fr(t.l213) + ' €' + (t.exonere ? ' : ≤ 305 €, cessions exonérées' : ' : > 305 €, imposable')]);
+      lines.push(['Total des prix de cession nets (218)', fr(t.l218) + ' €' + (t.exonere ? ' : ≤ 305 €, cessions exonérées' : ' : > 305 €, imposable')]);
       lines.push(['Case 2042-C', t.exonere ? 'aucune (seuil de 305 € non dépassé)' : `${t.box} = ${t.report} €`]);
       if (!t.exonere) lines.push(['Prélèvements sociaux', `Les prélèvements sociaux s'ajoutent à l'impôt (${t.year >= 2025 ? '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' : '30 % au total'}). Taux à vérifier sur impots.gouv.fr.`]);
     }
