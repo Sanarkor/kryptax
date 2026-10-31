@@ -1,0 +1,30 @@
+{
+ "nTx": 2,
+ "types": {
+  "BUY": 1,
+  "SELL": 1
+ },
+ "years": {
+  "2025": {
+   "cessions": 1,
+   "incomplete": false,
+   "l213": 310,
+   "l214": 10,
+   "l218": 300,
+   "l224": 200,
+   "exonere": true,
+   "box": null,
+   "base": 0,
+   "prelevement": 0,
+   "detail": [
+    [
+     "AAA",
+     310,
+     300,
+     100,
+     200
+    ]
+   ]
+  }
+ }
+}
