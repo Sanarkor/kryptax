@@ -59,7 +59,7 @@ Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur parta
 Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'origine de la page, et les symboles et horodatages demandés : ils peuvent donc déduire quelles cryptos vous détenez et quand vous avez vendu, mais pas les montants.
 
 ## Limites
-- Outil d'aide : vérifiez les résultats. Un outil comme Koinly peut servir de **repère de comparaison**, pas de vérité absolue.
+- Outil d'aide : vérifiez les résultats.
 - Soultes (216, 222) non gérées automatiquement (0 par défaut).
 - Fiscalité des récompenses (BNC, BIC…) non calculée.
 - La ligne 212 doit inclure tous vos portefeuilles : importez tous vos relevés.
