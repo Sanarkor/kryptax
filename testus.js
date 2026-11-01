@@ -413,4 +413,11 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
     /c\.section !== 'body' && \[3, 4, 7\]\.includes\(c\.column\.index\)\) c\.cell\.styles\.halign = 'right'/.test(src), /c\.section === 'head' && c\.column\.index >= 2 && c\.column\.index <= 5\) c\.cell\.styles\.halign = 'right'/.test(src)],
     [true, true, true, true, 'Form 8949 box not chosen: choose it in Options at the top.', true, true, true],
     'PDF: What to copy and where on page 1 (= screen guide = CSV amounts), then To verify; box not chosen said; ASCII; head and totals right-aligned under their columns'); }
+// v2.17 screen "To verify (N)": same points, same text, same order, grouped by importance, N = number of points
+{ const r = U.compute(U.fromCSVText(require('fs').readFileSync(__dirname + '/testdata/us/us_fictif.csv')).txs, { method: 'HIFO' }), C = U.checks(r, {}), H = U.checksBlock(C);
+  const items = (H.match(/<li>[\s\S]*?<\/li>/g) || []).map(x => x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'));
+  const heads = (H.match(/<p class="uschk-h">([^<]*)<\/p>/g) || []).map(x => x.replace(/<[^>]+>/g, ''));
+  const N = +(/To verify \((\d+)\)/.exec(H) || [])[1], ranks = C.map(c => c.rank);
+  eq([JSON.stringify(items) === JSON.stringify(C.map(c => c.msg)), new Set(items).size === items.length, N === C.length && C.length >= 3, ranks.every((x, i) => !i || ranks[i - 1] <= x), new Set(heads).size === heads.length, /<b>Line \d+<\/b>: /.test(H)],
+    [true, true, true, true, true, true], 'To verify on screen: every point kept with the same text and order, no duplicate, N = points, groups in order of importance, "Line N" in bold'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
