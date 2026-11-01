@@ -360,10 +360,6 @@ header h1{font-size:3.6rem}
 header .sub{font-size:1.3em;margin-top:2px}header .sub2{margin-top:2px}
 main>section{margin-top:8px;margin-bottom:8px}
 main:has(#results:empty)>#calc{grid-column:2;grid-row:1}
-main:has(#results:empty):not(:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden])))>section:first-of-type{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:22px;align-content:start}
-main:has(#results:empty):not(:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden])))>section:first-of-type>*{grid-column:1}
-main:has(#results:empty):not(:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden])))>section:first-of-type>.fhelp-l{grid-column:2;grid-row:1/span 6;align-self:start}
-main:has(#results:empty):not(:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden])))>section:first-of-type>#helppanel{grid-column:1/-1}
 footer{padding:6px 24px 4px}
 footer .disclaim{max-width:none;margin-top:4px}
 .kofifoot{margin:0 auto 8px}
@@ -431,3 +427,9 @@ footer .disclaim{margin-top:2px}
 }
 /* v2.22 PC : logo et signature x2,25, sous-titre x1,5 (écrans de plus de 560 px de haut) */
 @media (min-width:1024px) and (min-height:561px){header h1{font-size:5.4rem;padding-bottom:.16em}header .sub{font-size:1.575em}}
+/* v2.23 U.S.A. : fuseau du fichier dans Options, ligne pleine largeur */
+.usopts .ustzopt{grid-column:1/-1}.usopts .ustzopt select{width:100%;max-width:100%;min-width:0}
+/* v2.23 FRANCE PC : dès l'arrivée, 2 colonnes ; carte « 2. Résultat et export » vide avec un message d'attente, masquée pendant un calcul */
+@media (min-width:1024px){main>#results:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;color:var(--muted);font-style:italic}
+main>#results:empty::before{content:"2. Résultat et export \2014  le résultat apparaîtra ici après le calcul."}
+main:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden]))>#results:empty{display:none}}
