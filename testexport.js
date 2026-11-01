@@ -78,4 +78,11 @@ chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » 
   const Y3 = E.byYear(E.compute(T3, () => null)), x3 = X.exportData(Y3, {}, () => [], T3, 2025);
   const t3 = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, x3, X.title(2025)).output('arraybuffer')) }).toString();
   chk(Y3[2025].exonere === true && x3.totals[0].exonere === true && /<= 305|≤ 305/.test(t3) && !/3AN|3BN/.test(t3.replace(/3AN\/3BN/g, '')) && /exon/i.test(t3), 'PDF : 310 € avec 10 € de frais (218 = 300 €) exonéré, comme à l’écran'); }
+// Impôt estimé dans le PDF = même calcul que « Prélèvement estimé selon le calcul » à l'écran (app.js)
+{ const AP = fs.readFileSync(__dirname + '/app.js', 'utf8'), scr = t => t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30);
+  chk(AP.includes('eur(t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30))'), 'écran : formule du prélèvement estimé inchangée');
+  const C = [{ year: 2025, exonere: true, l224: 50, report: 0 }, { year: 2025, exonere: false, l224: -120, report: 120 }, { year: 2024, exonere: false, l224: 1000.4, report: 1000 }, { year: 2025, exonere: false, l224: 1000.4, report: 1000 }];
+  chk(C.every(c => X.impot(c) === scr(c)), 'PDF : impôt estimé = montant de l’écran (≤ 305 €, perte, 2024, 2025)');
+  chk(JSON.stringify(C.map(X.impotTxt)) === JSON.stringify(['0,00 € (cessions ≤ 305 €)', '0,00 € (pas de plus-value)', '300,00 € (30 % de 1000 €)', '314,00 € (31,4 % de 1000 €)']), 'PDF : ligne impôt estimé, un seul taux, celui de l’année');
+  const tt = x.totals[0]; chk(/Imp.t estim. \(. v.rifier\)/.test(txt) && txt.includes(X.impotTxt(tt).replace(/ /g, ' ').split(' (')[0].replace(/ /g, ' ')), 'PDF : ligne « Impôt estimé (à vérifier) » présente avec le montant'); }
 process.exit(ok ? 0 : 1);
