@@ -247,3 +247,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 - Two bar charts under the result, side by side from 1024 px, stacked full width below: net gain or loss by tax year (the totals already shown for each year) and by asset (sum of the gain of each line counted in the totals). Lines marked "to verify" are left out, as in the totals, and the legend says so. Sum of the asset bars = net gain or loss shown. Screen only: not in the PDF, CSV, Excel or print. No calculation changed.
 - Wide screens: more compact and wider layout (smaller header, footer and disclaimer; before any result, options and import side by side) to avoid vertical scrolling at common heights. Light theme: brighter red disclaimer and brighter blue "Why Kryptax?" / "Support Kryptax" buttons. Below 1024 px and in the dark theme, nothing else changes.
+
+## v2.23 — Time zone in Options (v=20261101zg)
+
+- "Time zone of your file" moved from 1. Import to the first, full-width line of Options (set before import). Same select, same default (this browser), same saved settings (kryptax.us.settings). No calculation or text change.

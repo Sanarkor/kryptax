@@ -62,7 +62,7 @@ Deux graphiques en barres s'affichent sous le résultat (empilés sur smartphone
 
 Sur PC (≥ 1024 px), la mise en page est plus compacte et plus large (entête, pied et avertissement resserrés ; à l'état initial, l'import occupe les deux colonnes) pour éviter le défilement vertical aux hauteurs courantes. En thème clair, l'avertissement est d'un rouge plus vif et les boutons « Pourquoi Kryptax ? » / « Soutenir Kryptax » d'un bleu plus vif.
 
-v2.22 : mise en page PC compacte v2.20 rétablie, avec logo et signature 2,25 fois plus grands et sous-titre 1,5 fois plus grand (écrans de plus de 560 px de haut). Conservé : sur PC avec souris, « Voir le PDF » ouvre le PDF dans un nouvel onglet (repli sur l'aperçu intégré si le navigateur bloque l'onglet) ; sur smartphone, l'aperçu intégré reste.
+v2.22 : mise en page PC compacte v2.20 rétablie, avec logo et signature 2,25 fois plus grands et sous-titre 1,5 fois plus grand (écrans de plus de 560 px de haut). v2.23 : sur PC, la carte « 2. Résultat et export » est visible dès l'arrivée avec un message d'attente, « Quel fichier choisir ? » reste dans la colonne gauche ; mode U.S.A. : « Time zone of your file » est la 1re ligne des Options (set before import). Conservé : sur PC avec souris, « Voir le PDF » ouvre le PDF dans un nouvel onglet (repli sur l'aperçu intégré si le navigateur bloque l'onglet) ; sur smartphone, l'aperçu intégré reste.
 
 Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur partagé, pensez à l'utiliser.
 
