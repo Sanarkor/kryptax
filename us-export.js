@@ -47,6 +47,8 @@
     return { title: 'Kryptax - U.S. summary (estimate)', checks, info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows, parts, tv };
   }
 
+  /* v2.14 amounts to copy (Form 8949 Part totals, Schedule D lines 7, 15, 16, 21) in dark amber #A16207; text stays black */
+  const COPY = [161, 98, 7];
   function makePdf(jsPDF, res, opts) {
     const D = summaryData(res, opts), doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 10;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('Kryptax \u2014 U.S. summary (estimate)', M, 16);
@@ -59,7 +61,8 @@
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(title, M, y + 4); doc.setFont('helvetica', 'normal');
       doc.autoTable({ startY: y + 6, head: [D.head], body, foot: foot ? [foot] : undefined, showFoot: 'lastPage', margin: { left: M, right: M, bottom: 16, top: 12 },
         styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, headStyles: { fillColor: [40, 40, 40] }, footStyles: { fillColor: [225, 225, 225], textColor: 0 }, columnStyles: cs, rowPageBreak: 'avoid',
-        didParseCell: c => { if (hl && c.section === 'body') { c.cell.styles.fillColor = [255, 236, 200]; c.cell.styles.fontStyle = 'bold'; } } });
+        didParseCell: c => { if (c.section === 'foot' && [3, 4, 7].includes(c.column.index)) c.cell.styles.textColor = api.COPY;
+          if (hl && c.section === 'body') { c.cell.styles.fillColor = [255, 236, 200]; c.cell.styles.fontStyle = 'bold'; } } });
       y = doc.lastAutoTable.finalY + 6;
     };
     for (const P of D.parts) tbl(P.title, P.rows.length ? P.rows.map(r => r.cells) : [['No sale in this part'].concat(D.head.slice(1).map(() => ''))], P.total, false);
@@ -71,7 +74,8 @@
     doc.autoTable({ startY: y + 10, head: [['Line', 'Description', '(d) Proceeds', '(e) Cost', '(g) Adjustments', '(h) Gain or (loss)', 'Note']],
       body: SD.lines.map(l => [l.line, l.desc, l.nc ? '' : usd0(l.d), l.nc ? '' : usd0(l.e), l.nc ? '' : usd0(l.g), l.nc ? '' : (l.answer || usd0(l.h)), l.note].map(ascii)), margin: { left: M, right: M, bottom: 16, top: 12 },
       styles: { fontSize: 7.5, cellPadding: 1.2, overflow: 'linebreak' }, headStyles: { fillColor: [40, 40, 40] }, columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 58 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
-      didParseCell: c => { if (c.section === 'body' && SD.lines[c.row.index].nc) { c.cell.styles.textColor = 150; c.cell.styles.fillColor = [240, 240, 240]; } } });
+      didParseCell: c => { if (c.section === 'body' && ['7', '15', '16', '21'].includes(SD.lines[c.row.index].line) && !SD.lines[c.row.index].nc && c.column.index === 5) c.cell.styles.textColor = api.COPY;
+        if (c.section === 'body' && SD.lines[c.row.index].nc) { c.cell.styles.textColor = 150; c.cell.styles.fillColor = [240, 240, 240]; } } });
     const n = doc.internal.getNumberOfPages();
     for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(80); doc.text(D.foot, M, H - 7); doc.text('Page ' + i + ' / ' + n, W - M, H - 7, { align: 'right' }); doc.setTextColor(0); }
     return doc;
@@ -80,6 +84,6 @@
     const d = (doc0 || root.document), blob = makePdf(jsPDF, res, opts).output('blob'), a = d.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = eng().stampName('kryptax-us-summary', 'pdf'); d.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
-  const api = { summaryData, makePdf, download, FOOT };
+  const api = { summaryData, makePdf, download, FOOT, COPY };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxUSExport = api;
 })(this);
