@@ -544,10 +544,6 @@
     }
     out.addEventListener('change', e => {
       const t = e.target; if (!cur) return;
-      if (t.id === 'usmethod') { method = t.value; render(); return; }
-      if (t.id === 'usfees') { fees = FEE_MODES[t.value] ? t.value : 'IGNORE'; render(); return; }
-      if (t.id === 'uscat') { cat = t.value; render(); return; }
-      if (t.id === 'usfstat') { fstat = FSTAT[t.value] != null ? t.value : ''; render(); return; }
       if (t.classList.contains('uscl')) { const v = parseFloat(String(t.value || '').replace(/[$,()\s-]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) carry[k] = v; else delete carry[k]; render(); return; }
       if (t.classList.contains('usda')) { const v = parseFloat(String(t.value || '').replace(/[$,\s]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) da[k] = v; else delete da[k]; render(); return; }
       if (t.classList.contains('usmc') || t.classList.contains('usmd')) {
@@ -566,7 +562,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -618,15 +614,26 @@
       return `<h3 class="ussdh">Schedule D (draft)</h3><p class="warn">${SD.warn}.</p><div class="scroll"><table class="us8949 ussd"><tr class="hdr"><th>Line</th><th>Description</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(g) Adj.</th><th>(h) Gain/(loss)</th></tr>`
         + SD.lines.map(l => l.nc ? `<tr class="usnc"><td data-l="Line">${l.line}</td><td data-l="Description">${esc(l.desc)}</td><td data-l="Status" colspan="4">${esc(l.note)}</td></tr>`
           : `<tr><td data-l="Line">${l.line}</td><td data-l="Description">${esc(l.desc)}${l.note ? ' <span class="hint">(' + esc(l.note) + ')</span>' : ''}</td><td data-l="(d) Proceeds">${v(l.d)}</td><td data-l="(e) Cost">${v(l.e)}</td><td data-l="(g) Adj.">${v(l.g)}</td><td data-l="(h) Gain/(loss)">${l.answer || v(l.h)}</td></tr>`).join('')
-        + '</table></div>' + `<div class="grid"><label>Filing status (Schedule D line 21) <select id="usfstat">${Object.keys(FSTAT).map(k => `<option value="${k}"${fstat === k ? ' selected' : ''}>${esc(FSTAT[k].replace(' - ', ' — '))}</option>`).join('')}</select></label></div>`
-        + '<p class="hint">Net capital loss: the deductible part is limited to $3,000 a year ($1,500 if married filing separately), the rest is carried over (IRS Topic no. 409). Kryptax only sees the sales in this file — to verify.</p><p class="hint">Uses the Form 8949 box chosen above and the carryover entered. Source: Schedule D (Form 1040) 2025 and its instructions.</p>';
+        + '</table></div>' + ''
+        + '<p class="hint">Net capital loss: the deductible part is limited to $3,000 a year ($1,500 if married filing separately), the rest is carried over (IRS Topic no. 409). Kryptax only sees the sales in this file — to verify.</p><p class="hint">Uses the options at the top (Form 8949 box, filing status) and the carryover entered. Source: Schedule D (Form 1040) 2025 and its instructions.</p>';
     }
     const daNow = () => ({ p: da[(year || 'all') + 'p'], b: da[(year || 'all') + 'b'] });
-    function catSel() {
-      const F = form8949(last, cat), o = (v, l) => `<option value="${v}"${cat === v ? ' selected' : ''}>${l}</option>`;
-      return `<div class="grid uscat"><label>Form 8949 box (from your Form 1099-DA) <select id="uscat">${o('', 'Not chosen — to verify')}${o('none', 'No Form 1099-DA → box I / L')}${o('nobasis', 'Form 1099-DA, basis not reported to the IRS → box H / K')}${o('basis', 'Form 1099-DA, basis reported to the IRS → box G / J')}</select></label></div>`
-        + `<p class="hint">Part I (short term): box ${esc(F.parts[0].boxText)}, totals to ${esc(F.parts[0].scheduleD)}. Part II (long term): box ${esc(F.parts[1].boxText)}, totals to ${esc(F.parts[1].scheduleD)}. If only some sales are on a Form 1099-DA, each kind needs its own Part — to verify.</p>`;
+    // Options U.S. en haut de page (avant l'import) : un seul exemplaire de chaque sélecteur, état partagé avec le calcul et les exports
+    function optsHtml() {
+      const o = (v, l, c) => `<option value="${v}"${c === v ? ' selected' : ''}>${l}</option>`;
+      return '<details class="note usopts" open><summary>Options (set before import)</summary><div class="grid">'
+        + `<label>Lot method <select id="usmethod">${o('FIFO', 'FIFO (first in, first out)', method)}${o('HIFO', 'HIFO (highest cost first)', method)}${o('MANUAL', 'Manual choice per sale', method)}</select></label>`
+        + `<label>Form 8949 box <select id="uscat">${o('', 'Not chosen — to verify', cat)}${o('none', 'No Form 1099-DA → box I / L', cat)}${o('nobasis', '1099-DA, basis not reported → H / K', cat)}${o('basis', '1099-DA, basis reported → G / J', cat)}</select></label>`
+        + `<label>Network fees on transfers <select id="usfees">${Object.keys(FEE_MODES).map(k => o(k, FEE_MODES[k], fees)).join('')}</select></label>`
+        + `<label>Filing status (Schedule D line 21) <select id="usfstat">${Object.keys(FSTAT).map(k => o(k, esc(FSTAT[k].replace(' - ', ' — ')), fstat)).join('')}</select></label>`
+        + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p></details>';
     }
+    const opts = doc.createElement('div'); opts.id = 'usopts'; const imp = doc.getElementById('usimp');
+    if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const drawOpts = () => { opts.innerHTML = optsHtml(); }; drawOpts();
+    opts.addEventListener('change', e => { const t = e.target;
+      if (t.id === 'usmethod') method = t.value; else if (t.id === 'usfees') fees = FEE_MODES[t.value] ? t.value : 'IGNORE';
+      else if (t.id === 'uscat') cat = t.value; else if (t.id === 'usfstat') fstat = FSTAT[t.value] != null ? t.value : ''; else return;
+      if (cur) render(); });
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
@@ -653,11 +660,8 @@
         + sdBlock(res)
         + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
-        + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
         + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
         + (method === 'MANUAL' ? manualHtml(res) : '')
-        + `<div class="grid"><label>Network fees on transfers <select id="usfees">${Object.keys(FEE_MODES).map(k => `<option value="${k}"${fees === k ? ' selected' : ''}>${FEE_MODES[k]}</option>`).join('')}</select></label></div><p class="hint">Network fees paid in crypto on transfers between your wallets: tax treatment not settled — to verify. Default: Ignore (same results as before).</p>`
-        + catSel()
         + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsx" class="small">Download Excel (.xlsx)</button>' : ''}${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
     }

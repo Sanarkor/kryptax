@@ -352,5 +352,8 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
 { const a = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 7)), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 8));
   const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$/;
   eq([a, ok.test(a), ok.test(U.stampName('kryptax-us-summary', 'pdf')), /[\\/:*?"<>| ]/.test(a), a !== b, /^kryptax-income_.*\.csv$/.test(U.stampName('kryptax-income', 'csv'))], ['kryptax-us-summary_2026-11-01_09-05-07.pdf', true, true, false, true, true], 'export names: prefix kept, local date + time with seconds, no forbidden characters, different instants -> different names'); }
+{ const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8'), n = id => (src.match(new RegExp('<select id="' + id + '"', 'g')) || []).length;
+  eq([n('usmethod'), n('uscat'), n('usfees'), n('usfstat'), /function optsHtml\(\)[\s\S]*id="usfstat"[\s\S]*insertBefore\(opts, imp\)/.test(src), /fstat = ''; cat = ''; drawOpts\(\)/.test(src), /if \(cur\) render\(\)/.test(src)],
+    [1, 1, 1, 1, true, true, true], 'options block at the top: the 4 selects exist once, placed before the import, Reset restores defaults, change re-computes'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
