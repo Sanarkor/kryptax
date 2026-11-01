@@ -53,9 +53,11 @@
     for (let i = 0; i < Math.min(25, rows.length); i++) { const m = mapHeader(rows[i] || []); if (['date', 'type', 'asset', 'qty'].every(k => m[k] != null)) return i; }
     return 0;
   }
+  /* v2.7: an explicit UTC marker at the end ("2025-01-10 14:00:00 UTC", "GMT", "Z", "+00:00", "+0000") is accepted and the time is read as written (UTC). */
+  const UTC_SUFFIX = /\s*(?:UTC|GMT|Z|[+-]00:?00)$/i;
   /* Excel dates come as JS Date in local time (SheetJS cellDates): keep the calendar date/time as written, read as UTC. */
   const usDate = v => v instanceof Date ? Date.UTC(v.getFullYear(), v.getMonth(), v.getDate(), v.getHours(), v.getMinutes(), v.getSeconds())
-    : typeof v === 'number' ? NaN : E.parseDate(String(v == null ? '' : v).trim(), 'MDY', 'UTC');
+    : typeof v === 'number' ? NaN : E.parseDate(String(v == null ? '' : v).trim().replace(UTC_SUFFIX, ''), 'MDY', 'UTC');
   /* rows: array of arrays (header found in the first 25 rows). Returns { txs, skipped, missingCols } */
   /* v2.0 platform exports, recognised only when the header matches a structure documented on the platform's official help pages:
      Kraken "Trades" export (support.kraken.com, "How to interpret Trades history fields"): txid, ordertxid, pair, time (UTC), type (buy/sell), price, cost (quote currency, fees NOT included), fee (quote currency), vol (base currency), margin.
