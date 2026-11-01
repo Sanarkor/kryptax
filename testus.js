@@ -400,5 +400,17 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const c = X.COPY, a1 = raw(); X.COPY = [0, 0, 0]; const a0 = raw(); X.COPY = c;
   const amb = '0.631 0.384 0.027 rg', n = b => b.toString('latin1').split(amb).length - 1;
   eq([txt(a1) === txt(a0), JSON.stringify(c), n(a0), n(a1) >= 6, /-\$1,000\.00/.test(txt(a1))], [true, '[161,98,7]', 0, true, true], 'PDF: only the colour of the amounts to copy changes (dark amber #A16207), text and amounts identical'); }
-console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
+// v2.16 PDF: "What to copy and where" block at the top of page 1, same amounts as the screen guide() and the CSV; totals/head aligned right like the amounts
+{ const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
+  const p = U.fromCSVText(require('fs').readFileSync(__dirname + '/testdata/us/us_fictif.csv')), r = U.compute(p.txs), o = { cat: 'none', fstat: 'other' }, G = U.guide(r, o), D = X.summaryData(r, o), csv = U.toCSV(r, o);
+  const f = v => (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), am = D.copy.filter(c => !c.text).map(c => [c.d, c.e, c.h]).flat().filter(Boolean);
+  const want = G.parts.filter(P => P.n).map(P => [f(P.d), f(P.e), f(P.h)]).flat().concat([f(G.n7), f(G.n15), f(G.n16)]);
+  const plain = s => s.replace(/[$,]/g, ''), txt = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, r, o).output('arraybuffer')) }).toString();
+  const nb = X.summaryData(r, {}), src = require('fs').readFileSync(__dirname + '/us-export.js', 'utf8');
+  eq([JSON.stringify(am) === JSON.stringify(want), am.every(a => csv.includes(a) || csv.includes(plain(a))), txt.indexOf('What to copy and where') < txt.indexOf('To verify (') && txt.indexOf('To verify (') < txt.indexOf('Part I - Short-term'),
+    D.copy.some(c => /Staking .*where to report: to verify/.test(c.label)), nb.copy[0].label, D.copy.every(c => /^[\x20-\x7e]*$/.test(c.label)),
+    /c\.section !== 'body' && \[3, 4, 7\]\.includes\(c\.column\.index\)\) c\.cell\.styles\.halign = 'right'/.test(src), /c\.section === 'head' && c\.column\.index >= 2 && c\.column\.index <= 5\) c\.cell\.styles\.halign = 'right'/.test(src)],
+    [true, true, true, true, 'Form 8949 box not chosen: choose it in Options at the top.', true, true, true],
+    'PDF: What to copy and where on page 1 (= screen guide = CSV amounts), then To verify; box not chosen said; ASCII; head and totals right-aligned under their columns'); }
+console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
