@@ -40,6 +40,7 @@ Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
 - Export **uniquement en PDF** : une synthèse, un tableau des cessions avec les colonnes 211 à 224 et une ligne GLOBAL, et le report sur la 2042-C.
 - Après le calcul : « Voir mon formulaire », puis directement un **aperçu plein écran** et le bouton « Enregistrer le PDF ».
 - Nom du fichier : `kryptax-formulaire-2086-<année>-sur-<année de déclaration>-<JJ>-<MM>-<AAAA>-<HH>-<MM>.pdf` (heure de Paris).
+- État au 31/12 (.json) : `kryptax-etat-<date de l’état>_<AAAA>-<MM>-<JJ>_<HH>-<mm>.json` (date et heure locales de l’export, à la minute).
 
 ## Mode U.S.A.
 - **Import** : CSV, Excel .xlsx ou PDF (au mieux). Colonnes : Date, Type (Buy, Sell, Convert, Send / Receive), Asset, Quantity, Total ou Price, Fee (USD) ; colonne Wallet facultative. Export « Trades » d'une plateforme reconnu. Fuseau horaire du fichier réglable ; les dates suffixées UTC, GMT, Z ou +00:00 sont lues en UTC.
