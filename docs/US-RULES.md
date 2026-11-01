@@ -183,3 +183,8 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 - Holding period of capitalized fee basis.
 - Fees paid in another asset than the one transferred (not handled).
 - Unpaired sends (gift, payment) and unpaired receives.
+
+## v2.9 — Capital loss limit (Schedule D line 21)
+- Source: IRS Topic no. 409, Capital gains and losses — https://www.irs.gov/taxtopics/tc409 (checked 2026-11-01): if capital losses exceed capital gains, the loss you can claim is the lesser of $3,000 ($1,500 if married filing separately) or the total net loss on Schedule D line 16; the rest can be carried forward (Capital Loss Carryover Worksheet, Publication 550 or Instructions for Schedule D).
+- Coded: a filing status select (not chosen / $3,000 statuses / married filing separately $1,500). When line 16 is a loss, line 21 = the smaller of the loss or the limit, and the amount left to carry over is shown. Status not chosen: line 21 "to verify", no amount. Line 16 not a loss: line 21 skipped. Shown on screen, in the CSV/XLSX header and Schedule D section, and in the PDF summary.
+- Always "to verify": Kryptax only sees the sales in this file (other capital gains or losses change line 16). The carryover worksheet itself is not computed.

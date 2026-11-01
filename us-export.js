@@ -37,6 +37,8 @@
     ];
     if (T.income && T.income.count) info.push('Income (staking / airdrops / interest): ' + usd(T.income.usd) + ' (' + (T.income.count - T.income.unknown) + ' of ' + T.income.count + ' lines' + (T.income.unknown ? '; ' + T.income.unknown + ' without USD value, to verify' : '') + ') - ordinary income, to verify; no tax rates applied');
     if (T.fees && eng().feeLine(T.fees)) info.push('Network fees: ' + eng().feeLine(T.fees).replace(/ — /g, ' - '));
+    { const L21 = eng().scheduleD(res, opts.cat, opts.carry, opts.fstat).lossLimit;
+      if (L21) info.push('Filing status (Schedule D line 21): ' + eng().FSTAT[opts.fstat || ''] + '. ' + (L21.h != null ? 'Capital loss allowed ' + usd(L21.h) + (L21.rest > 0 ? ', ' + usd(L21.rest) + ' to carry over' : '') + ' (IRS Topic no. 409) - from this file only, to verify.' : 'Net capital loss: limit not applied - to verify.')); }
     const K = eng().carryLines(res, opts.carry);
     if (K) info.push('Capital loss carryover you entered: short-term ' + usd(-K.s) + ' (Schedule D line 6), long-term ' + usd(-K.l) + ' (line 14). Net with this file: short-term ' + usd(K.net7) + ', long-term ' + usd(K.net15) + '. ' + K.note);
     const DA = eng().daLines(res, opts.da);
@@ -61,7 +63,7 @@
     };
     for (const P of D.parts) tbl(P.title, P.rows.length ? P.rows.map(r => r.cells) : [['No sale in this part'].concat(D.head.slice(1).map(() => ''))], P.total, false);
     if (D.tv.length) tbl('Not on Form 8949 - to verify (not in the totals)', D.tv.map(r => r.cells), null, true);
-    const SD = eng().scheduleD(res, (opts || {}).cat, (opts || {}).carry); doc.addPage(); y = 16;
+    const SD = eng().scheduleD(res, (opts || {}).cat, (opts || {}).carry, (opts || {}).fstat); doc.addPage(); y = 16;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(ascii(SD.title), M, y); doc.setFontSize(10); doc.setTextColor(170, 0, 0); doc.text(ascii(SD.warn), M, y + 6); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
     doc.autoTable({ startY: y + 10, head: [['Line', 'Description', '(d) Proceeds', '(e) Cost', '(g) Adjustments', '(h) Gain or (loss)', 'Note']],
       body: SD.lines.map(l => [l.line, l.desc, l.nc ? '' : usd0(l.d), l.nc ? '' : usd0(l.e), l.nc ? '' : usd0(l.g), l.nc ? '' : (l.answer || usd0(l.h)), l.note].map(ascii)), margin: { left: M, right: M, bottom: 16, top: 12 },
