@@ -369,6 +369,9 @@
     if (res.totals.fees) totals.fees = feeTotals(fe, res.totals.fees.mode, res.totals.fees.usdOnly);
     return Object.assign({}, res, { rows, income, totals, feeEvents: fe, wash: (res.wash || []).filter(w => inY(w.sold)), sales: res.sales.filter(x => lines.has(x.line)) });
   }
+  /* v2.11 export file names: prefix + local date and time of the browser, seconds included (no two exports with the same name) */
+  const p2 = n => String(n).padStart(2, '0');
+  const stampName = (prefix, ext, d) => { d = d || new Date(); return prefix + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + '-' + p2(d.getMinutes()) + '-' + p2(d.getSeconds()) + '.' + ext; };
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   /* CSV of 8949-style lines (columns a, b, c, d, e, h + term/box hint + status) */
@@ -518,7 +521,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
+  const api = { stampName, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -661,9 +664,9 @@
     out.addEventListener('click', e => {
       if (/^us(pdf|csv|xlsx)main$/.test(e.target.id)) { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
       if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, fstat, da: daNow(), carry: clNow() }); return; }
-      if (last && e.target.id === 'usxlsx' && W0.XLSX && W0.XLSX.write) { const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([W0.XLSX.write(toXLSX(W0.XLSX, last, { cat, fstat, da: daNow(), carry: clNow() }), { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = 'kryptax-us-summary.xlsx'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); return; }
+      if (last && e.target.id === 'usxlsx' && W0.XLSX && W0.XLSX.write) { const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([W0.XLSX.write(toXLSX(W0.XLSX, last, { cat, fstat, da: daNow(), carry: clNow() }), { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = stampName('kryptax-us-summary', 'xlsx'); doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
-      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF', inc ? incomeCSV(last) : toCSV(last, { cat, fstat, da: daNow(), carry: clNow() })], { type: 'text/csv;charset=utf-8' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-us-summary.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF', inc ? incomeCSV(last) : toCSV(last, { cat, fstat, da: daNow(), carry: clNow() })], { type: 'text/csv;charset=utf-8' })); a.download = stampName(inc ? 'kryptax-income' : 'kryptax-us-summary', 'csv'); doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;
