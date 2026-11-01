@@ -62,6 +62,8 @@ Deux graphiques en barres s'affichent sous le résultat (empilés sur smartphone
 
 Sur PC (≥ 1024 px), la mise en page est plus compacte et plus large (entête, pied et avertissement resserrés ; à l'état initial, l'import occupe les deux colonnes) pour éviter le défilement vertical aux hauteurs courantes. En thème clair, l'avertissement est d'un rouge plus vif et les boutons « Pourquoi Kryptax ? » / « Soutenir Kryptax » d'un bleu plus vif.
 
+v2.20 (PC, ≥ 1024 px) : entête sur une ligne, conteneur quasi pleine largeur, polices et espacements réduits ; à partir de 1200 px, le résultat a une 2e sous-colonne (« Voir le PDF », « Comparer… », graphiques). Sur PC avec souris, « Voir le PDF » ouvre le PDF dans un nouvel onglet (repli sur l'aperçu intégré si le navigateur bloque l'onglet) ; sur smartphone, l'aperçu intégré reste.
+
 Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur partagé, pensez à l'utiliser.
 
 Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'origine de la page, et les symboles et horodatages demandés : ils peuvent donc déduire quelles cryptos vous détenez et quand vous avez vendu, mais pas les montants.

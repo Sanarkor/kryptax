@@ -247,3 +247,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 - Two bar charts under the result, side by side from 1024 px, stacked full width below: net gain or loss by tax year (the totals already shown for each year) and by asset (sum of the gain of each line counted in the totals). Lines marked "to verify" are left out, as in the totals, and the legend says so. Sum of the asset bars = net gain or loss shown. Screen only: not in the PDF, CSV, Excel or print. No calculation changed.
 - Wide screens: more compact and wider layout (smaller header, footer and disclaimer; before any result, options and import side by side) to avoid vertical scrolling at common heights. Light theme: brighter red disclaimer and brighter blue "Why Kryptax?" / "Support Kryptax" buttons. Below 1024 px and in the dark theme, nothing else changes.
+
+## v2.20 — Full-width compact layout (v=20261101zd)
+
+- 1024 px and wider: header on one line, near full-width container, smaller fonts and gaps, menus full width of their cell with the full option text as a tooltip. From 1200 px the result has a second sub-column with the charts. Below 1024 px nothing changes. No text or calculation changed.
