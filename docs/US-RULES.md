@@ -1,6 +1,6 @@
 # Kryptax — U.S.A. rules used by the v1 module
 
-Checked on 2026-10-31. Kryptax is not tax advice: it gives an estimate that you must check yourself.
+Checked on 2026-11-01. Kryptax is not tax advice: it gives an estimate that you must check yourself.
 State taxes are not included.
 
 ## Sources (irs.gov)
@@ -54,7 +54,7 @@ State taxes are not included.
 
 ## Result screen (v1.6)
 
-- Tax year selector: sales are grouped by the year of the sale date, income by the year received (default: the latest year; "All years" also available). Dates are read in UTC, like the rest of the module; if your local date differs near midnight on Dec 31, to verify.
+- Tax year selector: sales are grouped by the year of the sale date, income by the year received (default: the latest year; "All years" also available). The year follows the tax dates chosen with the time zone selector (see Time zones, v1.8); near midnight on Dec 31, to verify.
 - Short / long term totals, number of sales, and the PDF and CSV buttons right below the totals. The PDF and CSV follow the selected year.
 
 ## To be verified (not coded in v1)
@@ -149,3 +149,8 @@ Shown on screen, in the CSV (section) and in the PDF (separate last page).
 - "Download Excel (.xlsx)" uses the SheetJS build already shipped (xlsx.mini.min.js, Community edition) — no external resource. Sheet "Summary" = same layout as the CSV, with column widths and amounts as numbers in `$#,##0.00` format; sheet "Form 8949 data" = one flat table (Part, Box, columns (a)–(h), status).
 - Limit: the Community edition does not write bold text or colours, so the .xlsx has no bold headers or coloured rows.
 - File names: kryptax-us-summary.csv / kryptax-us-summary.xlsx.
+
+## v2.7 — Review fixes
+
+- Dates ending with an explicit UTC marker (`2025-01-10 14:00:00 UTC`, `GMT`, `Z`, `+00:00`, `+0000`) are accepted and read as UTC instead of "unreadable date". Other offsets are not converted (unreadable, to verify). Keep "Time zone of your file" on UTC for such files.
+- Total / fee convention (unchanged, now stated in the import help): **Total (USD) = amount before fee**. Buy: cost basis = Total + Fee (fees are part of basis, i8949 "Basis and Recordkeeping"). Sell: proceeds = Total − Fee. If your file's Total already includes the fee, leave Fee empty to avoid counting it twice. Without Total, Total = Price × Quantity. Covered by tests.

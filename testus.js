@@ -238,5 +238,14 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([wb.SheetNames.join('|'), A[i][7], S[c].t, S[c].z, S['!cols'][0].wch > 30, XL.utils.sheet_to_json(D).length], ['Summary|Form 8949 data', 22933, 'n', '$#,##0.00;-$#,##0.00', true, 5], 'xlsx: summary + data sheets, totals as numbers in $ format');
   const back = XL.read(XL.write(wb, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
   eq(XL.utils.sheet_to_csv(back.Sheets.Summary).split('\n')[0].startsWith('Kryptax - U.S. summary'), true, 'xlsx: written file reads back'); }
+// v2.7 dates with an explicit UTC marker; Total = amount before fee
+{ const d = s => U.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n' + s + ',Buy,BTC,1,100\n');
+  const want = Date.UTC(2025, 0, 10, 14, 0, 0);
+  eq(['2025-01-10 14:00:00 UTC', '2025-01-10 14:00:00 GMT', '2025-01-10T14:00:00+00:00', '2025-01-10T14:00:00Z', '2025-01-10 14:00:00 +0000'].map(x => { const p = d(x); return p.skipped.length === 0 && p.txs[0].date === want; }), [true, true, true, true, true], 'dates with UTC / GMT / +00:00 / Z suffix read as UTC');
+  eq(d('2025-01-10 14:00:00 PST').skipped[0].why, 'unreadable date', 'other zone names still reported as unreadable');
+  const f = U.compute(U.fromCSVText('Date,Type,Asset,Quantity,Total (USD),Fee (USD)\n2024-01-01,Buy,BTC,1,1000,10\n2025-06-01,Sell,BTC,1,1500,15\n').txs).rows[0];
+  eq([f.cost, f.proceeds, f.gain], [1010, 1485, 475], 'Total = amount before fee: Buy cost = Total + Fee, Sell proceeds = Total - Fee');
+  const g = U.compute(U.fromCSVText('Date,Type,Asset,Quantity,Price (USD),Fee (USD)\n2024-01-01,Buy,BTC,2,500,4\n2025-06-01,Sell,BTC,2,800,6\n').txs).rows[0];
+  eq([g.cost, g.proceeds], [1004, 1594], 'without Total: Total = Price x Quantity, then the same fee rule'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
