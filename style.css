@@ -368,8 +368,6 @@ footer .disclaim{max-width:none;margin-top:4px}
 header h1{font-size:3rem}header .sub{font-size:1.15em;margin-top:0}
 main>section:first-of-type{padding-top:12px;padding-bottom:12px}
 .usmode{margin-top:4px}.usmode>.usbeta{margin:6px 0}
-.usmode:has(#usresult:empty)>#usleft{grid-column:1/-1;position:static;max-height:none;overflow:visible;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:22px;align-items:start}
-.usmode:has(#usresult:empty)>#usleft>#usside:empty{display:none}
 footer .law{margin-top:0}
 }
 @media (min-width:1024px) and (max-height:560px){header{padding-top:4px}header h1{font-size:2.5rem}header .sub{font-size:1.05em}header .sub2{font-size:.9em}footer{font-size:.74em;padding-top:2px}}
@@ -433,3 +431,8 @@ footer .disclaim{margin-top:2px}
 @media (min-width:1024px){main>#results:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;color:var(--muted);font-style:italic}
 main>#results:empty::before{content:"2. Résultat et export \2014  le résultat apparaîtra ici après le calcul."}
 main:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden]))>#results:empty{display:none}}
+/* v2.24 U.S.A. PC : dès l'arrivée, 2 colonnes (Options + 1. Import à gauche) ; carte de résultat vide avec un message d'attente en anglais */
+@media (min-width:1024px){.usmode>#usleft>#usside:empty{display:none}
+.usmode>#usresult:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px #0006;color:var(--muted);font-style:italic;margin:8px 0}
+.usmode>#usresult:empty::before{content:"Your results will appear here after the calculation."}}
+@media (min-width:1024px){.usmode:has(#usresult:empty){grid-template-columns:minmax(0,1fr) minmax(260px,30%)}.usmode:has(#usresult:empty)>#usleft{position:static;max-height:none;overflow:visible;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:14px;align-items:start}}
