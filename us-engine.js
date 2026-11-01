@@ -609,7 +609,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); if (LS) clearSettings(LS); pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); if (LS) clearSettings(LS); pdfN = ''; inp.value = ''; out.innerHTML = ''; side.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -677,6 +677,11 @@
     }
     const opts = doc.createElement('div'); opts.id = 'usopts'; const imp = doc.getElementById('usimp');
     if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const drawOpts = () => { opts.innerHTML = optsHtml(); }; drawOpts();
+    // v2.18 wide screens (>= 1024px): options + import in a left column, "What to copy and where" + "To verify" in a side panel under them
+    const left = doc.createElement('div'); left.id = 'usleft'; const side = doc.createElement('div'); side.id = 'usside';
+    if (imp && imp.parentNode) { imp.parentNode.insertBefore(left, opts); left.appendChild(opts); left.appendChild(imp); left.appendChild(side); }
+    const MQ = W0.matchMedia ? W0.matchMedia('(min-width: 1024px)') : null, wide = () => !!(MQ && MQ.matches);
+    if (MQ) { const f = () => { if (cur) render(); else side.innerHTML = ''; }; if (MQ.addEventListener) MQ.addEventListener('change', f); else if (MQ.addListener) MQ.addListener(f); }
     opts.addEventListener('change', e => { const t = e.target;
       if (t.id === 'usmethod') method = t.value; else if (t.id === 'usfees') fees = FEE_MODES[t.value] ? t.value : 'IGNORE';
       else if (t.id === 'uscat') cat = t.value; else if (t.id === 'usfstat') fstat = FSTAT[t.value] != null ? t.value : ''; else return;
@@ -698,6 +703,12 @@
       const C = checks(res, { cat, fstat, carry: clNow() }); if (!C.length) return '';
       return checksBlock(C);
     }
+    // v2.18 key figures strip (wide screens only, hidden below 1024px): amounts already computed, nothing new
+    function kpiHtml(res) {
+      const T = res.totals, G = guide(res, { cat, fstat, carry: clNow() }), c = (l, v, k) => `<div><span>${l}</span><b class="${k || ''}">${v}</b></div>`;
+      return '<div class="kxkpi halo" aria-hidden="true">' + c('Net gain or loss', usd(T.gain), T.gain < 0 ? 'neg' : 'pos') + c('Short term', usd(T.short.gain)) + c('Long term', usd(T.long.gain))
+        + (G.loss && G.l21 ? c('Loss allowed (line 21)', usd(G.l21.h)) + (G.l21.rest > 0 ? c('Carryover', usd(G.l21.rest)) : '') : '') + '</div>';
+    }
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
@@ -705,7 +716,7 @@
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
       const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsxmain" class="btn ghost">Download Excel (.xlsx)</button>' : ''}</p>`;
-      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + guideHtml(res) + checksHtml(res) + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
+      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + kpiHtml(res) + (wide() ? '' : guideHtml(res) + checksHtml(res)) + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
         + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
           + `<div class="scroll"><table class="us8949 usincome"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value USD</th><th>Type</th></tr>${res.income.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${mdy(r.date)}</td><td>${esc(r.asset)}</td><td>${+r.qty.toPrecision(10)}</td><td>${r.usd == null ? 'to verify' : usd(r.usd)}</td><td>${r.type}</td></tr>`).join('')}</table></div>`
           + `<p><button type="button" id="usinccsv" class="small">Download CSV (income)</button></p>` : '')
@@ -724,6 +735,7 @@
         + (method === 'MANUAL' ? manualHtml(res) : '')
         + `<details class="usdet" open><summary>Detailed table (Form 8949 lines)</summary><div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div></details>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsx" class="small">Download Excel (.xlsx)</button>' : ''}${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
+      side.innerHTML = wide() ? guideHtml(res) + checksHtml(res) : '';
     }
     out.addEventListener('click', e => {
       if (/^us(pdf|csv|xlsx)main$/.test(e.target.id)) { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
