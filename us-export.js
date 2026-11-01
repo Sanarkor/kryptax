@@ -76,7 +76,7 @@
   }
   function download(jsPDF, res, doc0, opts) {
     const d = (doc0 || root.document), blob = makePdf(jsPDF, res, opts).output('blob'), a = d.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'kryptax-us-summary.pdf'; d.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    a.href = URL.createObjectURL(blob); a.download = eng().stampName('kryptax-us-summary', 'pdf'); d.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
   const api = { summaryData, makePdf, download, FOOT };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxUSExport = api;

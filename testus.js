@@ -348,5 +348,9 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([U.forYear(b, 2025).wash.length, U.forYear(b, 2024).wash.length], [1, 0], 'wash flags filtered by tax year of the sale');
   const X = require('./us-export.js'), c = U.toCSV(b);
   eq([/POSSIBLE WASH SALES - to verify/.test(c), /^Line 3,ETH,,03\/01\/2025,-1000\.00,/m.test(c), X.summaryData(b, {}).info.some(l => /Possible wash sales.*\(3\).*to verify/.test(l)), /WASH/.test(U.toCSV(a))], [true, true, true, false], 'exports: wash sale section in CSV/XLSX and PDF summary line, only when flagged'); }
+// v2.11 export file names with local date and time
+{ const a = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 7)), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 8));
+  const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$/;
+  eq([a, ok.test(a), ok.test(U.stampName('kryptax-us-summary', 'pdf')), /[\\/:*?"<>| ]/.test(a), a !== b, /^kryptax-income_.*\.csv$/.test(U.stampName('kryptax-income', 'csv'))], ['kryptax-us-summary_2026-11-01_09-05-07.pdf', true, true, false, true, true], 'export names: prefix kept, local date + time with seconds, no forbidden characters, different instants -> different names'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
