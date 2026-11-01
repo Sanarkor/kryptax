@@ -609,6 +609,7 @@
     }
     const unv = livePrice && livePrice.unvalued ? [...livePrice.unvalued].filter(x => manual[x] == null && !rewardOnly(x)) : [];
     if (unv.length) h += `<div class="note warn">Aucun cours trouvé pour ${unv.map(esc).join(', ')} : compté 0 € dans la ligne 212 (≈, à vérifier). Cours unitaire en € si vous le connaissez : ${unv.map(x => `<label>${esc(x)} <input size="8" data-man="${esc(x)}"></label>`).join(' ')} — ou relancez le calcul plus tard.</div>`;
+    h += cmpBlock(Y);
     h += `<div class="note">🌍 Compte ou plateforme à l’étranger : déclarez chaque compte d’actifs numériques sur le formulaire <b>3916-bis</b> (même sans cession), et les comptes bancaires étrangers sur le 3916.</div>`;
     { const R = KP.reconList(txs); if (R.length) h += `<details class="note" id="reconlist"><summary class="warn">🔧 ${R.length} valeur${R.length > 1 ? 's' : ''} reconstruite${R.length > 1 ? 's' : ''} ou devinée${R.length > 1 ? 's' : ''} (virgule perdue, valeur absente)</summary><div class="scroll"><table><tr><th>Fichier · ligne</th><th>Crypto</th><th>Champ</th><th>Valeur d’origine</th><th>Valeur retenue</th><th>Méthode</th><th>Confiance</th></tr>${R.map(r => `<tr${r.pending ? ' class="bad"' : ''}><td>${esc(r.source || '')}${r.line ? ' · ' + r.line : ''}</td><td>${esc(r.asset)}</td><td>${esc(r.field)}</td><td>${esc(r.raw)}</td><td class="n">${r.field === 'quantité' ? num(r.val) : eur(r.val)}</td><td>${esc(r.method)}</td><td>${r.pending ? 'à confirmer' : esc(r.conf)}</td></tr>`).join('')}</table></div></details>`; }
     const W = out.warnings; if (W.length) h += `<details><summary class="warn">⚠️ ${W.length} point(s) à vérifier</summary><ul>${W.map(w => `<li>${dt(w.t.date)} ${esc(w.t.asset)} : ${esc(w.msg)}</li>`).join('')}</ul><p class="hint">Staking, airdrops, intérêts : leur fiscalité est discutée (revenus BNC/BIC à la réception, ou acquisition à 0 € imposée seulement à la cession). Kryptax ne tranche pas : ils sont comptés dans les quantités avec un coût d’acquisition de 0 €. Renseignez-vous ou demandez à un professionnel.</p></details>`;
@@ -738,6 +739,13 @@
     return `<details class="note spec" id="special"><summary>${esc(head)}</summary><ul>${li}</ul><p>Kryptax ne calcule pas leur imposition propre (revenus, etc.).</p>${rwOpt()}</details>`;
   }
   let lastOut = null, lastY = null, fyear = null;
+  function cmpBlock(Y) {
+    const ys = Object.keys(Y).sort().reverse(); if (!ys.length) return '';
+    const d = (k, v) => { const c = manual[k]; if (c == null || v == null) return ''; const x = v - c; return ` <span class="${Math.abs(x) < 1 ? '' : 'warn'}">écart ${x >= 0 ? '+' : ''}${eur(x)}</span>`; };
+    return `<details${ys.some(y => manual['cmpPV@' + y] != null) ? ' open' : ''}><summary>🔎 Comparer avec un autre calcul (facultatif)</summary><p class="hint">Saisissez les totaux d'un autre calcul que vous avez (calcul précédent, tableur, conseil) ou importez un CSV « année;prix de cession;plus-value »). Un écart vient souvent d'opérations manquantes, de types différents (staking, transferts) ou des cours. Ces chiffres servent seulement à la comparaison : ils ne changent aucun calcul.</p>
+      <div class="scroll"><table><tr><th>Année</th><th>Total prix de cession (Kryptax)</th><th>Autre calcul</th><th>Plus/moins-value (Kryptax)</th><th>Autre calcul</th></tr>${ys.map(y => `<tr><td>${y}</td><td class="n">${eur(Y[y].total218)}</td><td><input size="9" data-cmp="cmpP@${y}" value="${manual['cmpP@' + y] != null ? num(manual['cmpP@' + y]) : ''}">${d('cmpP@' + y, Y[y].total218)}</td><td class="n">${Y[y].incomplete ? 'incomplet' : eur(Y[y].total224)}</td><td><input size="9" data-cmp="cmpPV@${y}" value="${manual['cmpPV@' + y] != null ? num(manual['cmpPV@' + y]) : ''}">${Y[y].incomplete ? '' : d('cmpPV@' + y, Y[y].total224)}</td></tr>`).join('')}</table></div>
+      <label class="ghost btn small">Importer des totaux (CSV)<input type="file" id="cmpfile" accept=".csv" hidden></label></details>`;
+  }
   function computeWithPrices() {
     const withOverride = txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] }));
     // le moteur passe (asset, ts) ; on retrouve la cession concernée par son horodatage
@@ -746,6 +754,8 @@
   }
   $('#results').addEventListener('change', e => {
     if (e.target.id === 'fyear') { cancelAuto(); fyear = +e.target.value; if (scopedYear != null && fyear > scopedYear && !runCtl) { $('#run').click(); return; } renderResults(); return; }
+    if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
+    const k = e.target.dataset.cmp; if (k) { const v = E.parseNum(e.target.value); if (isFinite(v)) manual[k] = v; else delete manual[k]; save(); renderResults(); return; }
     const m = e.target.dataset.man, o = e.target.dataset.o212, v = E.parseNum(e.target.value);
     if (m) { if (v >= 0) manual[m] = v; else delete manual[m]; }
     if (o) { if (v > 0) manual['212@' + o] = v; else delete manual['212@' + o]; }
