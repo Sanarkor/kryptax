@@ -371,9 +371,11 @@
     if (res.totals.fees) totals.fees = feeTotals(fe, res.totals.fees.mode, res.totals.fees.usdOnly);
     return Object.assign({}, res, { rows, income, totals, feeEvents: fe, wash: (res.wash || []).filter(w => inY(w.sold)), sales: res.sales.filter(x => lines.has(x.line)) });
   }
-  /* v2.11 export file names: prefix + local date and time of the browser, seconds included (no two exports with the same name) */
-  const p2 = n => String(n).padStart(2, '0');
-  const stampName = (prefix, ext, d) => { d = d || new Date(); return prefix + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + '-' + p2(d.getMinutes()) + '-' + p2(d.getSeconds()) + '.' + ext; };
+  /* v2.15 export file names: prefix_YYYY-MM-DD_HH-MM.ext (local time of the browser, to the minute, like the France mode).
+     A name already given in this session gets a short suffix (_2, _3...), only in that case: never the same name twice. */
+  const p2 = n => String(n).padStart(2, '0'), usedNames = new Set();
+  const stampName = (prefix, ext, d) => { d = d || new Date(); const b = prefix + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + '-' + p2(d.getMinutes());
+    let n = b + '.' + ext, k = 2; while (usedNames.has(n)) n = b + '_' + (k++) + '.' + ext; usedNames.add(n); return n; };
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   /* CSV of 8949-style lines (columns a, b, c, d, e, h + term/box hint + status) */
@@ -546,7 +548,14 @@
     return L.map((c, i) => Object.assign(c, { i })).sort((a, b) => a.rank - b.rank || (a.line == null ? -1 : b.line == null ? 1 : a.line - b.line) || a.i - b.i).map(({ rank, line, msg }) => ({ rank, line, msg }));
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { stampName, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
+  /* v2.15 option choices kept in this browser (localStorage only): lot method, Form 8949 box, fee option, filing status.
+     Never file data, transactions or amounts. Invalid or unreadable values are ignored (defaults used). */
+  const SET_KEY = 'kryptax.us.settings', SET_OK = { method: ['FIFO', 'HIFO', 'MANUAL'], cat: ['', 'none', 'nobasis', 'basis'], fees: Object.keys(FEE_MODES), fstat: Object.keys(FSTAT) };
+  const pickSettings = v => { const o = {}; if (v && typeof v === 'object') for (const k in SET_OK) if (typeof v[k] === 'string' && SET_OK[k].includes(v[k])) o[k] = v[k]; return o; };
+  const loadSettings = st => { try { return pickSettings(JSON.parse(st.getItem(SET_KEY))); } catch (e) { return {}; } };
+  const saveSettings = (st, v) => { try { st.setItem(SET_KEY, JSON.stringify(pickSettings(v))); return true; } catch (e) { return false; } };
+  const clearSettings = st => { try { st.removeItem(SET_KEY); return true; } catch (e) { return false; } };
+  const api = { stampName, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -555,6 +564,9 @@
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
     let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', fstat = '', carry = {};
+    let LS = null; try { LS = W0.localStorage || null; } catch (x) {}
+    if (LS) { const S = loadSettings(LS); if (S.method) method = S.method; if (S.fees) fees = S.fees; if (S.cat != null) cat = S.cat; if (S.fstat != null) fstat = S.fstat; }
+    const keepSet = () => { if (LS) saveSettings(LS, { method, fees, cat, fstat }); };
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -587,7 +599,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); if (LS) clearSettings(LS); pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -651,14 +663,16 @@
         + `<label>Form 8949 box <select id="uscat">${o('', 'Not chosen — to verify', cat)}${o('none', 'No Form 1099-DA → box I / L', cat)}${o('nobasis', '1099-DA, basis not reported → H / K', cat)}${o('basis', '1099-DA, basis reported → G / J', cat)}</select></label>`
         + `<label>Network fees on transfers <select id="usfees">${Object.keys(FEE_MODES).map(k => o(k, FEE_MODES[k], fees)).join('')}</select></label>`
         + `<label>Filing status (Schedule D line 21) <select id="usfstat">${Object.keys(FSTAT).map(k => o(k, esc(FSTAT[k].replace(' - ', ' — ')), fstat)).join('')}</select></label>`
-        + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p></details>';
+        + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p><p class="hint">These four choices are kept in this browser only (no file data, no amounts). <a href="#" id="ussetreset">Reset saved settings</a></p></details>';
     }
     const opts = doc.createElement('div'); opts.id = 'usopts'; const imp = doc.getElementById('usimp');
     if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const drawOpts = () => { opts.innerHTML = optsHtml(); }; drawOpts();
     opts.addEventListener('change', e => { const t = e.target;
       if (t.id === 'usmethod') method = t.value; else if (t.id === 'usfees') fees = FEE_MODES[t.value] ? t.value : 'IGNORE';
       else if (t.id === 'uscat') cat = t.value; else if (t.id === 'usfstat') fstat = FSTAT[t.value] != null ? t.value : ''; else return;
-      if (cur) render(); });
+      keepSet(); if (cur) render(); });
+    opts.addEventListener('click', e => { if (e.target.id !== 'ussetreset') return; e.preventDefault(); if (LS) clearSettings(LS);
+      method = 'FIFO'; fees = 'IGNORE'; cat = ''; fstat = ''; drawOpts(); if (cur) render(); });
     // v2.12 guided result + single to-verify list (same amounts as the tables and exports)
     function guideHtml(res) {
       const G = guide(res, { cat, fstat, carry: clNow() }), li = [];
