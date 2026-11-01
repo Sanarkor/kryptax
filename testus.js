@@ -228,7 +228,7 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const C2 = U.scheduleD(r, 'none', { s: 30000, l: 30000 });
   eq([by(C2, '16').h, by(C2, '17').answer, by(C2, '21').nc], [-17117, null, true], 'line 16 loss: 17 skipped, 21 not computed');
   const c = U.toCSV(r, { cat: 'none' }).split('\n');
-  eq([c.includes('SCHEDULE D (FORM 1040) - DRAFT - Draft to verify - not tax advice,,,,,,,,'), c.includes('Line 3,Form 8949 totals with box C/I,,53963.00,31030.00,,,22933.00,'), c.some(l => /^Line 21,.*not computed by Kryptax/.test(l))], [true, true, true], 'CSV: Schedule D section');
+  eq([c.includes('SCHEDULE D (FORM 1040) - DRAFT - Draft to verify - not tax advice,,,,,,,,'), c.includes('Line 3,Form 8949 totals with box C/I,,53963.00,31030.00,,,22933.00,'), c.some(l => /^Line 21,.*skipped \(line 16 is not a loss\)/.test(l))], [true, true, true], 'CSV: Schedule D section');
   const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
   const t = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, r, { cat: 'none' }).output('arraybuffer')) }).toString().split('\f').filter(p => p.trim());
   eq([t.length >= 2, /Schedule D \(Form 1040\) - draft/.test(t[t.length - 1]), /Draft to verify - not tax advice/.test(t[t.length - 1]), /Schedule D \(Form 1040\) - draft/.test(t[0])], [true, true, true, false], 'PDF: Schedule D on a separate last page'); }
@@ -326,5 +326,15 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   // exports show the option
   const X = require('./us-export.js'), sd = X.summaryData(pd, {}).info.join('\n'), cs = U.toCSV(pd);
   eq([/Network fees on transfers: Dispose/.test(sd), /Network fees: 1 transfer/.test(sd), /Network fees on transfers,Dispose/.test(cs), /network fee \(to verify\)/.test(cs)], [true, true, true, true], 'PDF summary and CSV header show the option and the Network fees line'); }
+// v2.9 capital loss limit (Schedule D line 21), IRS Topic no. 409: $3,000, $1,500 married filing separately, rest carried over
+{ const L = (csv, fs) => U.scheduleD(U.compute(U.fromCSVText(csv).txs), 'none', {}, fs).lines.find(l => l.line === '21');
+  const loss = n => 'Date,Type,Asset,Quantity,Total (USD)\n2025-01-01,Buy,BTC,1,' + (10000 + n) + '\n2025-06-01,Sell,BTC,1,10000\n';
+  eq([L(loss(5000), 'other').h, L(loss(5000), 'other').rest, L(loss(5000), 'mfs').h, L(loss(5000), 'mfs').rest], [-3000, 2000, -1500, 3500], 'line 21: loss above the limit -> $3,000 / $1,500 (married filing separately), rest to carry over');
+  eq([L(loss(1000), 'other').h, L(loss(1000), 'other').rest, L(loss(1000), 'mfs').h, L(loss(3000), 'other').rest], [-1000, 0, -1000, 0], 'line 21: loss below or equal to the limit -> whole loss, nothing carried');
+  const nc = L(loss(5000), ''), g = L(loss(-500), 'mfs');
+  eq([nc.nc, /filing status - to verify/.test(nc.note), g.nc, /not a loss/.test(g.note)], [true, true, true, true], 'line 21: status not chosen -> to verify, no amount; gain -> skipped');
+  eq([/to verify/.test(L(loss(5000), 'other').note), U.scheduleD(U.compute(U.fromCSVText(loss(5000)).txs), 'none', { s: 2000 }, 'other').lines.find(l => l.line === '21').rest], [true, 4000], 'line 21: always to verify; carryover entered is part of the line 16 loss');
+  const rr = U.compute(U.fromCSVText(loss(5000)).txs), c = U.toCSV(rr, { fstat: 'mfs' }), X = require('./us-export.js'), sd = X.summaryData(rr, { fstat: 'mfs' }).info.join('\n');
+  eq([/Filing status \(line 21\),"?Married filing separately/.test(c), /^Line 21,.*,-1500\.00,/m.test(c), /Capital loss allowed -\$1,500\.00, \$3,500\.00 to carry over/.test(sd), /Filing status/.test(U.toCSV(r))], [true, true, true, false], 'exports: filing status and line 21 in CSV and PDF summary; nothing added for a gain without status'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 

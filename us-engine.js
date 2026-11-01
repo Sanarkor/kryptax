@@ -400,7 +400,8 @@
       blank(); row('section', ['TO VERIFY - not on Form 8949, not in the totals (missing cost or value)']); row('head', head);
       for (const r of F.toVerify) row('tv', line(r, r.status));
     }
-    const SD = scheduleD(res, opts.cat, opts.carry);
+    const SD = scheduleD(res, opts.cat, opts.carry, opts.fstat);
+    if (opts.fstat !== undefined || SD.n16 < 0) row('kv', ['Filing status (line 21)', FSTAT[opts.fstat || ''] || FSTAT[''], 'to verify']);
     blank(); row('section', ['SCHEDULE D (FORM 1040) - DRAFT - ' + SD.warn]);
     row('head', ['Line', 'Description', '', '(d) Proceeds', '(e) Cost', '', '(g) Adjustments', '(h) Gain or (loss)', 'Note']);
     for (const l of SD.lines) row(l.nc ? 'nc' : (['7', '15', '16'].includes(l.line) ? 'total' : 'row'), ['Line ' + l.line, l.desc, '', l.d, l.e, '', l.g, l.answer || l.h, l.note]);
@@ -449,7 +450,19 @@
      (box G/H/I -> 1b/2/3, J/K/L -> 8b/9/10), 6 and 14 = carryover typed by the user, 7 = lines 1a-6, 15 = lines 8a-14, 16 = 7 + 15,
      17 = "are lines 15 and 16 both gains". Lines 1a/8a (Exception 1), 4, 5, 11-13 and 18-22 are not computed. */
   const SD_NC = 'not computed by Kryptax';
-  function scheduleD(res, cat, carry) {
+  /* v2.9 capital loss limit (Schedule D line 21). IRS Topic no. 409 (irs.gov/taxtopics/tc409, checked 2026-11-01): the loss you can claim is
+     the lesser of $3,000 ($1,500 if married filing separately) or the net loss on Schedule D line 16; the rest can be carried forward
+     (Capital Loss Carryover Worksheet). Kryptax only sees the sales in this file: to verify. */
+  const LOSS_LIMIT = { other: 3000, mfs: 1500 };
+  const FSTAT = { '': 'Not chosen - to verify', other: 'Single, married filing jointly, head of household or qualifying surviving spouse ($3,000)', mfs: 'Married filing separately ($1,500)' };
+  function lossLimit(n16, fstat) {
+    const lim = LOSS_LIMIT[fstat];
+    if (!(n16 < 0)) return null;
+    if (!lim) return { h: null, rest: null, note: 'choose the filing status - to verify' };
+    const h = -Math.min(-n16, lim), rest = r2(-n16 + h);
+    return { h, rest, lim, note: 'smaller of the line 16 loss or ' + usd(-lim) + (rest > 0 ? '; ' + usd(rest) + ' left to carry over (Capital Loss Carryover Worksheet)' : '') + ' - from this file only, to verify' };
+  }
+  function scheduleD(res, cat, carry, fstat) {
     const F = form8949(res, cat), K = carryLines(res, carry), L = [], sh = F.parts[0], lg = F.parts[1];
     const nc = (line, desc, why) => L.push({ line, desc, nc: true, note: why || SD_NC });
     const tot = (line, desc, P) => L.push({ line, desc, d: P.totals.d, e: P.totals.e, g: null, h: P.totals.h, note: P.box ? '' : 'box not chosen - to verify' });
@@ -469,8 +482,10 @@
     L.push({ line: '16', desc: 'Combine lines 7 and 15', h: n16, note: n16 > 0 ? 'gain: Form 1040 line 7a - to verify' : n16 < 0 ? 'loss: skip lines 17-20, see line 21' : 'zero: skip lines 17-21' });
     L.push({ line: '17', desc: 'Are lines 15 and 16 both gains?', answer: n16 > 0 ? (n15 > 0 ? 'Yes' : 'No') : null, note: n16 > 0 ? 'to verify' : 'skipped (line 16 is not a gain)' });
     nc('18', '28% Rate Gain Worksheet amount'); nc('19', 'Unrecaptured Section 1250 Gain Worksheet amount'); nc('20', 'Lines 18 and 19 zero or blank? (tax worksheet)');
-    nc('21', 'Capital loss allowed (limit depends on filing status)', SD_NC + ' (depends on filing status)'); nc('22', 'Qualified dividends? (tax worksheet)');
-    return { lines: L, cat: F.cat, n7, n15, n16, title: 'Schedule D (Form 1040) - draft', warn: 'Draft to verify - not tax advice' };
+    const LL = lossLimit(n16, fstat);
+    if (LL && LL.h != null) L.push({ line: '21', desc: 'Capital loss allowed (' + (fstat === 'mfs' ? 'married filing separately' : 'filing status chosen') + ')', h: LL.h, rest: LL.rest, note: LL.note });
+    else nc('21', 'Capital loss allowed (limit depends on filing status)', LL ? LL.note : (n16 < 0 ? SD_NC : 'skipped (line 16 is not a loss)')); nc('22', 'Qualified dividends? (tax worksheet)');
+    return { lines: L, cat: F.cat, n7, n15, n16, lossLimit: LL, fstat: fstat || '', title: 'Schedule D (Form 1040) - draft', warn: 'Draft to verify - not tax advice' };
   }
   function daLines(res, d) {
     if (!d || (!isFinite(d.p) && !isFinite(d.b))) return null;
@@ -486,7 +501,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
+  const api = { LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -494,7 +509,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', carry = {};
+    let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', fstat = '', carry = {};
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -512,6 +527,7 @@
       if (t.id === 'usmethod') { method = t.value; render(); return; }
       if (t.id === 'usfees') { fees = FEE_MODES[t.value] ? t.value : 'IGNORE'; render(); return; }
       if (t.id === 'uscat') { cat = t.value; render(); return; }
+      if (t.id === 'usfstat') { fstat = FSTAT[t.value] != null ? t.value : ''; render(); return; }
       if (t.classList.contains('uscl')) { const v = parseFloat(String(t.value || '').replace(/[$,()\s-]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) carry[k] = v; else delete carry[k]; render(); return; }
       if (t.classList.contains('usda')) { const v = parseFloat(String(t.value || '').replace(/[$,\s]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) da[k] = v; else delete da[k]; render(); return; }
       if (t.classList.contains('usmc') || t.classList.contains('usmd')) {
@@ -530,7 +546,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -578,11 +594,12 @@
         + (K ? '<ul><li>Net short-term: ' + usd(K.net7) + '</li><li>Net long-term: ' + usd(K.net15) + '</li></ul><p class="usnote">' + esc(K.note) + '</p>' : '') + '</details>';
     }
     function sdBlock(res) {
-      const SD = scheduleD(res, cat, clNow()), v = x => x == null ? '' : usd(x);
+      const SD = scheduleD(res, cat, clNow(), fstat), v = x => x == null ? '' : usd(x);
       return `<h3 class="ussdh">Schedule D (draft)</h3><p class="warn">${SD.warn}.</p><div class="scroll"><table class="us8949 ussd"><tr class="hdr"><th>Line</th><th>Description</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(g) Adj.</th><th>(h) Gain/(loss)</th></tr>`
         + SD.lines.map(l => l.nc ? `<tr class="usnc"><td data-l="Line">${l.line}</td><td data-l="Description">${esc(l.desc)}</td><td data-l="Status" colspan="4">${esc(l.note)}</td></tr>`
           : `<tr><td data-l="Line">${l.line}</td><td data-l="Description">${esc(l.desc)}${l.note ? ' <span class="hint">(' + esc(l.note) + ')</span>' : ''}</td><td data-l="(d) Proceeds">${v(l.d)}</td><td data-l="(e) Cost">${v(l.e)}</td><td data-l="(g) Adj.">${v(l.g)}</td><td data-l="(h) Gain/(loss)">${l.answer || v(l.h)}</td></tr>`).join('')
-        + '</table></div><p class="hint">Uses the Form 8949 box chosen above and the carryover entered. Source: Schedule D (Form 1040) 2025 and its instructions.</p>';
+        + '</table></div>' + `<div class="grid"><label>Filing status (Schedule D line 21) <select id="usfstat">${Object.keys(FSTAT).map(k => `<option value="${k}"${fstat === k ? ' selected' : ''}>${esc(FSTAT[k].replace(' - ', ' — '))}</option>`).join('')}</select></label></div>`
+        + '<p class="hint">Net capital loss: the deductible part is limited to $3,000 a year ($1,500 if married filing separately), the rest is carried over (IRS Topic no. 409). Kryptax only sees the sales in this file — to verify.</p><p class="hint">Uses the Form 8949 box chosen above and the carryover entered. Source: Schedule D (Form 1040) 2025 and its instructions.</p>';
     }
     const daNow = () => ({ p: da[(year || 'all') + 'p'], b: da[(year || 'all') + 'b'] });
     function catSel() {
@@ -626,10 +643,10 @@
     }
     out.addEventListener('click', e => {
       if (/^us(pdf|csv|xlsx)main$/.test(e.target.id)) { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
-      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, da: daNow(), carry: clNow() }); return; }
-      if (last && e.target.id === 'usxlsx' && W0.XLSX && W0.XLSX.write) { const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([W0.XLSX.write(toXLSX(W0.XLSX, last, { cat, da: daNow(), carry: clNow() }), { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = 'kryptax-us-summary.xlsx'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); return; }
+      if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, fstat, da: daNow(), carry: clNow() }); return; }
+      if (last && e.target.id === 'usxlsx' && W0.XLSX && W0.XLSX.write) { const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([W0.XLSX.write(toXLSX(W0.XLSX, last, { cat, fstat, da: daNow(), carry: clNow() }), { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = 'kryptax-us-summary.xlsx'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
-      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF', inc ? incomeCSV(last) : toCSV(last, { cat, da: daNow(), carry: clNow() })], { type: 'text/csv;charset=utf-8' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-us-summary.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF', inc ? incomeCSV(last) : toCSV(last, { cat, fstat, da: daNow(), carry: clNow() })], { type: 'text/csv;charset=utf-8' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-us-summary.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;
