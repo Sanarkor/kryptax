@@ -245,3 +245,4 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 @media (max-width:600px){#usresult table.us8949.ussd td:empty{display:none}}
 .prelev{display:inline-block;margin-top:2px;font-size:1.1em;font-weight:700}.prelev b{color:var(--acc);font-weight:800;text-shadow:0 0 6px rgba(34,211,238,.55),0 0 14px rgba(34,211,238,.3)}
 .usopts{margin:8px 0}.usopts summary{cursor:pointer;font-weight:700}.usopts select{max-width:100%;min-width:0;text-overflow:ellipsis}.usopts .hint{margin:6px 0 0}
+.usguide ul,.uschecks ul{margin:4px 0 4px 1.1em;padding:0}.usguide li,.uschecks li{margin:2px 0;overflow-wrap:anywhere}.usdet summary{cursor:pointer;font-weight:700;margin:6px 0}
