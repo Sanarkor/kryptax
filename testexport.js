@@ -101,5 +101,7 @@ chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » 
   chk(/<a id="pvopen"[^>]*target="_blank" rel="noopener"/.test(IH) && !/location\.(href\s*=|assign|replace)/.test(AP), 'PDF : ouverture dans un nouvel onglet (target=_blank, noopener), jamais à la place de la page'); }
 { const C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
   chk(/main>#results:empty\{display:flex/.test(C) && /main>#results:empty::before\{content:"2\. Résultat et export/.test(C) && /\)>#results:empty\{display:none\}/.test(C) && !/section:first-of-type>\.fhelp-l\{grid-column:2/.test(C), 'PC, état initial : carte « 2. Résultat et export » vide avec message d’attente (masquée pendant un calcul), « Quel fichier choisir ? » dans la colonne gauche'); }
+{ const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
+  chk(/matchMedia\('\(min-width: 1024px\)'\)/.test(A) && /hd\.appendChild\(kf\)/.test(A) && /home\.insertBefore\(kf, nx\)/.test(A) && /header \.kofifoot\.kofitop\{grid-column:3;grid-row:1/.test(C), 'PC : Pourquoi / Soutenir déplacés (pas copiés) en haut à droite de l’en-tête, retour en bas de page sur mobile'); }
 chk(/window\.open\(pvUrl, '_blank'\); if \(w\) \{ try \{ w\.opener = null;/.test(require('fs').readFileSync(__dirname + '/app.js', 'utf8')), 'PDF (PC) : nouvel onglet ouvert dans le clic, opener coupé, repli sur l’aperçu si bloqué');
 process.exit(ok ? 0 : 1);

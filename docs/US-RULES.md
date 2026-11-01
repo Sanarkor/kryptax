@@ -259,3 +259,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 ## v2.25 — Import under Options before import (v=20261101zi)
 
 - 1024 px and wider, before import: Options then 1. Import stacked in the left column (same as the result layout), the empty result card on the right; only the spacing of these two blocks is tightened. No text or calculation change.
+
+## v2.26 — Header buttons on PC (v=20261101zj)
+
+- 1024 px and wider: "Why Kryptax?" and "Support Kryptax" move (same buttons, no copy) to the top right of the header, with the country and theme buttons under them. Below 1024 px they stay at the bottom. No text or calculation change.
