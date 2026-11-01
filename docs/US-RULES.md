@@ -236,3 +236,9 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 ## v2.17 — Simpler "To verify" list on screen (v=20261101za)
 - Same points, same texts, same order (importance 1 to 5) as before; N in the title = number of points. Grouped under short headings: "Not in your totals", "Choose / confirm", "Possible issues", "Entered by you / methods"; a line number at the start ("Line 29") is shown in bold; more spacing. PDF, CSV and Excel keep the existing list unchanged. No calculation changed.
+
+## v2.18 — Wide-screen layout and light/dark theme (v=20261101zb)
+
+- Screens 1024 px and wider: two columns. Options and import on the left (sticky), result on the right. "What to copy and where" and "To verify" move to the left panel, shown once. A key-figures banner repeats numbers already computed: net gain or loss, short term, long term, and the line 21 loss allowed and carryover when present. No new calculation.
+- Below 1024 px nothing changes.
+- Moon/sun button next to FRANCE / U.S.A.: default follows the system setting; a click stores the choice under `kx-theme` in this browser (no other data). PDF, CSV and Excel exports are unchanged (white background).

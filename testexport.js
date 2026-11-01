@@ -85,4 +85,11 @@ chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » 
   chk(C.every(c => X.impot(c) === scr(c)), 'PDF : impôt estimé = montant de l’écran (≤ 305 €, perte, 2024, 2025)');
   chk(JSON.stringify(C.map(X.impotTxt)) === JSON.stringify(['0,00 € (cessions ≤ 305 €)', '0,00 € (pas de plus-value)', '300,00 € (30 % de 1000 €)', '314,00 € (31,4 % de 1000 €)']), 'PDF : ligne impôt estimé, un seul taux, celui de l’année');
   const tt = x.totals[0]; chk(/Imp.t estim. \(. v.rifier\)/.test(txt) && txt.includes(X.impotTxt(tt).replace(/ /g, ' ').split(' (')[0].replace(/ /g, ' ')), 'PDF : ligne « Impôt estimé (à vérifier) » présente avec le montant'); }
+{ const fs2 = require('fs'), AP = fs2.readFileSync(__dirname + '/app.js', 'utf8'), UE = fs2.readFileSync(__dirname + '/us-engine.js', 'utf8'), CS = fs2.readFileSync(__dirname + '/style.css', 'utf8');
+  chk(AP.includes('prelev = t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30)') && AP.includes('${eur(prelev)}'), 'PC : bandeau = même formule que le cadre (aucun nouveau calcul)');
+  const ks = [...AP.matchAll(/localStorage\.setItem\(([^,]+),/g)].map(m => m[1].trim()); chk(AP.includes("KT = 'kx-theme'") && ks.includes('KT') && /v === 'light' \|\| v === 'dark'/.test(AP), 'thème : clé kx-theme seule, valeur invalide ignorée');
+  chk(/(^|\n)\.kxkpi\{display:none\}/.test(CS) && /@media \(min-width:1024px\)\{\nheader,main,\.banner\{max-width:1400px\}/.test(CS) && /@media print\{\.kxkpi,\.themebtn\{display:none!important\}\}/.test(CS), 'PC : bandeau caché sous 1024 px et à l’impression');
+  chk(CS.includes(':root[data-theme="light"]{') && CS.includes('@media (prefers-color-scheme: light){'), 'thème : clair par préférence système ou choix mémorisé');
+  chk(!/data-theme|kx-theme/.test(fs2.readFileSync(__dirname + '/export.js', 'utf8') + fs2.readFileSync(__dirname + '/us-export.js', 'utf8')), 'thème : PDF/CSV/Excel non concernés');
+  chk(UE.includes("side.innerHTML = wide() ? guideHtml(res) + checksHtml(res) : ''") && UE.includes("(wide() ? '' : guideHtml(res) + checksHtml(res))"), 'U.S. PC : To verify + What to copy dans le panneau latéral, une seule fois'); }
 process.exit(ok ? 0 : 1);

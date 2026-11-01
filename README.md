@@ -54,6 +54,9 @@ Rien n'est envoyé, mais le navigateur **conserve en localStorage, sans limite d
 - les soldes et états d'ouverture (`kryptax.balances`, `kryptax.opening`), les opérations en monnaie classique (`kryptax.fiat`) ;
 - **le nom du titulaire** lu dans les relevés (`kryptax.holders`) ;
 - le cache des cours (`kryptax.prices2`, `kryptax.binsyms`).
+- le thème clair ou sombre choisi avec le bouton lune/soleil (`kx-theme`, seulement si vous cliquez ; sinon la préférence du système s'applique).
+
+Sur un écran d'au moins 1024 px, la page passe en deux colonnes (import et réglages à gauche, résultat à droite) avec un bandeau de chiffres clés déjà calculés ; en dessous de 1024 px, l'affichage ne change pas.
 
 Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur partagé, pensez à l'utiliser.
 
