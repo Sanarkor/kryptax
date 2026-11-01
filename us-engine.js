@@ -487,13 +487,13 @@
       lines.forEach((ln, j) => { if (i === j) tot(ln, descs[j], P); else if (i < 0 && j === 0) tot(lines.join(' / '), descs[0].replace(/ with box \w\/\w/, '') + ' (choose the box)', P); else if (i >= 0) L.push({ line: ln, desc: descs[j], d: null, e: null, g: null, h: null, note: 'none in this file' }); }); };
     nc('1a', 'Short-term totals reported directly (Exception 1)', 'not used: all sales listed on Form 8949');
     pick(sh, ['1b', '2', '3'], ['Form 8949 totals with box A/G', 'Form 8949 totals with box B/H', 'Form 8949 totals with box C/I']);
-    nc('4', 'Short-term gain from Forms 6252, 4684, 6781, 8824'); nc('5', 'Net short-term gain or (loss) from Schedule(s) K-1');
+    /* v2.10 lines 4, 5, 11, 12, 13 grouped in one line (numbers checked on Schedule D (Form 1040) 2025, irs.gov/pub/irs-pdf/f1040sd.pdf, 2026-11-01) */
+    nc('4, 5, 11-13', 'Other gains (Forms 4797, 2439, 6252, 4684, 6781, 8824, Schedule K-1, capital gain distributions)', 'not computed by Kryptax - leave blank if you only have crypto');
     L.push({ line: '6', desc: 'Short-term capital loss carryover', h: K && isFinite(carry.s) ? -K.s : null, note: K && isFinite(carry.s) ? 'entered by you - to verify' : 'none entered' });
     const n7 = r2((sh.totals.h || 0) - (K ? K.s : 0)), n15 = r2((lg.totals.h || 0) - (K ? K.l : 0)), n16 = r2(n7 + n15);
     L.push({ line: '7', desc: 'Net short-term capital gain or (loss)', h: n7, note: 'lines 1a-6 from Kryptax only - to verify' });
     nc('8a', 'Long-term totals reported directly (Exception 1)', 'not used: all sales listed on Form 8949');
     pick(lg, ['8b', '9', '10'], ['Form 8949 totals with box D/J', 'Form 8949 totals with box E/K', 'Form 8949 totals with box F/L']);
-    nc('11', 'Gain from Form 4797, 2439, 6252, 4684, 6781, 8824'); nc('12', 'Net long-term gain or (loss) from Schedule(s) K-1'); nc('13', 'Capital gain distributions');
     L.push({ line: '14', desc: 'Long-term capital loss carryover', h: K && isFinite(carry.l) ? -K.l : null, note: K && isFinite(carry.l) ? 'entered by you - to verify' : 'none entered' });
     L.push({ line: '15', desc: 'Net long-term capital gain or (loss)', h: n15, note: 'lines 8a-14 from Kryptax only - to verify' });
     L.push({ line: '16', desc: 'Combine lines 7 and 15', h: n16, note: n16 > 0 ? 'gain: Form 1040 line 7a - to verify' : n16 < 0 ? 'loss: skip lines 17-20, see line 21' : 'zero: skip lines 17-21' });

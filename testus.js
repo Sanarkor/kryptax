@@ -219,7 +219,8 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([by(S, '3').d, by(S, '3').e, by(S, '3').h, by(S, '10').h], [F.parts[0].totals.d, F.parts[0].totals.e, F.parts[0].totals.h, F.parts[1].totals.h], 'no 1099-DA: line 3 = Part I box I totals, line 10 = Part II box L');
   eq([by(S, '3').h, r2s(by(S, '3').d - by(S, '3').e), by(S, '1b').h, by(S, '2').h], [22933, 22933, null, null], 'line 3 (h) = (d) - (e); lines 1b and 2 empty');
   eq([by(S, '7').h, by(S, '15').h, by(S, '16').h, by(S, '17').answer], [22933, 19950, 42883, 'Yes'], 'lines 7, 15, 16 = sums; line 17 Yes');
-  eq(['1a', '4', '5', '8a', '11', '12', '13', '18', '19', '20', '21', '22'].every(l => by(S, l).nc), true, 'undocumented or tax lines not computed');
+  eq(['1a', '4, 5, 11-13', '8a', '18', '19', '20', '21', '22'].every(l => by(S, l).nc), true, 'undocumented or tax lines not computed');
+  eq([S.lines.filter(l => /Other gains/.test(l.desc)).length, ['4', '5', '11', '12', '13'].some(n => S.lines.some(l => l.line === n)), /leave blank if you only have crypto/.test(by(S, '4, 5, 11-13').note), /^Line 4\, 5\, 11-13,Other gains/m.test(U.toCSV(r)) || /^"?Line 4, 5, 11-13/m.test(U.toCSV(r))], [1, false, true, true], 'Schedule D lines 4, 5, 11, 12, 13 grouped in one "Other gains" line, not computed');
   const G = U.scheduleD(r, 'basis', {}), H = U.scheduleD(r, 'nobasis', {});
   eq([by(G, '1b').h, by(G, '8b').h, by(H, '2').h, by(H, '9').h], [22933, 19950, 22933, 19950], 'boxes G/J -> 1b/8b, H/K -> 2/9');
   const N = U.scheduleD(r, '', {}); eq([by(N, '1b / 2 / 3').h, /to verify/.test(by(N, '1b / 2 / 3').note)], [22933, true], 'box not chosen: totals shown, to verify');

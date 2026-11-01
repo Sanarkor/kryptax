@@ -193,3 +193,10 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 - No calculation changed: rows, totals, notes and Schedule D are the same with or without the flag.
 - Flag: a sale line with a loss (network fee lines excluded) and an acquisition of the same asset (Buy, or the asset received in an exchange) dated within 30 days before or after the sale date. The lot sold itself (same acquisition date as a loss part of the sale) is not counted. Shown in the "to verify" list on screen, in a CSV/XLSX section and in the PDF summary.
 - To verify: whether the wash sale rule applies to these digital assets for the tax year (no irs.gov text checked here), what "substantially identical" means for them, and acquisitions outside this file (other platforms, spouse, retirement accounts).
+
+## New import formats and Form 1099-DA import (checked 2026-11-01) — not coded
+- No new platform format added: no other official help page documenting the export columns with a USD value per row was found. Bitstamp transaction export: columns only described by third-party sites, not on an official page. Crypto.com Exchange: the official help page explains the download, not the columns. Coinbase, Gemini, Kraken Ledgers: unchanged (see v2.0). A format will be added only from an official column description or a real anonymised export.
+- Form 1099-DA file import: not coded. No official file layout for the copy a customer downloads was verified; headers are not guessed. The 1099-DA comparison (boxes 1f and 1g typed by the user, v2.1) remains the way to use it — to verify.
+
+## v2.10 — Schedule D "Other gains" line
+- Lines 4, 5 (Part I) and 11, 12, 13 (Part II) — numbers checked on Schedule D (Form 1040) 2025, https://www.irs.gov/pub/irs-pdf/f1040sd.pdf (2026-11-01) — are shown as one line "Other gains (Forms 4797, 2439, 6252, 4684, 6781, 8824, Schedule K-1, capital gain distributions): not computed by Kryptax - leave blank if you only have crypto". Same on screen, CSV, Excel and PDF. No calculation or total changed.
