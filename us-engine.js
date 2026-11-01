@@ -548,9 +548,10 @@
     return L.map((c, i) => Object.assign(c, { i })).sort((a, b) => a.rank - b.rank || (a.line == null ? -1 : b.line == null ? 1 : a.line - b.line) || a.i - b.i).map(({ rank, line, msg }) => ({ rank, line, msg }));
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  /* v2.15 option choices kept in this browser (localStorage only): lot method, Form 8949 box, fee option, filing status.
+  /* v2.15 option choices kept in this browser (localStorage only): lot method, Form 8949 box, fee option, filing status, time zone of the file dates.
+     Manual lot picks per sale, the year and the amounts entered are not saved (they depend on the file).
      Never file data, transactions or amounts. Invalid or unreadable values are ignored (defaults used). */
-  const SET_KEY = 'kryptax.us.settings', SET_OK = { method: ['FIFO', 'HIFO', 'MANUAL'], cat: ['', 'none', 'nobasis', 'basis'], fees: Object.keys(FEE_MODES), fstat: Object.keys(FSTAT) };
+  const SET_KEY = 'kryptax.us.settings', SET_OK = { method: ['FIFO', 'HIFO', 'MANUAL'], cat: ['', 'none', 'nobasis', 'basis'], fees: Object.keys(FEE_MODES), fstat: Object.keys(FSTAT), tz: US_TZ.map(z => z[0]) };
   const pickSettings = v => { const o = {}; if (v && typeof v === 'object') for (const k in SET_OK) if (typeof v[k] === 'string' && SET_OK[k].includes(v[k])) o[k] = v[k]; return o; };
   const loadSettings = st => { try { return pickSettings(JSON.parse(st.getItem(SET_KEY))); } catch (e) { return {}; } };
   const saveSettings = (st, v) => { try { st.setItem(SET_KEY, JSON.stringify(pickSettings(v))); return true; } catch (e) { return false; } };
@@ -566,12 +567,13 @@
     let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', fstat = '', carry = {};
     let LS = null; try { LS = W0.localStorage || null; } catch (x) {}
     if (LS) { const S = loadSettings(LS); if (S.method) method = S.method; if (S.fees) fees = S.fees; if (S.cat != null) cat = S.cat; if (S.fstat != null) fstat = S.fstat; }
-    const keepSet = () => { if (LS) saveSettings(LS, { method, fees, cat, fstat }); };
+    const keepSet = () => { if (LS) saveSettings(LS, { method, fees, cat, fstat, tz: fileTz }); };
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
       tzSel.innerHTML = L.map(z => `<option value="${esc(z[0])}"${z[0] === fileTz ? ' selected' : ''}>${esc(z[1] === 'UTC' ? 'UTC' : z[1] + ' (' + z[0] + ')')}</option>`).join('');
-      tzSel.addEventListener('change', () => { fileTz = tzSel.value; if (cur) render(); }); }
+      tzSel.addEventListener('change', () => { fileTz = tzSel.value; keepSet(); if (cur) render(); }); }
+    if (LS) { const z = loadSettings(LS).tz; if (z) { fileTz = z; if (tzSel) tzSel.value = z; } }
     const lotLabel = l => `line ${l.line} · ${mdy(l.date)} · ${+l.qty.toPrecision(8)} left · ${isFinite(l.unit) ? usd(l.unit) + '/unit' : 'cost unknown'}`;
     function manualHtml(res) {
       if (!res.sales.length) return '';
@@ -663,7 +665,7 @@
         + `<label>Form 8949 box <select id="uscat">${o('', 'Not chosen — to verify', cat)}${o('none', 'No Form 1099-DA → box I / L', cat)}${o('nobasis', '1099-DA, basis not reported → H / K', cat)}${o('basis', '1099-DA, basis reported → G / J', cat)}</select></label>`
         + `<label>Network fees on transfers <select id="usfees">${Object.keys(FEE_MODES).map(k => o(k, FEE_MODES[k], fees)).join('')}</select></label>`
         + `<label>Filing status (Schedule D line 21) <select id="usfstat">${Object.keys(FSTAT).map(k => o(k, esc(FSTAT[k].replace(' - ', ' — ')), fstat)).join('')}</select></label>`
-        + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p><p class="hint">These four choices are kept in this browser only (no file data, no amounts). <a href="#" id="ussetreset">Reset saved settings</a></p></details>';
+        + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p><p class="hint">These choices and the time zone are kept in this browser only (no file data, no amounts, no manual lot picks). <a href="#" id="ussetreset">Reset saved settings</a></p></details>';
     }
     const opts = doc.createElement('div'); opts.id = 'usopts'; const imp = doc.getElementById('usimp');
     if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const drawOpts = () => { opts.innerHTML = optsHtml(); }; drawOpts();
