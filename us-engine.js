@@ -200,7 +200,9 @@
       + (F.usdOnly ? '. ' + F.usdOnly + ' fee' + (F.usdOnly > 1 ? 's' : '') + ' in USD without a fee quantity: not computed, to verify' : '') + '. Tax treatment not settled — to verify.';
   }
   const feeBlock = F => { const l = feeLine(F); return l ? `<p class="warn usfees">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>` : ''; };
-  /* v2.10 possible wash sales: a flag only, no amount changed. A sale line with a loss and an acquisition of the same asset
+  /* v2.13 wording: 26 U.S.C. 1091(a) covers losses on "shares of stock or securities" (30 days before/after, substantially identical);
+     the text neither names nor excludes crypto (uscode.house.gov, law.cornell.edu, checked 2026-11-01). No IRS crypto source cited (not verified).
+     v2.10 possible wash sales: a flag only, no amount changed. A sale line with a loss and an acquisition of the same asset
      (Buy, or asset received in an exchange) dated within 30 days before or after the sale date (tax dates). The lot sold itself
      (same acquisition date as a loss part of that sale) is not counted. Whether the rule applies to crypto is to verify. */
   const WASH_DAYS = 30;
@@ -211,7 +213,7 @@
       const buys = txs.filter(t => t.line !== o.line && isFinite(t.date) && ((t.type === 'BUY' && t.asset === o.asset) || (t.type === 'CONVERT' && t.toAsset === o.asset && t.toQty > 0))
         && Math.abs(Math.round((t.date - o.sold) / 86400000)) <= WASH_DAYS && !o.acq.has(t.date)).map(t => ({ line: t.line, date: t.date }));
       if (buys.length) out.push({ line: o.line, asset: o.asset, sold: o.sold, loss: o.loss, buys,
-        msg: `Possible wash sale, line ${o.line}: ${o.asset} sold at a loss (${usd(o.loss)}) and bought again within ${WASH_DAYS} days (line${buys.length > 1 ? 's' : ''} ${buys.map(b => b.line).join(', ')}). Loss kept as computed — to verify.` });
+        msg: `Possible wash sale pattern, line ${o.line}: ${o.asset} sold at a loss (${usd(o.loss)}) and the same asset bought within ${WASH_DAYS} days before or after (line${buys.length > 1 ? 's' : ''} ${buys.map(b => b.line).join(', ')}). 26 U.S.C. section 1091 applies to stock or securities; no verified IRS rule extends it to regular crypto assets, and a token that is legally a security could be covered. Not applied in the totals — to verify.` });
     }
     return out;
   }
