@@ -26,6 +26,7 @@
     const info = [
       'Generated: ' + now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate()) + ' ' + pad(now.getUTCHours()) + ':' + pad(now.getUTCMinutes()) + ' UTC',
       'Lot method: ' + (METHOD[T.method] || METHOD.FIFO),
+      'Network fees on transfers: ' + (eng().FEE_MODES[(T.fees || {}).mode] || eng().FEE_MODES.IGNORE) + ' - tax treatment not settled, to verify',
       'Wallets: ' + (T.wallets && T.wallets.length ? T.wallets.join(', ') : 'one (no wallet column)'),
       'Form 8949 situation: ' + (eng().CATNOTE[F.cat] || 'not chosen - to verify'),
       'Tax year: ' + (T.year || 'all years') + (T.tz ? ' (times in file: ' + T.tz.file + '; tax dates: ' + T.tz.tax + ', to verify)' : ' (sale dates in UTC, to verify)'),
@@ -35,6 +36,7 @@
       'Total gain or loss: ' + usd(T.gain)
     ];
     if (T.income && T.income.count) info.push('Income (staking / airdrops / interest): ' + usd(T.income.usd) + ' (' + (T.income.count - T.income.unknown) + ' of ' + T.income.count + ' lines' + (T.income.unknown ? '; ' + T.income.unknown + ' without USD value, to verify' : '') + ') - ordinary income, to verify; no tax rates applied');
+    if (T.fees && eng().feeLine(T.fees)) info.push('Network fees: ' + eng().feeLine(T.fees).replace(/ — /g, ' - '));
     const K = eng().carryLines(res, opts.carry);
     if (K) info.push('Capital loss carryover you entered: short-term ' + usd(-K.s) + ' (Schedule D line 6), long-term ' + usd(-K.l) + ' (line 14). Net with this file: short-term ' + usd(K.net7) + ', long-term ' + usd(K.net15) + '. ' + K.note);
     const DA = eng().daLines(res, opts.da);

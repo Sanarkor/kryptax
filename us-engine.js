@@ -183,6 +183,27 @@
     const t = String(raw || '').toLowerCase();
     return /stak/.test(t) ? 'Staking' : /airdrop/.test(t) ? 'Airdrop' : /reward|mining|learn/.test(t) ? 'Reward' : /interest|earn/.test(t) ? 'Interest' : 'Income';
   }
+  /* v2.8 network fees paid in the transferred asset (sent quantity above received quantity). Tax treatment not settled — to verify.
+     IGNORE (default, same results as before v2.8): the fee units leave the wallet, their cost basis is removed (shown in the result).
+     DISPOSE: the fee units are a sale: one Form 8949 line, proceeds = USD value of the fee from the file (Fee column, else the line's Total
+       pro rata), basis = actual lots taken by the lot method, term by holding period. No USD value in the file: line "to verify", out of the totals.
+     CAPITALIZE: the cost basis of the fee units is added to the units received, pro rata, original acquisition dates kept; no Form 8949 line. */
+  const FEE_MODES = { IGNORE: 'Ignore (fee units removed, basis not used)', DISPOSE: 'Dispose (fee units treated as a sale)', CAPITALIZE: 'Capitalize (fee basis added to the units received)' };
+  /* result block (also used to explain the option in the exports) */
+  function feeLine(F) {
+    if (!F || !(F.count || F.usdOnly)) return '';
+    const n = F.count + ' transfer' + (F.count === 1 ? '' : 's') + ' with network fee units';
+    const what = F.mode === 'DISPOSE' ? 'cost basis ' + usd(F.basis) + ' used in the network fee lines (Form 8949, to verify)'
+      : F.mode === 'CAPITALIZE' ? 'cost basis ' + usd(F.capitalized) + ' added to the units received' + (F.removed ? '; ' + usd(F.removed) + ' removed (no received lot with a known basis)' : '')
+      : 'cost basis removed: ' + usd(F.removed) + ' (not used anywhere)';
+    return (F.count ? n + ' (option ' + F.mode + '): ' + what + (F.unknown ? '; ' + F.unknown + ' with units of unknown basis' : '') + (F.mode === 'DISPOSE' && F.noUsd ? '; ' + F.noUsd + ' without a USD value in the file (to verify, not in the totals)' : '') : 'Network fees (option ' + F.mode + ')')
+      + (F.usdOnly ? '. ' + F.usdOnly + ' fee' + (F.usdOnly > 1 ? 's' : '') + ' in USD without a fee quantity: not computed, to verify' : '') + '. Tax treatment not settled — to verify.';
+  }
+  const feeBlock = F => { const l = feeLine(F); return l ? `<p class="warn usfees">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>` : ''; };
+  function feeTotals(ev, mode, usdOnly) {
+    return { mode, count: ev.length, basis: r2(ev.reduce((a, e) => a + e.basis, 0)), capitalized: r2(ev.reduce((a, e) => a + e.capitalized, 0)),
+      removed: r2(ev.reduce((a, e) => a + (mode === 'IGNORE' || e.lost ? e.basis : 0), 0)), unknown: ev.filter(e => e.unknown).length, noUsd: ev.filter(e => e.usd == null).length, usdOnly: usdOnly || 0 };
+  }
   function compute(txs, opts) {
     opts = opts || {};
     if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: shiftTz(t.date, opts.fileTz || 'UTC', opts.taxTz || 'UTC') }));
@@ -190,7 +211,45 @@
     const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
     const nextIdx = L => { if (method !== 'HIFO') return 0; let b = 0; for (let i = 1; i < L.length; i++) if (unit(L[i]) > unit(L[b]) + 1e-9) b = i; return b; };
     const lots = {}, rows = [], notes = [], income = [], key = (w, a) => (w || '') + '|' + a, wallets = new Set();
-    const add = (w, asset, qty, cost, date, line) => { wallets.add(w || ''); (lots[key(w, asset)] = lots[key(w, asset)] || []).push({ qty, cost, date, line }); };
+    const add = (w, asset, qty, cost, date, line) => { wallets.add(w || ''); const lot = { qty, cost, date, line }; (lots[key(w, asset)] = lots[key(w, asset)] || []).push(lot); return lot; };
+    /* v2.8 cost-basis ledger (finite amounts only): in = sold + remaining + removed. Capitalized basis stays in "remaining" (it moved into other lots). */
+    const feeMode = FEE_MODES[opts.fees] ? opts.fees : 'IGNORE', fin = v => isFinite(v) ? v : 0;
+    const basis = { in: 0, sold: 0, remaining: 0, removedFees: 0, removedUnpaired: 0, capitalized: 0 }, feeEvents = [];
+    const addNew = (w, asset, qty, cost, date, line) => { basis.in += fin(cost); return add(w, asset, qty, cost, date, line); };
+    /* Units that leave a wallet in a transfer without arriving (network fee paid in the asset): handled by the chosen option.
+       pieces = the fee units with their own lot cost/date (lot method order); recv = lots created at the destination. */
+    const feeUnits = (t, feeQty, pieces, recv) => {
+      const known = pieces.reduce((a, p) => a + fin(p.cost), 0), unknown = pieces.some(p => !isFinite(p.cost));
+      const feeUsd = t.fee > 0 ? t.fee : isFinite(t.usd) ? t.usd * feeQty / t.qty : NaN, ev = { line: t.line, date: t.date, asset: t.asset, qty: feeQty, basis: known, unknown, usd: isFinite(feeUsd) ? feeUsd : null, mode: feeMode, capitalized: 0 };
+      if (feeMode === 'DISPOSE') {
+        for (const p of pieces) {
+          const pr = isFinite(feeUsd) ? feeUsd * p.qty / feeQty : NaN;
+          const row = { line: t.line, desc: (+p.qty.toPrecision(10)) + ' ' + t.asset + ' network fee (to verify)', asset: t.asset, wallet: t.wallet || '', qty: p.qty, acquired: p.none ? null : p.date, sold: t.date,
+            proceeds: r2(pr), cost: r2(p.cost), gain: isFinite(pr) && isFinite(p.cost) ? r2(pr - p.cost) : null, term: p.none ? null : (isLong(p.date, t.date) ? 'long' : 'short'), convert: false, fee: true, status: 'ok' };
+          if (p.none) row.status = 'to verify: network fee units not found in the wallet (missing cost basis)';
+          else if (!isFinite(p.cost)) row.status = 'to verify: purchase price unknown (missing cost basis)';
+          else if (!isFinite(pr)) row.status = 'to verify: USD value of the network fee not in the file';
+          basis.sold += fin(p.cost); rows.push(row);
+        }
+      } else if (feeMode === 'CAPITALIZE') {
+        const R0 = recv.filter(l => isFinite(l.cost)), q = R0.reduce((a, l) => a + l.qty, 0);
+        if (q > 0 && known) { for (const l of R0) l.cost += known * l.qty / q; basis.capitalized += known; ev.capitalized = known; }
+        else if (known) { basis.removedFees += known; ev.lost = true; }
+      } else basis.removedFees += known;
+      feeEvents.push(ev);
+      return ev;
+    };
+    const feeNote = (t, gap) => feeMode === 'DISPOSE' ? ` — option DISPOSE: the ${+gap.toPrecision(10)} ${t.asset} are treated as a sale (network fee, to verify)` : feeMode === 'CAPITALIZE' ? ` — option CAPITALIZE: their cost basis is added to the units received (to verify)` : '';
+    /* splits the pieces taken from the sending wallet: first `moved` units go to the destination, the rest are fee units */
+    const moveAndFee = (t, r, toW, moved, dateIn, lineIn) => {
+      const recv = [], feeP = []; let m = moved;
+      for (const p of r.pieces) { const q = Math.min(p.qty, m); if (q > 1e-12) recv.push(add(toW, t.asset, q, isFinite(p.cost) ? p.cost * q / p.qty : NaN, p.date, p.line)); m -= q;
+        const rest = p.qty - Math.max(q, 0); if (rest > 1e-12) feeP.push({ qty: rest, cost: isFinite(p.cost) ? p.cost * rest / p.qty : NaN, date: p.date, line: p.line }); }
+      if (m > 1e-12) add(toW, t.asset, m, NaN, dateIn, lineIn);
+      const gap = t.qty - moved, found = feeP.reduce((a, p) => a + p.qty, 0);
+      if (gap > 1e-12 && gap - found > 1e-12) feeP.push({ qty: gap - found, cost: NaN, date: null, none: true });
+      return gap > 1e-12 ? feeUnits(t, gap, feeP, recv) : null;
+    };
     /* takes qty units FIFO from a wallet; returns the pieces [{qty, cost, date}] and the quantity not found */
     const take = (w, asset, qty) => {
       const L = lots[key(w, asset)] || [], out = []; let left = qty;
@@ -201,28 +260,29 @@
       }
       return { pieces: out, missing: left > 1e-12 ? left : 0 };
     };
-    const { pairs, used } = pairTransfers(txs), transfers = { paired: 0, toVerify: 0 };
+    const { pairs, used } = pairTransfers(txs), transfers = { paired: 0, toVerify: 0 }, feeUsdOnly = [];
     for (const t of txs) {
       if (t.wallet) wallets.add(t.wallet);
-      if (t.type === 'BUY') add(t.wallet, t.asset, t.qty, isFinite(t.usd) ? t.usd + t.fee : NaN, t.date, t.line);
-      else if (t.type === 'INCOME') { income.push(t); add(t.wallet, t.asset, t.qty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line); }
+      if (t.type === 'BUY') addNew(t.wallet, t.asset, t.qty, isFinite(t.usd) ? t.usd + t.fee : NaN, t.date, t.line);
+      else if (t.type === 'INCOME') { income.push(t); addNew(t.wallet, t.asset, t.qty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line); }
       else if (t.type === 'OUT' && pairs.has(t)) {
         const i = pairs.get(t), r = take(t.wallet, t.asset, t.qty), gap = t.qty - i.qty; transfers.paired++;
-        let moved = i.qty; // received units keep their original date and cost (FIFO pieces from the sending wallet)
-        for (const p of r.pieces) { const q = Math.min(p.qty, moved); if (q > 1e-12) add(i.wallet, t.asset, q, isFinite(p.cost) ? p.cost * q / p.qty : NaN, p.date, p.line); moved -= q; }
-        if (moved > 1e-12) add(i.wallet, t.asset, moved, NaN, i.date, i.line);
+        moveAndFee(t, r, i.wallet, i.qty, i.date, i.line); // received units keep their original date and cost; the rest = network fee units (v2.8 option)
         notes.push({ line: t.line, kind: 'transfer', ok: true, msg: `Transfer ${+t.qty.toPrecision(10)} ${t.asset}${t.wallet || i.wallet ? ' from ' + (t.wallet || '?') + ' to ' + (i.wallet || '?') : ''} (lines ${t.line} → ${i.line}): not taxable, original dates and cost kept.` });
         if (r.missing > 1e-12) notes.push({ line: t.line, kind: 'transfer', msg: `Transfer line ${t.line}: ${+r.missing.toPrecision(10)} ${t.asset} sent but not found in ${t.wallet || 'the wallet'} (missing cost basis, to verify).` });
-        if (gap > 1e-12 || t.fee > 0) notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line}${gap > 1e-12 ? ': ' + (+gap.toPrecision(10)) + ' ' + t.asset + ' not received' : ''}${t.fee > 0 ? ' ($' + t.fee.toFixed(2) + ')' : ''} — tax treatment to verify (not counted as a sale here).` });
+        if (gap <= 1e-12 && t.fee > 0) feeUsdOnly.push(t.line);
+        if (gap > 1e-12 || t.fee > 0) notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line}${gap > 1e-12 ? ': ' + (+gap.toPrecision(10)) + ' ' + t.asset + ' not received' : ''}${t.fee > 0 ? ' ($' + t.fee.toFixed(2) + ')' : ''} — tax treatment to verify${feeMode === 'IGNORE' ? ' (not counted as a sale here)' : feeNote(t, gap)}.` });
       } else if (t.type === 'OUT' || t.type === 'TRANSFER') {
         if (t.type === 'TRANSFER' && t.toWallet && t.toWallet !== t.wallet) { // one-line transfer with a destination wallet
-          const r = take(t.wallet, t.asset, t.qty); transfers.paired++;
-          for (const p of r.pieces) add(t.toWallet, t.asset, p.qty, p.cost, p.date, p.line);
-          if (r.missing > 1e-12) add(t.toWallet, t.asset, r.missing, NaN, t.date, t.line);
+          const r = take(t.wallet, t.asset, t.qty), gap1 = t.toQty > 0 && t.toQty < t.qty * (1 - 1e-9) ? t.qty - t.toQty : 0; transfers.paired++;
+          if (!gap1) { for (const p of r.pieces) add(t.toWallet, t.asset, p.qty, p.cost, p.date, p.line);
+            if (r.missing > 1e-12) add(t.toWallet, t.asset, r.missing, NaN, t.date, t.line); }
+          else { moveAndFee(t, r, t.toWallet, t.qty - gap1, t.date, t.line); // v2.8: Received Quantity below Quantity = network fee units
+            notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line}: ${+gap1.toPrecision(10)} ${t.asset} not received — tax treatment to verify${feeMode === 'IGNORE' ? ' (not counted as a sale here)' : feeNote(t, gap1)}.` }); }
           notes.push({ line: t.line, kind: 'transfer', ok: true, msg: `Transfer ${+t.qty.toPrecision(10)} ${t.asset} from ${t.wallet || '?'} to ${t.toWallet} (line ${t.line}): not taxable, original dates and cost kept.` });
-          if (t.fee > 0) notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line} ($${t.fee.toFixed(2)}) — tax treatment to verify.` });
+          if (t.fee > 0 && !gap1) notes.push({ line: t.line, kind: 'transfer', msg: `Network fee on transfer line ${t.line} ($${t.fee.toFixed(2)}) — tax treatment to verify.${feeMode === 'IGNORE' ? '' : ' Fee in USD without a fee quantity: not computed.'}` });
         } else { // unpaired send: units leave the wallet, no gain computed, flagged
-          take(t.wallet, t.asset, t.qty); transfers.toVerify++;
+          const r = take(t.wallet, t.asset, t.qty); transfers.toVerify++; basis.removedUnpaired += r.pieces.reduce((a, p) => a + fin(p.cost), 0);
           notes.push({ line: t.line, kind: 'transfer', msg: `Line ${t.line}: ${+t.qty.toPrecision(10)} ${t.asset} sent${t.wallet ? ' from ' + t.wallet : ''} with no matching receive — own wallet, gift or payment? To verify (no gain computed).` });
         }
       } else if (t.type === 'IN') {
@@ -243,6 +303,7 @@
           const rest = take(t.wallet, t.asset, t.qty - got); r.pieces = r.pieces.concat(rest.pieces.map(x => Object.assign(x, { fallback: short > 0 }))); r.missing = rest.missing;
           if (short) notes.push({ line: t.line, kind: 'lots', msg: `Sale line ${t.line}: the chosen lot (line ${pk.lot}) has only ${+(want - short).toPrecision(10)} ${t.asset} left in this wallet; ${+short.toPrecision(10)} taken by FIFO instead — to verify.` });
         } else r = take(t.wallet, t.asset, t.qty);
+        basis.sold += r.pieces.reduce((a, p) => a + fin(p.cost), 0);
         const pieces = r.pieces.concat(r.missing > 1e-12 ? [{ qty: r.missing, cost: NaN, date: null, none: true }] : []);
         for (const p of pieces) {
           const q = p.qty, pr = isFinite(proceeds) ? proceeds * q / t.qty : NaN, cost = p.cost;
@@ -260,7 +321,7 @@
           rows.push(row);
         }
         if (t.type === 'CONVERT') { // the asset received is acquired at its fair market value = USD value of the exchange (FAQ Q18)
-          if (t.toAsset && t.toQty > 0) add(t.wallet, t.toAsset, t.toQty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line);
+          if (t.toAsset && t.toQty > 0) addNew(t.wallet, t.toAsset, t.toQty, isFinite(t.usd) ? t.usd : NaN, t.date, t.line);
           else notes.push({ line: t.line, msg: 'Exchange without received asset/quantity: the new lot is missing (to verify).' });
         }
       }
@@ -275,7 +336,9 @@
       status: isFinite(t.usd) ? 'ok' : 'to verify: USD value when received is missing (not in the total)' }));
     if (opts.fileTz || opts.taxTz) totals.tz = { file: opts.fileTz || 'UTC', tax: opts.taxTz || 'UTC' };
     totals.transfers = transfers; totals.method = method; wallets.delete(''); totals.wallets = [...wallets];
-    return { rows, totals, notes, sales, income: incomeRows };
+    for (const k in lots) for (const l of lots[k]) basis.remaining += fin(l.cost);
+    totals.basis = basis; totals.fees = feeTotals(feeEvents, feeMode, feeUsdOnly.length + txs.filter(t => t.type === 'TRANSFER' && t.toWallet && t.toWallet !== t.wallet && t.fee > 0 && !(t.toQty > 0 && t.toQty < t.qty * (1 - 1e-9))).length);
+    return { rows, totals, notes, sales, income: incomeRows, feeEvents };
   }
   /* Tax year view: sales by the year of the sale date, income by the year received (UTC dates, like mdy; your local date may differ — to verify). */
   function years(res) { return [...new Set(res.rows.map(r => new Date(r.sold).getUTCFullYear()).concat(res.income.map(r => new Date(r.date).getUTCFullYear())))].filter(isFinite).sort(); }
@@ -287,8 +350,9 @@
       short: { proceeds: sum(S, 'proceeds'), cost: sum(S, 'cost'), gain: sum(S, 'gain') }, long: { proceeds: sum(Lg, 'proceeds'), cost: sum(Lg, 'cost'), gain: sum(Lg, 'gain') },
       income: { count: income.length, usd: r2(income.reduce((a, r) => a + (r.usd == null ? 0 : r.usd), 0)), unknown: income.filter(r => r.usd == null).length } });
     totals.gain = r2(totals.short.gain + totals.long.gain);
-    const lines = new Set(rows.map(r => r.line));
-    return Object.assign({}, res, { rows, income, totals, sales: res.sales.filter(x => lines.has(x.line)) });
+    const lines = new Set(rows.map(r => r.line)), fe = (res.feeEvents || []).filter(e => inY(e.date));
+    if (res.totals.fees) totals.fees = feeTotals(fe, res.totals.fees.mode, res.totals.fees.usdOnly);
+    return Object.assign({}, res, { rows, income, totals, feeEvents: fe, sales: res.sales.filter(x => lines.has(x.line)) });
   }
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -321,6 +385,8 @@
     row('kv', ['Tax year', T.year ? String(T.year) : 'All years']);
     if (T.tz) row('kv', ['Time zones', 'File: ' + T.tz.file, 'Tax dates: ' + T.tz.tax + ' (to verify)']);
     row('kv', ['Lot method', METHOD_TXT[T.method] || METHOD_TXT.FIFO]);
+    row('kv', ['Network fees on transfers', FEE_MODES[(T.fees || {}).mode] || FEE_MODES.IGNORE, 'Tax treatment not settled - to verify']);
+    if (T.fees && feeLine(T.fees)) row('kv', ['Network fees', feeLine(T.fees).replace(/ — /g, ' - ')]);
     row('kv', ['Form 8949 situation', CATNOTE[F.cat] || 'not chosen - to verify']);
     row('kv', ['Sales', T.sales + ' (' + T.rows + ' lines' + (T.toVerify ? ', ' + T.toVerify + ' to verify' : '') + ')']);
     if (F.cat && F.cat !== 'none') row('kv', ['With a Form 1099-DA', 'Columns (d) and (e) should match the form; corrections go in (f) and (g) - to verify']);
@@ -420,7 +486,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
+  const api = { FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -428,7 +494,7 @@
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
-    let last = null, cur = null, pdfN = '', method = 'FIFO', picks = {}, year = null, mcost = {}, da = {}, cat = '', carry = {};
+    let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', carry = {};
     let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
@@ -444,6 +510,7 @@
     out.addEventListener('change', e => {
       const t = e.target; if (!cur) return;
       if (t.id === 'usmethod') { method = t.value; render(); return; }
+      if (t.id === 'usfees') { fees = FEE_MODES[t.value] ? t.value : 'IGNORE'; render(); return; }
       if (t.id === 'uscat') { cat = t.value; render(); return; }
       if (t.classList.contains('uscl')) { const v = parseFloat(String(t.value || '').replace(/[$,()\s-]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) carry[k] = v; else delete carry[k]; render(); return; }
       if (t.classList.contains('usda')) { const v = parseFloat(String(t.value || '').replace(/[$,\s]/g, '')), k = (year || 'all') + t.dataset.k; if (isFinite(v)) da[k] = v; else delete da[k]; render(); return; }
@@ -463,7 +530,7 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; pdfN = ''; inp.value = ''; out.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
@@ -524,7 +591,7 @@
         + `<p class="hint">Part I (short term): box ${esc(F.parts[0].boxText)}, totals to ${esc(F.parts[0].scheduleD)}. Part II (long term): box ${esc(F.parts[1].boxText)}, totals to ${esc(F.parts[1].scheduleD)}. If only some sales are on a Form 1099-DA, each kind needs its own Part — to verify.</p>`;
     }
     function render() {
-      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
+      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
       const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
@@ -537,6 +604,7 @@
           + `<div class="scroll"><table class="us8949 usincome"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value USD</th><th>Type</th></tr>${res.income.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${mdy(r.date)}</td><td>${esc(r.asset)}</td><td>${+r.qty.toPrecision(10)}</td><td>${r.usd == null ? 'to verify' : usd(r.usd)}</td><td>${r.type}</td></tr>`).join('')}</table></div>`
           + `<p><button type="button" id="usinccsv" class="small">Download CSV (income)</button></p>` : '')
         + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (lots tracked in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
+        + feeBlock(T.fees)
         + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
         + (tvN.length ? `<div class="warn"><p>${tvN.length} item${tvN.length > 1 ? 's' : ''} to verify:</p><ul>${tvN.slice(0, 20).map(n => '<li>' + esc(n.msg) + '</li>').join('')}</ul></div>` : '')
         + (()=>{ const M = full.rows.filter(r => r.status.startsWith('to verify: no purchase found') || r.user); if (!M.length) return '';
@@ -551,6 +619,7 @@
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
         + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
         + (method === 'MANUAL' ? manualHtml(res) : '')
+        + `<div class="grid"><label>Network fees on transfers <select id="usfees">${Object.keys(FEE_MODES).map(k => `<option value="${k}"${fees === k ? ' selected' : ''}>${FEE_MODES[k]}</option>`).join('')}</select></label></div><p class="hint">Network fees paid in crypto on transfers between your wallets: tax treatment not settled — to verify. Default: Ignore (same results as before).</p>`
         + catSel()
         + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsx" class="small">Download Excel (.xlsx)</button>' : ''}${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;

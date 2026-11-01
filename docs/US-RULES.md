@@ -154,3 +154,32 @@ Shown on screen, in the CSV (section) and in the PDF (separate last page).
 
 - Dates ending with an explicit UTC marker (`2025-01-10 14:00:00 UTC`, `GMT`, `Z`, `+00:00`, `+0000`) are accepted and read as UTC instead of "unreadable date". Other offsets are not converted (unreadable, to verify). Keep "Time zone of your file" on UTC for such files.
 - Total / fee convention (unchanged, now stated in the import help): **Total (USD) = amount before fee**. Buy: cost basis = Total + Fee (fees are part of basis, i8949 "Basis and Recordkeeping"). Sell: proceeds = Total − Fee. If your file's Total already includes the fee, leave Fee empty to avoid counting it twice. Without Total, Total = Price × Quantity. Covered by tests.
+
+## v2.8 — Network fees on transfers (option, tax treatment to verify)
+
+No IRS source was verified for crypto network fees paid in the transferred asset on a transfer between the user's own wallets. Everything below is an **option** for the user, not a rule: to verify.
+
+### Audit (before v2.8): where cost basis left without a gain/loss or a carryover
+1. Paired Send/Receive: the sent quantity is taken from the lots, only the received quantity moves; the basis of the difference (network fee units) disappeared, with only a note. A Fee in USD was only noted.
+2. Paired transfer moving more units than the sending wallet holds: destination lot without basis ("to verify"); no known basis lost.
+3. One-line Transfer with To Wallet: the full Quantity moved, Received Quantity ignored (destination overstated when Received < Quantity); Fee in USD only noted.
+4. Unpaired Send / Transfer without To Wallet (gift, payment, own wallet?): the whole basis leaves, no gain computed (note "to verify"). Not covered by the option; now counted as "removedUnpaired".
+5. Unpaired Receive: lot without basis ("to verify").
+6. Sale with missing units: lines "to verify"; no known basis lost.
+Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
+
+### What is coded
+- Option "Network fees on transfers" (U.S.A. mode only, next to the lot method): IGNORE (default), DISPOSE, CAPITALIZE. Shown in the CSV/XLSX/PDF headers and a "Network fees" summary line.
+- Fee units = sent quantity minus received quantity (paired Send/Receive; one-line Transfer with Received Quantity below Quantity). The pieces are taken in lot-method order: moved units first, fee units last (MANUAL: transfers follow FIFO, as before).
+- Fee USD value: only from the file — the Fee (USD) column, otherwise the line Total pro rata to the fee units. Missing: "to verify", out of the totals, never 0.
+- A Fee in USD without fee units (sent = received): reported, not computed.
+- IGNORE: results unchanged from v2.7 (except a one-line Transfer with Received Quantity below Quantity, now moving only the received units); the removed basis is shown.
+- DISPOSE: one Form 8949 line per fee lot piece, "network fee (to verify)", proceeds = fee USD value, basis from the actual lot, short/long by holding period.
+- CAPITALIZE: the basis of the fee units is added to the received units pro rata (finite-cost lots only), acquisition dates kept, no Form 8949 line. If no received lot has a known basis, the amount is counted as removed.
+- Ledger in the result: basis in = sold + remaining + removed (fees) + removed (unpaired sends); capitalized basis is part of "remaining".
+
+### Still to verify (not decided here)
+- Which treatment applies (ignore, disposal, added to basis), and whether a fee on a self-transfer can be a disposal.
+- Holding period of capitalized fee basis.
+- Fees paid in another asset than the one transferred (not handled).
+- Unpaired sends (gift, payment) and unpaired receives.
