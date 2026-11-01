@@ -2,6 +2,7 @@
 const fs = require('fs'), U = require('./us-engine.js');
 let ok = 0, ko = 0;
 const eq = (a, b, n) => { const s = JSON.stringify(a) === JSON.stringify(b); s ? ok++ : ko++; console.log((s ? 'OK    ' : 'ÉCHEC ') + n + (s ? '' : ' → ' + JSON.stringify(a) + ' ≠ ' + JSON.stringify(b))); };
+const r2s = v => Math.round(v * 100) / 100;
 const D = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
 const run = csv => U.compute(U.fromCSVText(csv).txs);
 
@@ -212,4 +213,23 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([c.includes('Schedule D line 6 - short-term carryover,-1000.00'), c.includes('Schedule D line 14 - long-term carryover,0.00'), /Capital loss carryover/.test(U.toCSV(r))], [true, true, false], 'CSV: carryover section only when entered');
   const X = require('./us-export.js');
   eq([X.summaryData(r, { carry: { l: 500 } }).info.some(l => /long-term -\$500\.00 \(line 14\)/.test(l)), X.summaryData(r, {}).info.some(l => /carryover/.test(l))], [true, false], 'PDF: carryover line only when entered'); }
+// v2.5 Schedule D draft
+{ const by = (S, l) => S.lines.find(x => x.line === l), F = U.form8949(r, 'none');
+  const S = U.scheduleD(r, 'none', {});
+  eq([by(S, '3').d, by(S, '3').e, by(S, '3').h, by(S, '10').h], [F.parts[0].totals.d, F.parts[0].totals.e, F.parts[0].totals.h, F.parts[1].totals.h], 'no 1099-DA: line 3 = Part I box I totals, line 10 = Part II box L');
+  eq([by(S, '3').h, r2s(by(S, '3').d - by(S, '3').e), by(S, '1b').h, by(S, '2').h], [22933, 22933, null, null], 'line 3 (h) = (d) - (e); lines 1b and 2 empty');
+  eq([by(S, '7').h, by(S, '15').h, by(S, '16').h, by(S, '17').answer], [22933, 19950, 42883, 'Yes'], 'lines 7, 15, 16 = sums; line 17 Yes');
+  eq(['1a', '4', '5', '8a', '11', '12', '13', '18', '19', '20', '21', '22'].every(l => by(S, l).nc), true, 'undocumented or tax lines not computed');
+  const G = U.scheduleD(r, 'basis', {}), H = U.scheduleD(r, 'nobasis', {});
+  eq([by(G, '1b').h, by(G, '8b').h, by(H, '2').h, by(H, '9').h], [22933, 19950, 22933, 19950], 'boxes G/J -> 1b/8b, H/K -> 2/9');
+  const N = U.scheduleD(r, '', {}); eq([by(N, '1b / 2 / 3').h, /to verify/.test(by(N, '1b / 2 / 3').note)], [22933, true], 'box not chosen: totals shown, to verify');
+  const C = U.scheduleD(r, 'none', { s: 30000, l: 1000 });
+  eq([by(C, '6').h, by(C, '7').h, by(C, '14').h, by(C, '15').h, by(C, '16').h, by(C, '17').answer], [-30000, -7067, -1000, 18950, 11883, 'Yes'], 'carryover: lines 6/14 negative, 7/15/16 netted');
+  const C2 = U.scheduleD(r, 'none', { s: 30000, l: 30000 });
+  eq([by(C2, '16').h, by(C2, '17').answer, by(C2, '21').nc], [-17117, null, true], 'line 16 loss: 17 skipped, 21 not computed');
+  const c = U.toCSV(r, { cat: 'none' }).split('\n');
+  eq([c.includes('Schedule D (Form 1040) - draft - Draft to verify - not tax advice'), c.includes('3,Form 8949 totals with box C/I,53963.00,31030.00,,22933.00,'), c.some(l => /^21,.*not computed by Kryptax/.test(l))], [true, true, true], 'CSV: Schedule D section');
+  const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
+  const t = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, r, { cat: 'none' }).output('arraybuffer')) }).toString().split('\f').filter(p => p.trim());
+  eq([t.length >= 2, /Schedule D \(Form 1040\) - draft/.test(t[t.length - 1]), /Draft to verify - not tax advice/.test(t[t.length - 1]), /Schedule D \(Form 1040\) - draft/.test(t[0])], [true, true, true, false], 'PDF: Schedule D on a separate last page'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;

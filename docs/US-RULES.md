@@ -124,3 +124,20 @@ Source: IRS, Instructions for Schedule D (Form 1040) (2025), "Capital Loss Carry
 - Kryptax shows the net short-term and long-term amounts for this file plus the carryover. These equal Schedule D lines 7 and 15 only if there are no other capital items — to verify.
 - Shown on screen, and in the CSV and PDF only when entered.
 - Not done: the capital loss limit of Schedule D line 21, any tax rate or tax computation, wash sales.
+
+## Schedule D draft (v2.5)
+
+Sources: Schedule D (Form 1040) 2025 (irs.gov/pub/irs-pdf/f1040sd.pdf) and Instructions for Schedule D (Form 1040) 2025 (irs.gov/instructions/i1040sd), checked 2026-11-01.
+
+Filled (plain sums of Kryptax data, "Draft to verify — not tax advice"):
+- 1b / 2 / 3: Form 8949 Part I totals with box G / H / I (the box chosen in the selector). 8b / 9 / 10: Part II totals with box J / K / L. Box not chosen: totals shown on "1b / 2 / 3" and "8b / 9 / 10", to verify.
+- 6 and 14: carryover typed by the user, shown in parentheses (negative).
+- 7: combine lines 1a-6; 15: combine lines 8a-14 (column h). Only Kryptax items — to verify.
+- 16: combine lines 7 and 15. Gain → Form 1040 line 7a; loss → skip 17-20, go to 21; zero → skip 17-21 (as printed on the form).
+- 17: "Are lines 15 and 16 both gains?" answered Yes/No when line 16 is a gain.
+
+Not computed by Kryptax (shown greyed):
+- 1a / 8a (Exception 1 — all sales are listed on Form 8949 instead), 4, 5, 11, 12, 13 (other forms, K-1, distributions).
+- 18, 19 (worksheets), 20 and 22 (tax worksheets), 21 (loss limit depends on filing status).
+
+Shown on screen, in the CSV (section) and in the PDF (separate last page).
