@@ -200,6 +200,21 @@
       + (F.usdOnly ? '. ' + F.usdOnly + ' fee' + (F.usdOnly > 1 ? 's' : '') + ' in USD without a fee quantity: not computed, to verify' : '') + '. Tax treatment not settled — to verify.';
   }
   const feeBlock = F => { const l = feeLine(F); return l ? `<p class="warn usfees">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>` : ''; };
+  /* v2.10 possible wash sales: a flag only, no amount changed. A sale line with a loss and an acquisition of the same asset
+     (Buy, or asset received in an exchange) dated within 30 days before or after the sale date (tax dates). The lot sold itself
+     (same acquisition date as a loss part of that sale) is not counted. Whether the rule applies to crypto is to verify. */
+  const WASH_DAYS = 30;
+  function washFlags(rows, txs) {
+    const out = [], by = new Map();
+    for (const r of rows) if (!r.fee && r.gain != null && r.gain < 0) { const o = by.get(r.line) || { line: r.line, asset: r.asset, sold: r.sold, loss: 0, acq: new Set() }; o.loss = r2(o.loss + r.gain); o.acq.add(r.acquired); by.set(r.line, o); }
+    for (const o of by.values()) {
+      const buys = txs.filter(t => t.line !== o.line && isFinite(t.date) && ((t.type === 'BUY' && t.asset === o.asset) || (t.type === 'CONVERT' && t.toAsset === o.asset && t.toQty > 0))
+        && Math.abs(Math.round((t.date - o.sold) / 86400000)) <= WASH_DAYS && !o.acq.has(t.date)).map(t => ({ line: t.line, date: t.date }));
+      if (buys.length) out.push({ line: o.line, asset: o.asset, sold: o.sold, loss: o.loss, buys,
+        msg: `Possible wash sale, line ${o.line}: ${o.asset} sold at a loss (${usd(o.loss)}) and bought again within ${WASH_DAYS} days (line${buys.length > 1 ? 's' : ''} ${buys.map(b => b.line).join(', ')}). Loss kept as computed — to verify.` });
+    }
+    return out;
+  }
   function feeTotals(ev, mode, usdOnly) {
     return { mode, count: ev.length, basis: r2(ev.reduce((a, e) => a + e.basis, 0)), capitalized: r2(ev.reduce((a, e) => a + e.capitalized, 0)),
       removed: r2(ev.reduce((a, e) => a + (mode === 'IGNORE' || e.lost ? e.basis : 0), 0)), unknown: ev.filter(e => e.unknown).length, noUsd: ev.filter(e => e.usd == null).length, usdOnly: usdOnly || 0 };
@@ -338,7 +353,7 @@
     totals.transfers = transfers; totals.method = method; wallets.delete(''); totals.wallets = [...wallets];
     for (const k in lots) for (const l of lots[k]) basis.remaining += fin(l.cost);
     totals.basis = basis; totals.fees = feeTotals(feeEvents, feeMode, feeUsdOnly.length + txs.filter(t => t.type === 'TRANSFER' && t.toWallet && t.toWallet !== t.wallet && t.fee > 0 && !(t.toQty > 0 && t.toQty < t.qty * (1 - 1e-9))).length);
-    return { rows, totals, notes, sales, income: incomeRows, feeEvents };
+    return { rows, totals, notes, sales, income: incomeRows, feeEvents, wash: washFlags(rows, txs) };
   }
   /* Tax year view: sales by the year of the sale date, income by the year received (UTC dates, like mdy; your local date may differ — to verify). */
   function years(res) { return [...new Set(res.rows.map(r => new Date(r.sold).getUTCFullYear()).concat(res.income.map(r => new Date(r.date).getUTCFullYear())))].filter(isFinite).sort(); }
@@ -352,7 +367,7 @@
     totals.gain = r2(totals.short.gain + totals.long.gain);
     const lines = new Set(rows.map(r => r.line)), fe = (res.feeEvents || []).filter(e => inY(e.date));
     if (res.totals.fees) totals.fees = feeTotals(fe, res.totals.fees.mode, res.totals.fees.usdOnly);
-    return Object.assign({}, res, { rows, income, totals, feeEvents: fe, sales: res.sales.filter(x => lines.has(x.line)) });
+    return Object.assign({}, res, { rows, income, totals, feeEvents: fe, wash: (res.wash || []).filter(w => inY(w.sold)), sales: res.sales.filter(x => lines.has(x.line)) });
   }
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + String(d.getUTCDate()).padStart(2, '0') + '/' + d.getUTCFullYear(); };
   const usd = v => v == null ? 'to verify' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -400,6 +415,8 @@
       blank(); row('section', ['TO VERIFY - not on Form 8949, not in the totals (missing cost or value)']); row('head', head);
       for (const r of F.toVerify) row('tv', line(r, r.status));
     }
+    if ((res.wash || []).length) { blank(); row('section', ['POSSIBLE WASH SALES - to verify (no amount changed)']); row('head', ['Sale line', 'Asset', '', 'Date sold', 'Loss', '', '', '', 'Acquired within 30 days (lines)']);
+      for (const w of res.wash) row('tv', ['Line ' + w.line, w.asset, '', mdy(w.sold), w.loss, '', null, null, w.buys.map(b => b.line + ' (' + mdy(b.date) + ')').join('; ')]); }
     const SD = scheduleD(res, opts.cat, opts.carry, opts.fstat);
     if (opts.fstat !== undefined || SD.n16 < 0) row('kv', ['Filing status (line 21)', FSTAT[opts.fstat || ''] || FSTAT[''], 'to verify']);
     blank(); row('section', ['SCHEDULE D (FORM 1040) - DRAFT - ' + SD.warn]);
@@ -610,7 +627,7 @@
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
-      const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
+      const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok).concat(res.wash || []);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
       const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsxmain" class="btn ghost">Download Excel (.xlsx)</button>' : ''}</p>`;
