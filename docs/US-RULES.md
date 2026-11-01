@@ -251,3 +251,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 ## v2.23 — Time zone in Options (v=20261101zg)
 
 - "Time zone of your file" moved from 1. Import to the first, full-width line of Options (set before import). Same select, same default (this browser), same saved settings (kryptax.us.settings). No calculation or text change.
+
+## v2.24 — Result card shown before import (v=20261101zh)
+
+- 1024 px and wider: two columns from the start (Options and 1. Import on the left), the result card on the right stays empty with "Your results will appear here after the calculation." until a file is processed. Nothing else is shown before a result. Below 1024 px nothing changes. No calculation change.

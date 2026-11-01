@@ -427,4 +427,6 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
 { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), E = fs.readFileSync(__dirname + '/us-engine.js', 'utf8'), imp = (H.match(/<section id="usimp"[\s\S]*?<\/section>/) || [''])[0];
   eq([/<label class="ustzopt">Time zone of your file <select id="ustz"><\/select><\/label>/.test(H), /g\.insertBefore\(tzLab, g\.firstChild\)/.test(E), /saveSettings\(LS, \{ method, fees, cat, fstat, tz: fileTz \}\)/.test(E)],
     [true, true, true], 'Time zone of the file: first line of Options (set before import), same select and saved settings'); void imp; }
+{ const C = fs.readFileSync(__dirname + '/style.css', 'utf8');
+  eq([/\.usmode>#usresult:empty\{display:flex/.test(C), /\.usmode>#usresult:empty::before\{content:"Your results will appear here after the calculation\."\}/.test(C), /#usleft>#usside:empty\{display:none\}/.test(C), /usmode:has\(#usresult:empty\)>#usleft\{grid-column:1\/-1/.test(C)], [true, true, true, false], 'Wide screens, before import: two columns, empty result card with an English waiting message only'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
