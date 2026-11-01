@@ -348,10 +348,26 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([U.forYear(b, 2025).wash.length, U.forYear(b, 2024).wash.length], [1, 0], 'wash flags filtered by tax year of the sale');
   const X = require('./us-export.js'), c = U.toCSV(b);
   eq([/^TO VERIFY \(\d+\)/m.test(c), /Possible wash sale pattern, line 3: ETH sold at a loss \(-\$1,000\.00\)/.test(c), X.summaryData(b, {}).checks.some(l => /Possible wash sale pattern, line 3.*26 U\.S\.C\. section 1091.*Not applied in the totals - to verify\./.test(l)), /wash/i.test(U.toCSV(a))], [true, true, true, false], 'exports: wash sale in the single TO VERIFY list (CSV/XLSX and PDF), only when flagged'); }
-// v2.11 export file names with local date and time
-{ const a = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 7)), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 8));
-  const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$/;
-  eq([a, ok.test(a), ok.test(U.stampName('kryptax-us-summary', 'pdf')), /[\\/:*?"<>| ]/.test(a), a !== b, /^kryptax-income_.*\.csv$/.test(U.stampName('kryptax-income', 'csv'))], ['kryptax-us-summary_2026-11-01_09-05-07.pdf', true, true, false, true, true], 'export names: prefix kept, local date + time with seconds, no forbidden characters, different instants -> different names'); }
+// v2.15 export file names to the minute; same minute -> short suffix _2, _3 (session), only in that case
+{ const t = new Date(2031, 10, 1, 9, 5, 7), a = U.stampName('kryptax-us-summary', 'pdf', t), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2031, 10, 1, 9, 5, 50)), c = U.stampName('kryptax-us-summary', 'pdf', t);
+  const x = U.stampName('kryptax-us-summary', 'csv', t), y = U.stampName('kryptax-us-summary', 'xlsx', t), z = U.stampName('kryptax-us-summary', 'pdf', new Date(2031, 10, 1, 9, 6, 0));
+  const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(_\d+)?\.pdf$/;
+  eq([a, b, c, x, y, z, ok.test(U.stampName('kryptax-us-summary', 'pdf')), /[\\/:*?"<>| ]/.test(a), /^kryptax-income_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(_\d+)?\.csv$/.test(U.stampName('kryptax-income', 'csv'))],
+    ['kryptax-us-summary_2031-11-01_09-05.pdf', 'kryptax-us-summary_2031-11-01_09-05_2.pdf', 'kryptax-us-summary_2031-11-01_09-05_3.pdf', 'kryptax-us-summary_2031-11-01_09-05.csv', 'kryptax-us-summary_2031-11-01_09-05.xlsx', 'kryptax-us-summary_2031-11-01_09-06.pdf', true, false, true],
+    'export names: prefix_YYYY-MM-DD_HH-MM.ext, suffix _2/_3 only when the same name was already given, never twice the same name'); }
+// v2.15 option choices kept in localStorage: only the 4 setting keys, invalid values ignored, reset clears, same totals
+{ const mk = () => { const m = new Map(); return { m, getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+  const s1 = mk(); U.saveSettings(s1, { method: 'HIFO', fees: 'DISPOSE', cat: 'none', fstat: 'mfs', txs: [1], amount: 123, file: 'x.csv' });
+  const st = JSON.parse(s1.m.get(U.SET_KEY));
+  const s2 = mk(); s2.setItem(U.SET_KEY, JSON.stringify({ method: 'LIFO', fees: 5, cat: 'zzz', fstat: 'mfs' })); const s3 = mk(); s3.setItem(U.SET_KEY, '{oops');
+  const bad = { getItem: () => { throw new Error('private'); }, setItem: () => { throw new Error('private'); }, removeItem: () => { throw new Error('private'); } };
+  const s4 = mk(); U.saveSettings(s4, { method: 'HIFO' }); U.clearSettings(s4);
+  const S = U.loadSettings(s1), fromSave = U.compute(lt, { method: S.method, fees: S.fees }).totals, fromClick = U.compute(lt, { method: 'HIFO', fees: 'DISPOSE' }).totals;
+  eq([[...s1.m.keys()], Object.keys(st).sort(), JSON.stringify(U.loadSettings(s2)), JSON.stringify(U.loadSettings(s3)), JSON.stringify(U.loadSettings(bad)), U.saveSettings(bad, { method: 'HIFO' }), s4.m.size, JSON.stringify(fromSave) === JSON.stringify(fromClick)],
+    [[U.SET_KEY], ['cat', 'fees', 'fstat', 'method'], '{"fstat":"mfs"}', '{}', '{}', false, 0, true],
+    'saved settings: one key, only the 4 choices (no file data or amounts), invalid/corrupt/unavailable storage -> defaults without error, reset clears, same totals from save or click'); }
+{ const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8');
+  eq([/id="ussetreset">Reset saved settings<\/a>/.test(src), /if \(LS\) clearSettings\(LS\)/.test(src), /keepSet\(\); if \(cur\) render\(\)/.test(src)], [true, true, true], 'U.S. page: "Reset saved settings" link, saved on each option change'); }
 { const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8'), n = id => (src.match(new RegExp('<select id="' + id + '"', 'g')) || []).length;
   eq([n('usmethod'), n('uscat'), n('usfees'), n('usfstat'), /function optsHtml\(\)[\s\S]*id="usfstat"[\s\S]*insertBefore\(opts, imp\)/.test(src), /fstat = ''; cat = ''; drawOpts\(\)/.test(src), /if \(cur\) render\(\)/.test(src)],
     [1, 1, 1, 1, true, true, true], 'options block at the top: the 4 selects exist once, placed before the import, Reset restores defaults, change re-computes'); }

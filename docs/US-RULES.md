@@ -202,7 +202,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 - Lines 4, 5 (Part I) and 11, 12, 13 (Part II) — numbers checked on Schedule D (Form 1040) 2025, https://www.irs.gov/pub/irs-pdf/f1040sd.pdf (2026-11-01) — are shown as one line "Other gains (Forms 4797, 2439, 6252, 4684, 6781, 8824, Schedule K-1, capital gain distributions): not computed by Kryptax - leave blank if you only have crypto". Same on screen, CSV, Excel and PDF. No calculation or total changed.
 
 ## v2.11 — Export file names
-- U.S.A. exports (PDF, CSV, Excel, income CSV) keep their prefix and add the browser's local date and time with seconds, e.g. `kryptax-us-summary_2026-11-01_10-15-32.pdf`, so two exports never share a name. FRANCE mode unchanged.
+- U.S.A. exports (PDF, CSV, Excel, income CSV) keep their prefix and add the browser's local date and time with seconds, e.g. `kryptax-us-summary_2026-11-01_10-15-32.pdf`, so two exports never share a name. FRANCE mode unchanged. (Replaced in v2.15: to the minute.)
 
 ## v2.12 — Guided result and single "to verify" list (v=20261101s)
 
@@ -223,3 +223,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 - Screen: the "What to copy and where" block has a thin cyan border and a wide layered glow: cyan (accent #22d3ee), then gold, then orange outside (`box-shadow`, three layers). The summary box below is unchanged. The same rule (class `halo`) is used on the main France result box (« Total global plus-value nette … Prélèvement estimé »), v=20261101v.
 - PDF: only the amounts to copy are coloured dark amber #A16207 (RGB 161, 98, 7): Form 8949 Part totals (d), (e), (h) and Schedule D lines 7, 15, 16 and 21 (when computed). Text stays black; amounts unchanged. CSV/Excel unchanged.
+
+## v2.15 — Saved option choices and export names (v=20261101w)
+- **Saved option choices**: lot method (FIFO/HIFO/MANUAL), Form 8949 box, network fee option (IGNORE/DISPOSE/CAPITALIZE) and filing status are kept in this browser's localStorage (one key, `kryptax.us.settings`) and restored on the next visit. The region (FRANCE/U.S.A.) was already kept (`kx-region`). The year is not saved (it depends on the file). Never saved: file data, transactions, amounts. Storage unavailable or value invalid: defaults are used, without error. Link "Reset saved settings" under the Options; "Reset everything" also clears them. Same totals whether a choice comes from the saved value or a click. FRANCE mode: no equivalent setting to save (date/number formats and year are per file), unchanged.
+- **Export names** (PDF, CSV, Excel, income CSV): `prefix_YYYY-MM-DD_HH-MM.ext`, local time, to the minute, like the FRANCE mode. If the same name was already given in this session (two exports in the same minute), and only then, a short suffix is added: `_2`, `_3`…
