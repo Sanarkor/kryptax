@@ -39,6 +39,7 @@
     if (T.fees && eng().feeLine(T.fees)) info.push('Network fees: ' + eng().feeLine(T.fees).replace(/ — /g, ' - '));
     { const L21 = eng().scheduleD(res, opts.cat, opts.carry, opts.fstat).lossLimit;
       if (L21) info.push('Filing status (Schedule D line 21): ' + eng().FSTAT[opts.fstat || ''] + '. ' + (L21.h != null ? 'Capital loss allowed ' + usd(L21.h) + (L21.rest > 0 ? ', ' + usd(L21.rest) + ' to carry over' : '') + ' (IRS Topic no. 409) - from this file only, to verify.' : 'Net capital loss: limit not applied - to verify.')); }
+    if ((res.wash || []).length) info.push('Possible wash sales (loss, then same asset acquired within 30 days before/after): ' + res.wash.length + ' sale line' + (res.wash.length > 1 ? 's' : '') + ' (' + res.wash.map(w => w.line).join(', ') + ') - no amount changed, to verify.');
     const K = eng().carryLines(res, opts.carry);
     if (K) info.push('Capital loss carryover you entered: short-term ' + usd(-K.s) + ' (Schedule D line 6), long-term ' + usd(-K.l) + ' (line 14). Net with this file: short-term ' + usd(K.net7) + ', long-term ' + usd(K.net15) + '. ' + K.note);
     const DA = eng().daLines(res, opts.da);

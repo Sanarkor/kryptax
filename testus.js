@@ -336,5 +336,16 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([/to verify/.test(L(loss(5000), 'other').note), U.scheduleD(U.compute(U.fromCSVText(loss(5000)).txs), 'none', { s: 2000 }, 'other').lines.find(l => l.line === '21').rest], [true, 4000], 'line 21: always to verify; carryover entered is part of the line 16 loss');
   const rr = U.compute(U.fromCSVText(loss(5000)).txs), c = U.toCSV(rr, { fstat: 'mfs' }), X = require('./us-export.js'), sd = X.summaryData(rr, { fstat: 'mfs' }).info.join('\n');
   eq([/Filing status \(line 21\),"?Married filing separately/.test(c), /^Line 21,.*,-1500\.00,/m.test(c), /Capital loss allowed -\$1,500\.00, \$3,500\.00 to carry over/.test(sd), /Filing status/.test(U.toCSV(r))], [true, true, true, false], 'exports: filing status and line 21 in CSV and PDF summary; nothing added for a gain without status'); }
+// v2.10 possible wash sales: flag only (loss, then same asset acquired within 30 days before/after), no amount changed
+{ const H = 'Date,Type,Asset,Quantity,Total (USD)\n', base = H + '2025-01-01,Buy,ETH,1,3000\n2025-03-01,Sell,ETH,1,2000\n';
+  const W = extra => U.compute(U.fromCSVText(base + extra).txs);
+  eq([W('2025-03-31,Buy,ETH,1,2100\n').wash.length, W('2025-04-01,Buy,ETH,1,2100\n').wash.length, W('2025-01-30,Buy,ETH,0.5,1000\n').wash.length, W('2025-01-29,Buy,ETH,0.5,1000\n').wash.length], [1, 0, 1, 0], 'wash flag: repurchase 30 days after / before flagged, 31 days not');
+  eq([W('').wash.length, W('2025-03-10,Buy,BTC,1,100\n').wash.length, U.compute(U.fromCSVText(H + '2025-01-01,Buy,ETH,1,1000\n2025-03-01,Sell,ETH,1,2000\n2025-03-10,Buy,ETH,1,2100\n').txs).wash.length], [0, 0, 0], 'no flag: no repurchase, other asset, or sale at a gain');
+  eq(W('2025-03-10,Convert,SOL,10,2100,,,ETH,1\n'.replace(',,,ETH,1', '')).wash.length, 0, 'acquisition of another asset not flagged');
+  const a = W(''), b = W('2025-03-10,Buy,ETH,1,2100\n'), w = b.wash[0];
+  eq([JSON.stringify(a.rows) === JSON.stringify(b.rows), a.totals.gain === b.totals.gain, JSON.stringify(a.notes) === JSON.stringify(b.notes), w.line, w.loss, w.buys.map(x => x.line), /to verify/.test(w.msg)], [true, true, true, 3, -1000, [4], true], 'wash flag changes no row, total or note; loss and repurchase line listed, to verify');
+  eq([U.forYear(b, 2025).wash.length, U.forYear(b, 2024).wash.length], [1, 0], 'wash flags filtered by tax year of the sale');
+  const X = require('./us-export.js'), c = U.toCSV(b);
+  eq([/POSSIBLE WASH SALES - to verify/.test(c), /^Line 3,ETH,,03\/01\/2025,-1000\.00,/m.test(c), X.summaryData(b, {}).info.some(l => /Possible wash sales.*\(3\).*to verify/.test(l)), /WASH/.test(U.toCSV(a))], [true, true, true, false], 'exports: wash sale section in CSV/XLSX and PDF summary line, only when flagged'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
