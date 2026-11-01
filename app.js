@@ -228,7 +228,7 @@
   }
 
 
-  /* ---------- Export Coinly/Koinly : une ligne = Envoyé + Reçu ---------- */
+  /* ---------- Export d'outil de suivi : une ligne = Envoyé + Reçu ---------- */
   const F2 = { date: ['date'], sa: ['sent amount', 'montant envoyé'], sc: ['sent currency', 'devise envoyée'], ra: ['received amount', 'montant reçu'], rc: ['received currency', 'devise reçue'], fa: ['fee amount', 'montant des frais'], fc: ['fee currency', 'devise des frais'], nw: ['net worth amount', 'net value', 'valeur nette', 'net worth'], nc: ['net worth currency', 'devise valeur'], label: ['label', 'tag', 'étiquette', 'type'], desc: ['description'] };
   const L2 = { date: 'Date', sa: 'Montant envoyé', sc: 'Devise envoyée', ra: 'Montant reçu', rc: 'Devise reçue', fa: 'Frais', fc: 'Devise des frais', nw: 'Valeur (€)', nc: 'Devise de la valeur', label: 'Label / type', desc: 'Description' };
   function showMapping2(name, rows) {
