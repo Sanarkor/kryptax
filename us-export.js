@@ -39,12 +39,12 @@
     if (T.fees && eng().feeLine(T.fees)) info.push('Network fees: ' + eng().feeLine(T.fees).replace(/ — /g, ' - '));
     { const L21 = eng().scheduleD(res, opts.cat, opts.carry, opts.fstat).lossLimit;
       if (L21) info.push('Filing status (Schedule D line 21): ' + eng().FSTAT[opts.fstat || ''] + '. ' + (L21.h != null ? 'Capital loss allowed ' + usd(L21.h) + (L21.rest > 0 ? ', ' + usd(L21.rest) + ' to carry over' : '') + ' (IRS Topic no. 409) - from this file only, to verify.' : 'Net capital loss: limit not applied - to verify.')); }
-    if ((res.wash || []).length) info.push('Possible wash sales (loss, then same asset acquired within 30 days before/after): ' + res.wash.length + ' sale line' + (res.wash.length > 1 ? 's' : '') + ' (' + res.wash.map(w => w.line).join(', ') + ') - no amount changed, to verify.');
     const K = eng().carryLines(res, opts.carry);
     if (K) info.push('Capital loss carryover you entered: short-term ' + usd(-K.s) + ' (Schedule D line 6), long-term ' + usd(-K.l) + ' (line 14). Net with this file: short-term ' + usd(K.net7) + ', long-term ' + usd(K.net15) + '. ' + K.note);
     const DA = eng().daLines(res, opts.da);
     if (DA) { for (const l of DA.lines) info.push('Form 1099-DA ' + l.label + ': ' + usd(l.form) + ' vs Kryptax ' + usd(l.mine) + ' - difference ' + usd(l.diff) + (l.flag ? ' (TO VERIFY)' : ' (matches)')); info.push(DA.note); }
-    return { title: 'Kryptax - U.S. summary (estimate)', info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows, parts, tv };
+    const checks = eng().checks(res, opts).map(c => ascii(c.msg.replace(/ — /g, ' - ')));
+    return { title: 'Kryptax - U.S. summary (estimate)', checks, info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows, parts, tv };
   }
 
   function makePdf(jsPDF, res, opts) {
@@ -63,7 +63,9 @@
       y = doc.lastAutoTable.finalY + 6;
     };
     for (const P of D.parts) tbl(P.title, P.rows.length ? P.rows.map(r => r.cells) : [['No sale in this part'].concat(D.head.slice(1).map(() => ''))], P.total, false);
-    if (D.tv.length) tbl('Not on Form 8949 - to verify (not in the totals)', D.tv.map(r => r.cells), null, true);
+    if (D.checks.length) { if (y > H - 30) { doc.addPage(); y = 16; } doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('To verify (' + D.checks.length + ')', M, y + 4); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); y += 9;
+      for (const c of D.checks) for (const s of doc.splitTextToSize('- ' + c, W - 2 * M)) { if (y > H - 18) { doc.addPage(); y = 16; } doc.text(s, M, y); y += 4.2; } y += 2;
+      if (D.tv.length) tbl('Not on Form 8949 - not in the totals (details)', D.tv.map(r => r.cells), null, true); }
     const SD = eng().scheduleD(res, (opts || {}).cat, (opts || {}).carry, (opts || {}).fstat); doc.addPage(); y = 16;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(ascii(SD.title), M, y); doc.setFontSize(10); doc.setTextColor(170, 0, 0); doc.text(ascii(SD.warn), M, y + 6); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
     doc.autoTable({ startY: y + 10, head: [['Line', 'Description', '(d) Proceeds', '(e) Cost', '(g) Adjustments', '(h) Gain or (loss)', 'Note']],

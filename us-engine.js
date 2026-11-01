@@ -414,12 +414,11 @@
       if (!P.lines.length) row('row', ['No sale in this part']);
       row('total', ['TOTAL ' + (P.part === 'I' ? 'PART I' : 'PART II') + ' -> ' + P.scheduleD, '', '', P.totals.d, P.totals.e, '', null, P.totals.h]);
     }
-    if (F.toVerify.length) {
-      blank(); row('section', ['TO VERIFY - not on Form 8949, not in the totals (missing cost or value)']); row('head', head);
-      for (const r of F.toVerify) row('tv', line(r, r.status));
+    const CK = checks(res, opts);
+    if (CK.length) {
+      blank(); row('section', ['TO VERIFY (' + CK.length + ')']); for (const c of CK) row('tv', [c.msg.replace(/ — /g, ' - ')]);
+      if (F.toVerify.length) { row('head', head); for (const r of F.toVerify) row('tv', line(r, r.status)); }
     }
-    if ((res.wash || []).length) { blank(); row('section', ['POSSIBLE WASH SALES - to verify (no amount changed)']); row('head', ['Sale line', 'Asset', '', 'Date sold', 'Loss', '', '', '', 'Acquired within 30 days (lines)']);
-      for (const w of res.wash) row('tv', ['Line ' + w.line, w.asset, '', mdy(w.sold), w.loss, '', null, null, w.buys.map(b => b.line + ' (' + mdy(b.date) + ')').join('; ')]); }
     const SD = scheduleD(res, opts.cat, opts.carry, opts.fstat);
     if (opts.fstat !== undefined || SD.n16 < 0) row('kv', ['Filing status (line 21)', FSTAT[opts.fstat || ''] || FSTAT[''], 'to verify']);
     blank(); row('section', ['SCHEDULE D (FORM 1040) - DRAFT - ' + SD.warn]);
@@ -520,8 +519,32 @@
     const L = res.income.map(r => [mdy(r.date), r.asset, +r.qty.toPrecision(12), r.usd == null ? '' : r.usd.toFixed(2), r.type, r.status].concat(hasW ? [r.wallet] : []));
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
+  /* v2.12 guided result: what to copy and where. Only amounts already computed (form8949 + scheduleD + income total), nothing new. */
+  function guide(res, opts) {
+    opts = opts || {}; const F = form8949(res, opts.cat), SD = scheduleD(res, opts.cat, opts.carry, opts.fstat), T = res.totals, I = T.income || {};
+    const l21 = SD.lines.find(l => l.line === '21' && !l.nc);
+    return { chosen: !!F.cat, parts: F.parts.map(P => ({ part: P.part, term: P.part === 'I' ? 'short-term' : 'long-term', box: P.box, boxText: P.box || (P.part === 'I' ? 'G, H or I' : 'J, K or L'),
+        sdLine: P.box ? SCHD[P.box] : (P.part === 'I' ? '1b, 2 or 3' : '8b, 9 or 10'), n: P.lines.length, d: P.totals.d, e: P.totals.e, h: P.totals.h })),
+      n7: SD.n7, n15: SD.n15, n16: SD.n16, loss: SD.n16 < 0, fstat: opts.fstat || '', l21: l21 ? { h: l21.h, rest: l21.rest } : null,
+      income: I.count ? { usd: I.usd, n: I.count, unknown: I.unknown } : null };
+  }
+  /* v2.12 single "to verify" list: every point to check, deduplicated, sorted by importance (1 = not in the totals ... 5 = records), each one short with its line. */
+  function checks(res, opts) {
+    opts = opts || {}; const T = res.totals, L = [], seen = new Set(), add = (rank, line, msg) => { if (!seen.has(msg)) { seen.add(msg); L.push({ rank, line, msg }); } };
+    for (const r of res.rows) if (r.status !== 'ok') add(1, r.line, `Line ${r.line}: ${r.status.replace(/^to verify:\s*/, '')} — not in the totals.`);
+      else if (!r.term) add(1, r.line, `Line ${r.line}: holding period unknown — not in the totals.`);
+    for (const r of res.income || []) if (r.usd == null) add(1, r.line, `Line ${r.line}: income without a USD value — not in the income total.`);
+    if (T.sales && !CAT[opts.cat]) add(2, null, 'Form 8949 box not chosen — choose it in Options at the top.');
+    if (opts.fstat !== undefined && !LOSS_LIMIT[opts.fstat] && scheduleD(res, opts.cat, opts.carry, opts.fstat).n16 < 0) add(2, null, 'Net loss: filing status not chosen (Schedule D line 21) — choose it in Options at the top.');
+    for (const w of res.wash || []) add(3, w.line, w.msg);
+    for (const n of res.notes || []) if (!n.ok) add(3, n.line, n.msg);
+    if (T.fees && T.fees.usdOnly) add(3, null, `${T.fees.usdOnly} network fee${T.fees.usdOnly > 1 ? 's' : ''} in USD without a fee quantity: not computed — to verify.`);
+    for (const r of res.rows) if (r.user) add(4, r.line, `Line ${r.line}: cost and date acquired entered by you — to verify.`);
+    if (T.method && T.method !== 'FIFO') add(5, null, 'HIFO or manual choice: specific identification needs records at the time of sale — to verify.');
+    return L.map((c, i) => Object.assign(c, { i })).sort((a, b) => a.rank - b.rank || (a.line == null ? -1 : b.line == null ? 1 : a.line - b.line) || a.i - b.i).map(({ rank, line, msg }) => ({ rank, line, msg }));
+  }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { stampName, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
+  const api = { stampName, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -634,23 +657,35 @@
       if (t.id === 'usmethod') method = t.value; else if (t.id === 'usfees') fees = FEE_MODES[t.value] ? t.value : 'IGNORE';
       else if (t.id === 'uscat') cat = t.value; else if (t.id === 'usfstat') fstat = FSTAT[t.value] != null ? t.value : ''; else return;
       if (cur) render(); });
+    // v2.12 guided result + single to-verify list (same amounts as the tables and exports)
+    function guideHtml(res) {
+      const G = guide(res, { cat, fstat, carry: clNow() }), li = [];
+      if (!G.chosen && res.totals.sales) li.push('<li class="neg">Form 8949 box not chosen: choose it in <a href="#usopts">Options</a> at the top.</li>');
+      for (const P of G.parts) if (P.n) li.push(`<li>Form 8949 Part ${P.part} (${P.term}), box <b>${esc(P.boxText)}</b>: proceeds <b>${usd(P.d)}</b> · cost <b>${usd(P.e)}</b> · gain/loss <b>${usd(P.h)}</b> → Schedule D line <b>${esc(P.sdLine)}</b></li>`);
+      if (res.totals.sales) li.push(`<li>Schedule D line 7: <b>${usd(G.n7)}</b> · line 15: <b>${usd(G.n15)}</b> · line 16: <b>${usd(G.n16)}</b></li>`);
+      if (G.loss) li.push(G.l21 ? `<li>Schedule D line 21: <b>${usd(G.l21.h)}</b>${G.l21.rest > 0 ? ' (' + usd(G.l21.rest) + ' to carry over)' : ''}</li>` : '<li class="neg">Schedule D line 21: choose the filing status in <a href="#usopts">Options</a> at the top.</li>');
+      if (G.income) li.push(`<li>Staking / airdrop / interest income: <b>${usd(G.income.usd)}</b> → report as ordinary income (no tax computed; where to report: to verify)</li>`);
+      if (!li.length) li.push('<li>No sale or income in this year: nothing to copy.</li>');
+      return `<div class="note usguide"><b>What to copy and where${year ? ' (' + year + ')' : ''}</b><ul>${li.join('')}</ul><span class="hint">Only the sales in this file — to verify.</span></div>`;
+    }
+    function checksHtml(res) {
+      const C = checks(res, { cat, fstat, carry: clNow() }); if (!C.length) return '';
+      return `<div class="warn uschecks"><b>To verify (${C.length})</b><ul>${C.map(c => '<li>' + esc(c.msg) + '</li>').join('')}</ul></div>`;
+    }
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
-      const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok).concat(res.wash || []);
+      const hasW = res.rows.some(r => r.wallet);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
       const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsxmain" class="btn ghost">Download Excel (.xlsx)</button>' : ''}</p>`;
-      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
-        + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
+      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + guideHtml(res) + checksHtml(res) + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
         + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
-          + (T.income.unknown ? `<p class="warn">${T.income.unknown} income line${T.income.unknown > 1 ? 's' : ''} without a USD value: to verify, not included in the income total.</p>` : '')
           + `<div class="scroll"><table class="us8949 usincome"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value USD</th><th>Type</th></tr>${res.income.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${mdy(r.date)}</td><td>${esc(r.asset)}</td><td>${+r.qty.toPrecision(10)}</td><td>${r.usd == null ? 'to verify' : usd(r.usd)}</td><td>${r.type}</td></tr>`).join('')}</table></div>`
           + `<p><button type="button" id="usinccsv" class="small">Download CSV (income)</button></p>` : '')
         + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (lots tracked in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
         + feeBlock(T.fees)
         + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
-        + (tvN.length ? `<div class="warn"><p>${tvN.length} item${tvN.length > 1 ? 's' : ''} to verify:</p><ul>${tvN.slice(0, 20).map(n => '<li>' + esc(n.msg) + '</li>').join('')}</ul></div>` : '')
         + (()=>{ const M = full.rows.filter(r => r.status.startsWith('to verify: no purchase found') || r.user); if (!M.length) return '';
           const iso = v => { if (v == null) return ''; const d = new Date(v); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); };
           return `<details class="note usmiss"${M.some(r => !r.user) ? ' open' : ''}><summary>Missing purchases: enter the cost (optional)</summary><p class="hint">Units sold with no purchase in your file are left out of the totals. If you know them, enter the total cost in USD and the date acquired; the line is then included and marked “entered by you” (to verify).</p>`
@@ -660,9 +695,8 @@
         + sdBlock(res)
         + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
-        + (method !== 'FIFO' ? '<p class="hint">Specific identification requires adequate records at the time of sale — to verify.</p>' : '')
         + (method === 'MANUAL' ? manualHtml(res) : '')
-        + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
+        + `<details class="usdet" open><summary>Detailed table (Form 8949 lines)</summary><div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div></details>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsx" class="small">Download Excel (.xlsx)</button>' : ''}${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
     }
     out.addEventListener('click', e => {
