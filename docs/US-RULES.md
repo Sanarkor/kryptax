@@ -209,3 +209,12 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 - **What to copy and where** (top of the U.S. result, selected year): for each Form 8949 Part with sales, the box (G/H/I or J/K/L, from the Options at the top) with totals (d), (e), (h) and the Schedule D line (1b/2/3 or 8b/9/10); then Schedule D lines 7, 15, 16, and line 21 when line 16 is a loss and the filing status is chosen; staking / airdrop / interest income as ordinary income (no tax computed, where to report: to verify). Box not chosen: said, with a link to the Options. Amounts come from `form8949`, `scheduleD` and the income total; nothing new is computed (`guide()`).
 - **To verify (N)**: one deduplicated list (`checks()`), sorted by importance: 1 lines not in the totals (missing cost, value, holding period; income without USD value), 2 Form 8949 box / filing status not chosen, 3 possible wash sales, transfer and network-fee notes, USD fees without quantity, 4 costs entered by you, 5 HIFO/manual records. Same list in the CSV/Excel (section `TO VERIFY (N)`, replaces the separate wash-sale section, detail lines below it) and in the PDF (list `To verify (N)` above the details table).
 - The detailed Form 8949 table stays below, in a foldable block (open by default).
+
+## v2.13 — Wash sale wording (v=20261101t)
+
+- Trigger and amounts unchanged (flag only, nothing applied in the totals).
+- New text (screen list "To verify (N)", CSV/Excel section `TO VERIFY (N)`, PDF list): *Possible wash sale pattern, line N: ASSET sold at a loss ($X) and the same asset bought within 30 days before or after (line M). 26 U.S.C. section 1091 applies to stock or securities; no verified IRS rule extends it to regular crypto assets, and a token that is legally a security could be covered. Not applied in the totals — to verify.*
+- Legal text checked: 26 U.S.C. §1091(a) covers losses on "shares of stock or securities" with a 30-day window before and after the sale and the acquisition of "substantially identical" stock or securities; it neither names nor excludes crypto assets.
+  - https://uscode.house.gov/us/usc/119-120/t26/s1091/
+  - https://www.law.cornell.edu/uscode/text/26/1091
+- No IRS guidance on crypto wash sales has been read: none is cited (to verify).
