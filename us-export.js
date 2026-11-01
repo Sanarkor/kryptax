@@ -11,6 +11,7 @@
   const pad = n => String(n).padStart(2, '0');
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return isNaN(d) ? 'unknown' : pad(d.getUTCMonth() + 1) + '/' + pad(d.getUTCDate()) + '/' + d.getUTCFullYear(); };
   const usd = v => v == null || !isFinite(v) ? 'to verify' : (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const usd0 = v => v == null ? '' : usd(v);
   const METHOD = { FIFO: 'FIFO (first in, first out)', HIFO: 'HIFO (highest cost first)', MANUAL: 'Manual choice per sale (specific identification - adequate records at the time of sale, to verify)' };
 
   /* Pure: everything printed in the PDF (tested in testus.js). */
@@ -58,6 +59,12 @@
     };
     for (const P of D.parts) tbl(P.title, P.rows.length ? P.rows.map(r => r.cells) : [['No sale in this part'].concat(D.head.slice(1).map(() => ''))], P.total, false);
     if (D.tv.length) tbl('Not on Form 8949 - to verify (not in the totals)', D.tv.map(r => r.cells), null, true);
+    const SD = eng().scheduleD(res, (opts || {}).cat, (opts || {}).carry); doc.addPage(); y = 16;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(ascii(SD.title), M, y); doc.setFontSize(10); doc.setTextColor(170, 0, 0); doc.text(ascii(SD.warn), M, y + 6); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+    doc.autoTable({ startY: y + 10, head: [['Line', 'Description', '(d) Proceeds', '(e) Cost', '(g) Adjustments', '(h) Gain or (loss)', 'Note']],
+      body: SD.lines.map(l => [l.line, l.desc, l.nc ? '' : usd0(l.d), l.nc ? '' : usd0(l.e), l.nc ? '' : usd0(l.g), l.nc ? '' : (l.answer || usd0(l.h)), l.note].map(ascii)), margin: { left: M, right: M, bottom: 16, top: 12 },
+      styles: { fontSize: 7.5, cellPadding: 1.2, overflow: 'linebreak' }, headStyles: { fillColor: [40, 40, 40] }, columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 58 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      didParseCell: c => { if (c.section === 'body' && SD.lines[c.row.index].nc) { c.cell.styles.textColor = 150; c.cell.styles.fillColor = [240, 240, 240]; } } });
     const n = doc.internal.getNumberOfPages();
     for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(80); doc.text(D.foot, M, H - 7); doc.text('Page ' + i + ' / ' + n, W - M, H - 7, { align: 'right' }); doc.setTextColor(0); }
     return doc;
