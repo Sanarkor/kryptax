@@ -712,6 +712,8 @@
   async function showPdf(blob, name) {
     const d = $('#pdfview'), box = $('#pvpages'); if (pvUrl) URL.revokeObjectURL(pvUrl);
     pvBlob = blob; pvName = name; pvUrl = URL.createObjectURL(typeof File === 'function' ? new File([blob], name, { type: 'application/pdf' }) : blob); $('#pvopen').href = pvUrl;
+    // v2.20 PC (écran large, souris) : le PDF s'ouvre dans un nouvel onglet, la page et son résultat restent ; bloqué ou mobile : aperçu intégré comme avant
+    try { if (matchMedia('(min-width: 1024px) and (pointer: fine)').matches) { const w = window.open(pvUrl, '_blank'); if (w) { try { w.opener = null; } catch (e) {} return; } } } catch (e) {}
     box.innerHTML = '<p class="hint">Préparation de l’aperçu…</p>'; box.setAttribute('aria-busy', 'true');
     if (d.showModal) d.showModal(); else d.setAttribute('open', ''); $('#pvsave').focus();
     try {
