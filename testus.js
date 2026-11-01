@@ -39,10 +39,10 @@ eq(p.rows.map(x => [x.qty, x.cost, x.proceeds]), [[10, 10, 20], [5, null, 10]], 
 eq(U.fromCSVText('Foo,Bar\n1,2\n').missingCols, ['date', 'type', 'asset', 'qty'], 'missing columns reported');
 // CSV export
 const csv = U.toCSV(r, { cat: 'none' }).split('\n');
-eq(csv[3], '(a) Description of property,(b) Date acquired,(c) Date sold or disposed of,(d) Proceeds (sales price),(e) Cost or other basis,(f) Code(s),(g) Amount of adjustment,(h) Gain or (loss),Note', 'CSV header = Form 8949 columns (a)-(h)');
-eq(csv[4], '0.5 BTC,01/10/2024,01/10/2025,34975.00,15025.00,,,19950.00,', 'CSV first line');
-eq([csv[2], csv.includes('Totals (Schedule D line 3),,,53963.00,31030.00,,,22933.00'), csv.includes('Part II - Long-term (held more than 1 year) - Box L'), csv.includes('Totals (Schedule D line 10),,,34975.00,15025.00,,,19950.00')], ['Part I - Short-term (held 1 year or less) - Box I', true, true, true], 'no 1099-DA: Part I box I (Schedule D line 3), Part II box L (line 10)');
-eq(/DOGE.*to verify: no purchase/.test(csv.slice(csv.indexOf('Not on Form 8949 - to verify (missing cost or value; not in the totals)')).join('\n')), true, 'lines to verify listed apart, not in the Part totals');
+const hd = csv.indexOf('(a) Description of property,(b) Date acquired,(c) Date sold or disposed of,(d) Proceeds (sales price),(e) Cost or other basis,(f) Code(s),(g) Amount of adjustment,(h) Gain or (loss),Note'); eq([hd > 0, csv[0].startsWith('Kryptax - U.S. summary (estimate) - Draft to verify'), csv[hd - 2], csv[hd - 1].startsWith('FORM 8949 PART I')], [true, true, ',,,,,,,,', true], 'CSV: title, blank line, section, header = Form 8949 columns (a)-(h)');
+eq(csv[hd + 1], '0.5 BTC,01/10/2024,01/10/2025,34975.00,15025.00,,,19950.00,', 'CSV first line');
+eq([csv.includes('Form 8949 situation,No Form 1099-DA received,,,,,,,'), csv.includes('TOTAL PART I -> Schedule D line 3,,,53963.00,31030.00,,,22933.00,'), csv.includes('FORM 8949 PART II - LONG-TERM (HELD MORE THAN 1 YEAR) - BOX L,,,,,,,,'), csv.includes('TOTAL PART II -> Schedule D line 10,,,34975.00,15025.00,,,19950.00,'), new Set(csv.filter(Boolean).map(l => l.replace(/"[^"]*"/g, 'x').split(',').length)).size], [true, true, true, true, 1], 'no 1099-DA: Part I box I (line 3), Part II box L (line 10), same column count on every row');
+eq(/DOGE.*to verify: no purchase/.test(csv.slice(csv.findIndex(l => l.startsWith('"TO VERIFY - not on Form 8949, not in the totals'))).join('\n')), true, 'lines to verify grouped apart, not in the Part totals');
 { const g = U.form8949(r, 'basis'), h = U.form8949(r, 'nobasis'), n = U.form8949(r, '');
   eq([g.parts.map(P => P.box + P.scheduleD), h.parts.map(P => P.box + P.scheduleD)], [['GSchedule D line 1b', 'JSchedule D line 8b'], ['HSchedule D line 2', 'KSchedule D line 9']], 'boxes G/J and H/K with Schedule D lines');
   eq([n.parts[0].box, n.parts[0].boxText, /to verify/.test(n.parts[1].scheduleD), /not chosen - to verify/.test(U.toCSV(r))], [null, 'G, H or I - to verify', true, true], 'situation not chosen: to verify');
@@ -76,7 +76,7 @@ eq(w.notes.filter(n => /Network fee/.test(n.msg)).length, 1, 'network fee (0.001
 eq(w.notes.filter(n => /no matching (send|receive)/.test(n.msg)).length, 2, 'unpaired send and receive listed, never silent');
 eq(wl(10).map(x => [x.cost, /to verify/.test(x.status)]), [[null, true]], 'sale of units received without a send → missing basis');
 eq(w.totals.wallets, ['Exchange A', 'Exchange B', 'Hardware wallet'], 'wallets listed');
-eq(U.toCSV(w).split('\n').some(l => l.endsWith(',Wallet,Note')), true, 'CSV has a Wallet column');
+eq(U.toCSV(w).split('\n').some(l => l.endsWith(',Note,Wallet')), true, 'CSV has a Wallet column');
 // no wallet column → one wallet, unchanged
 eq(U.toCSV(r).split('\n').some(l => l.includes('Wallet')), false, 'no Wallet column when the file has none');
 const nw = run('Date,Type,Asset,Quantity,Total (USD)\n2024-01-01,Buy,BTC,1,100\n2024-02-01,Buy,BTC,1,300\n2024-03-01,Sell,BTC,1,500\n');
@@ -164,7 +164,7 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const a = U.compute(T, { fileTz: 'UTC', taxTz: 'UTC' }), b = U.compute(T, { fileTz: 'UTC', taxTz: 'America/Los_Angeles' });
   eq(JSON.stringify(U.years(a)) + JSON.stringify(U.years(b)), '[2025][2024]', 'sale near midnight: tax year 2025 in UTC, 2024 in Pacific');
   eq(b.totals.tz.file + '|' + b.totals.tz.tax, 'UTC|America/Los_Angeles', 'time zones kept in the result');
-  eq(/\n# Times in file: UTC; tax dates: America\/Los_Angeles/.test(U.toCSV(b)), true, 'CSV shows the time zones');
+  eq(/\nTime zones,File: UTC,Tax dates: America\/Los_Angeles/.test(U.toCSV(b)), true, 'CSV shows the time zones');
   eq(/Times in file/.test(U.toCSV(U.compute(T))), false, 'CSV without time zone option: no time zone line');
   const H = [{ line: 2, date: W(2024, 6, 17, 20), type: 'BUY', asset: 'ETH', qty: 1, usd: 1000, fee: 0, wallet: '' }, { line: 3, date: W(2025, 6, 18, 2), type: 'SELL', asset: 'ETH', qty: 1, usd: 2000, fee: 0, wallet: '' }];
   eq(U.compute(H, { fileTz: 'UTC', taxTz: 'UTC' }).rows[0].term + '|' + U.compute(H, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows[0].term, 'long|short', 'holding period by calendar day in the tax zone (Pub. 544 example dates)'); }
@@ -201,8 +201,8 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
 // v2.3 1099-DA comparison in the CSV and PDF, only when entered
 { const c0 = U.toCSV(r, { cat: 'none' }), c1 = U.toCSV(r, { cat: 'none', da: { p: 88900, b: undefined } }).split('\n');
   eq(/1099-DA/.test(c0.replace(/No Form 1099-DA received/, '')), false, 'CSV: no 1099-DA section when nothing entered');
-  eq([c1.includes('Form 1099-DA comparison (totals you entered) - to verify'), c1.includes('Proceeds (box 1f),88900.00,88938.00,38.00,to verify'), c1.some(l => /Cost basis \(box 1g\)/.test(l))], [true, true, false], 'CSV: 1099-DA proceeds gap flagged to verify, basis line only if entered');
-  eq(U.toCSV(r, { da: { p: 88938, b: 46055 } }).includes('Cost basis (box 1g),46055.00,46055.00,0.00,matches'), true, 'CSV: matching basis');
+  eq([c1.includes('FORM 1099-DA COMPARISON (totals you entered) - to verify,,,,,,,,'), c1.includes('Proceeds (box 1f),,,88900.00,88938.00,,,38.00,to verify'), c1.some(l => /Cost basis \(box 1g\)/.test(l))], [true, true, false], 'CSV: 1099-DA proceeds gap flagged to verify, basis line only if entered');
+  eq(U.toCSV(r, { da: { p: 88938, b: 46055 } }).includes('Cost basis (box 1g),,,46055.00,46055.00,,,0.00,matches'), true, 'CSV: matching basis');
   const X = require('./us-export.js'), d0 = X.summaryData(r, {}), d1 = X.summaryData(r, { da: { p: 88900 } });
   eq([d0.info.some(l => /Form 1099-DA Proceeds/.test(l)), d1.info.some(l => l === 'Form 1099-DA Proceeds (box 1f): $88,900.00 vs Kryptax $88,938.00 - difference $38.00 (TO VERIFY)')], [false, true], 'PDF: 1099-DA line only when entered'); }
 // v2.4 capital loss carryover entry (Schedule D lines 6 and 14), only when entered
@@ -210,7 +210,7 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const K = U.carryLines(r, { s: 1000, l: -500 });
   eq([K.s, K.l, K.net7, K.net15], [1000, 500, 21933, 19450], 'carryover subtracted from the Part totals (sign typed either way)');
   const c = U.toCSV(r, { carry: { s: 1000 } }).split('\n');
-  eq([c.includes('Schedule D line 6 - short-term carryover,-1000.00'), c.includes('Schedule D line 14 - long-term carryover,0.00'), /Capital loss carryover/.test(U.toCSV(r))], [true, true, false], 'CSV: carryover section only when entered');
+  eq([c.includes('Schedule D line 6 - short-term carryover,,,,,,,-1000.00,'), c.includes('Schedule D line 14 - long-term carryover,,,,,,,0.00,'), /CAPITAL LOSS CARRYOVER/.test(U.toCSV(r))], [true, true, false], 'CSV: carryover section only when entered');
   const X = require('./us-export.js');
   eq([X.summaryData(r, { carry: { l: 500 } }).info.some(l => /long-term -\$500\.00 \(line 14\)/.test(l)), X.summaryData(r, {}).info.some(l => /carryover/.test(l))], [true, false], 'PDF: carryover line only when entered'); }
 // v2.5 Schedule D draft
@@ -228,8 +228,15 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const C2 = U.scheduleD(r, 'none', { s: 30000, l: 30000 });
   eq([by(C2, '16').h, by(C2, '17').answer, by(C2, '21').nc], [-17117, null, true], 'line 16 loss: 17 skipped, 21 not computed');
   const c = U.toCSV(r, { cat: 'none' }).split('\n');
-  eq([c.includes('Schedule D (Form 1040) - draft - Draft to verify - not tax advice'), c.includes('3,Form 8949 totals with box C/I,53963.00,31030.00,,22933.00,'), c.some(l => /^21,.*not computed by Kryptax/.test(l))], [true, true, true], 'CSV: Schedule D section');
+  eq([c.includes('SCHEDULE D (FORM 1040) - DRAFT - Draft to verify - not tax advice,,,,,,,,'), c.includes('Line 3,Form 8949 totals with box C/I,,53963.00,31030.00,,,22933.00,'), c.some(l => /^Line 21,.*not computed by Kryptax/.test(l))], [true, true, true], 'CSV: Schedule D section');
   const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
   const t = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, r, { cat: 'none' }).output('arraybuffer')) }).toString().split('\f').filter(p => p.trim());
   eq([t.length >= 2, /Schedule D \(Form 1040\) - draft/.test(t[t.length - 1]), /Draft to verify - not tax advice/.test(t[t.length - 1]), /Schedule D \(Form 1040\) - draft/.test(t[0])], [true, true, true, false], 'PDF: Schedule D on a separate last page'); }
+// v2.6 .xlsx export with the embedded SheetJS build: widths, $ formats, flat data sheet
+{ const XL = require('./xlsx.mini.min.js'), wb = U.toXLSX(XL, r, { cat: 'none' }), S = wb.Sheets.Summary, D = wb.Sheets['Form 8949 data'];
+  const A = XL.utils.sheet_to_json(S, { header: 1, defval: '' }), i = A.findIndex(x => x[0] === 'TOTAL PART I -> Schedule D line 3'), c = XL.utils.encode_cell({ r: i, c: 7 });
+  eq([wb.SheetNames.join('|'), A[i][7], S[c].t, S[c].z, S['!cols'][0].wch > 30, XL.utils.sheet_to_json(D).length], ['Summary|Form 8949 data', 22933, 'n', '$#,##0.00;-$#,##0.00', true, 5], 'xlsx: summary + data sheets, totals as numbers in $ format');
+  const back = XL.read(XL.write(wb, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
+  eq(XL.utils.sheet_to_csv(back.Sheets.Summary).split('\n')[0].startsWith('Kryptax - U.S. summary'), true, 'xlsx: written file reads back'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
+
