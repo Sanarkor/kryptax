@@ -255,3 +255,7 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 ## v2.24 — Result card shown before import (v=20261101zh)
 
 - 1024 px and wider: two columns from the start (Options and 1. Import on the left), the result card on the right stays empty with "Your results will appear here after the calculation." until a file is processed. Nothing else is shown before a result. Below 1024 px nothing changes. No calculation change.
+
+## v2.25 — Import under Options before import (v=20261101zi)
+
+- 1024 px and wider, before import: Options then 1. Import stacked in the left column (same as the result layout), the empty result card on the right; only the spacing of these two blocks is tightened. No text or calculation change.
