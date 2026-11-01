@@ -154,10 +154,13 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcu
   function defaultYear(years, now) { const ks = Object.values(years || {}).filter(y => selectable(y.year, now) && y.cessions.length).map(y => y.year); return ks.length ? Math.max(...ks) : now; }
   const title = y => `Année ${y} — déclaration ${y + 1}`;
   // Nom du PDF : kryptax-formulaire-2086-{année}-sur-{année+1}-JJ-MM-AAAA-HH-mm.pdf, date/heure réelles de l’export à Paris
+  // Horodatage à la minute (heure locale du navigateur) pour les autres exports France : _AAAA-MM-JJ_HH-mm
+  const stampMin = d => { d = d || new Date(); const z = n => String(n).padStart(2, '0'); return `_${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}_${z(d.getHours())}-${z(d.getMinutes())}`; };
+  const stateName = (date, now) => `kryptax-etat-${date}${stampMin(now)}.json`;
   function pdfName(y, now) {
     const p = {}; for (const x of new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now || new Date())) p[x.type] = x.value;
     return `kryptax-formulaire-2086-${y}-sur-${y + 1}-${p.day}-${p.month}-${p.year}-${p.hour}-${p.minute}.pdf`;
   }
-  const api = { pdfName, fr, impot, impotTxt, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
+  const api = { pdfName, stampMin, stateName, fr, impot, impotTxt, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);

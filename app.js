@@ -399,7 +399,7 @@
     el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
       const st = E.stateAt(txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] })), (a, ts) => priceFn(a, ts), +b.dataset.st, opening);
       if (st.incomplete && !confirm('Des cessions de cette année sont incomplètes (cours manquants) : la ligne 221 sera fausse. Exporter quand même ?')) return;
-      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(st, null, 2)], { type: 'application/json' })); a.download = 'kryptax-etat-' + st.date + '.json'; a.click();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(st, null, 2)], { type: 'application/json' })); a.download = X.stateName(st.date, new Date()); a.click();
     });
     $('#opfile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { opening = E.validateState(JSON.parse(await f.text())); localStorage.setItem('kryptax.opening', JSON.stringify(opening)); renderTx(); $('#results').innerHTML = ''; } catch (x) { alert('Import impossible : ' + x.message); } };
     const d = $('#opdel'); if (d) d.onclick = () => { opening = null; localStorage.removeItem('kryptax.opening'); renderTx(); $('#results').innerHTML = ''; };
