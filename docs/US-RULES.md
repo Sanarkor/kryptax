@@ -242,3 +242,8 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 - Screens 1024 px and wider: two columns. Options and import on the left (sticky), result on the right. "What to copy and where" and "To verify" move to the left panel, shown once. A key-figures banner repeats numbers already computed: net gain or loss, short term, long term, and the line 21 loss allowed and carryover when present. No new calculation.
 - Below 1024 px nothing changes.
 - Moon/sun button next to FRANCE / U.S.A.: default follows the system setting; a click stores the choice under `kx-theme` in this browser (no other data). PDF, CSV and Excel exports are unchanged (white background).
+
+## v2.19 — Bar charts on screen (v=20261101zc)
+
+- Two bar charts under the result, side by side from 1024 px, stacked full width below: net gain or loss by tax year (the totals already shown for each year) and by asset (sum of the gain of each line counted in the totals). Lines marked "to verify" are left out, as in the totals, and the legend says so. Sum of the asset bars = net gain or loss shown. Screen only: not in the PDF, CSV, Excel or print. No calculation changed.
+- Wide screens: more compact and wider layout (smaller header, footer and disclaimer; before any result, options and import side by side) to avoid vertical scrolling at common heights. Light theme: brighter red disclaimer and brighter blue "Why Kryptax?" / "Support Kryptax" buttons. Below 1024 px and in the dark theme, nothing else changes.

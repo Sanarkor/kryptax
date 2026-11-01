@@ -420,4 +420,8 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const N = +(/To verify \((\d+)\)/.exec(H) || [])[1], ranks = C.map(c => c.rank);
   eq([JSON.stringify(items) === JSON.stringify(C.map(c => c.msg)), new Set(items).size === items.length, N === C.length && C.length >= 3, ranks.every((x, i) => !i || ranks[i - 1] <= x), new Set(heads).size === heads.length, /<b>Line \d+<\/b>: /.test(H)],
     [true, true, true, true, true, true], 'To verify on screen: every point kept with the same text and order, no duplicate, N = points, groups in order of importance, "Line N" in bold'); }
+{ const B = U.barData(r, r), sA = x => Math.round(x.reduce((a, i) => a + i.v, 0) * 100) / 100, ys = U.years(r).filter(y => r.rows.some(x => new Date(x.sold).getUTCFullYear() === y));
+  const per = ys.map(y => { const R = U.forYear(r, y), b = U.barData(r, R); return sA(b.assets) === R.totals.gain ? 1 : 0; });
+  eq([sA(B.assets) === r.totals.gain, sA(B.years) === r.totals.gain, per.every(x => x === 1), B.years.length === ys.length, r.rows.some(x => x.status !== 'ok') ? B.assets.every(i => isFinite(i.v)) : true],
+    [true, true, true, true, true], 'Charts: sum of the asset bars = net gain shown (each year and all years), sum of the year bars = total, "to verify" lines left out'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;

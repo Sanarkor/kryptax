@@ -92,4 +92,11 @@ chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » 
   chk(CS.includes(':root[data-theme="light"]{') && CS.includes('@media (prefers-color-scheme: light){'), 'thème : clair par préférence système ou choix mémorisé');
   chk(!/data-theme|kx-theme/.test(fs2.readFileSync(__dirname + '/export.js', 'utf8') + fs2.readFileSync(__dirname + '/us-export.js', 'utf8')), 'thème : PDF/CSV/Excel non concernés');
   chk(UE.includes("side.innerHTML = wide() ? guideHtml(res) + checksHtml(res) : ''") && UE.includes("(wide() ? '' : guideHtml(res) + checksHtml(res))"), 'U.S. PC : To verify + What to copy dans le panneau latéral, une seule fois'); }
+{ const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), src = AP.match(/  function frBarData\(Y, yc\) \{[\s\S]*?\n  \}\n/)[0];
+  const frBarData = new Function('window', src + 'return frBarData;')({ KryptaxExport: X }), all = X.exportData(Y, {}, () => [], []).totals.filter(t => t.n);
+  const res = all.map(t => { const D = frBarData(Y, Y[t.year].cessions), s = D.assets.reduce((a, i) => a + i.v, 0); return Math.abs(s - t.l224) <= 0.01 * D.assets.length + 1e-9 && D.years.length === all.length && D.years.every((b, i) => b.v === all[i].l224); });
+  chk(res.length > 0 && res.every(Boolean), 'graphiques : somme des barres par crypto = total global de l’année ; barres par année = totaux de l’année (aucun nouveau calcul)');
+  chk(!/kxchart|kxBars/.test(require('fs').readFileSync(__dirname + '/export.js', 'utf8') + require('fs').readFileSync(__dirname + '/us-export.js', 'utf8')) && /@media print\{\.kxcharts\{display:none!important\}\}/.test(require('fs').readFileSync(__dirname + '/style.css', 'utf8')), 'graphiques : écran seulement (ni PDF/CSV/Excel, ni impression)'); }
+{ const IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8') + require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8') + require('fs').readFileSync(__dirname + '/us-export.js', 'utf8');
+  chk(/<a id="pvopen"[^>]*target="_blank" rel="noopener"/.test(IH) && !/location\.(href\s*=|assign|replace)/.test(AP), 'PDF : ouverture dans un nouvel onglet (target=_blank, noopener), jamais à la place de la page'); }
 process.exit(ok ? 0 : 1);

@@ -58,6 +58,10 @@ Rien n'est envoyé, mais le navigateur **conserve en localStorage, sans limite d
 
 Sur un écran d'au moins 1024 px, la page passe en deux colonnes (import et réglages à gauche, résultat à droite) avec un bandeau de chiffres clés déjà calculés ; en dessous de 1024 px, l'affichage ne change pas.
 
+Deux graphiques en barres s'affichent sous le résultat (empilés sur smartphone) : plus-value nette par année et par crypto vendue, uniquement à partir des montants déjà calculés (ligne 224 de chaque cession ; en U.S.A. les lignes « to verify » sont exclues, comme dans les totaux). Ils n'apparaissent ni dans le PDF, ni dans le CSV ou l'Excel, ni à l'impression.
+
+Sur PC (≥ 1024 px), la mise en page est plus compacte et plus large (entête, pied et avertissement resserrés ; à l'état initial, l'import occupe les deux colonnes) pour éviter le défilement vertical aux hauteurs courantes. En thème clair, l'avertissement est d'un rouge plus vif et les boutons « Pourquoi Kryptax ? » / « Soutenir Kryptax » d'un bleu plus vif.
+
 Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur partagé, pensez à l'utiliser.
 
 Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'origine de la page, et les symboles et horodatages demandés : ils peuvent donc déduire quelles cryptos vous détenez et quand vous avez vendu, mais pas les montants.
