@@ -42,7 +42,7 @@ const csv = U.toCSV(r, { cat: 'none' }).split('\n');
 const hd = csv.indexOf('(a) Description of property,(b) Date acquired,(c) Date sold or disposed of,(d) Proceeds (sales price),(e) Cost or other basis,(f) Code(s),(g) Amount of adjustment,(h) Gain or (loss),Note'); eq([hd > 0, csv[0].startsWith('Kryptax - U.S. summary (estimate) - Draft to verify'), csv[hd - 2], csv[hd - 1].startsWith('FORM 8949 PART I')], [true, true, ',,,,,,,,', true], 'CSV: title, blank line, section, header = Form 8949 columns (a)-(h)');
 eq(csv[hd + 1], '0.5 BTC,01/10/2024,01/10/2025,34975.00,15025.00,,,19950.00,', 'CSV first line');
 eq([csv.includes('Form 8949 situation,No Form 1099-DA received,,,,,,,'), csv.includes('TOTAL PART I -> Schedule D line 3,,,53963.00,31030.00,,,22933.00,'), csv.includes('FORM 8949 PART II - LONG-TERM (HELD MORE THAN 1 YEAR) - BOX L,,,,,,,,'), csv.includes('TOTAL PART II -> Schedule D line 10,,,34975.00,15025.00,,,19950.00,'), new Set(csv.filter(Boolean).map(l => l.replace(/"[^"]*"/g, 'x').split(',').length)).size], [true, true, true, true, 1], 'no 1099-DA: Part I box I (line 3), Part II box L (line 10), same column count on every row');
-eq(/DOGE.*to verify: no purchase/.test(csv.slice(csv.findIndex(l => l.startsWith('"TO VERIFY - not on Form 8949, not in the totals'))).join('\n')), true, 'lines to verify grouped apart, not in the Part totals');
+eq(/DOGE.*to verify: no purchase/.test(csv.slice(csv.findIndex(l => l.startsWith('TO VERIFY ('))).join('\n')), true, 'lines to verify grouped apart, not in the Part totals');
 { const g = U.form8949(r, 'basis'), h = U.form8949(r, 'nobasis'), n = U.form8949(r, '');
   eq([g.parts.map(P => P.box + P.scheduleD), h.parts.map(P => P.box + P.scheduleD)], [['GSchedule D line 1b', 'JSchedule D line 8b'], ['HSchedule D line 2', 'KSchedule D line 9']], 'boxes G/J and H/K with Schedule D lines');
   eq([n.parts[0].box, n.parts[0].boxText, /to verify/.test(n.parts[1].scheduleD), /not chosen - to verify/.test(U.toCSV(r))], [null, 'G, H or I - to verify', true, true], 'situation not chosen: to verify');
@@ -121,7 +121,7 @@ eq(U.incomeType('Learning reward') + U.incomeType('Earn interest'), 'RewardInter
   eq([/Kryptax . U\.S\. summary \(estimate\)/.test(t1), /Total gain or loss: \$30,020\.00/.test(t1), /TO VERIFY/.test(t1), /never A-F/.test(t1), /Hardware wallet/.test(t1)], [true, true, true, true, true], 'PDF text: title, totals, to verify, box note, wallet');
   eq(p1.every(p => p.includes(X.FOOT)), true, 'footer on every page');
   { const t8 = pdfText(r, { now, cat: 'none' });
-    eq([/Part I - Short-term \(held 1 year or less\) - Box I/.test(t8), /Totals \(Schedule D line 3\)\s+\$53,963\.00\s+\$31,030\.00\s+\$22,933\.00/.test(t8), /Part II - Long-term \(held more than 1 year\) - Box L/.test(t8), /Totals \(Schedule D line 10\)/.test(t8), /Not on Form 8949 - to verify/.test(t8), /No Form 1099-DA received/.test(t8)], [true, true, true, true, true, true], 'PDF: Parts I/II, boxes, Schedule D totals, lines to verify apart');
+    eq([/Part I - Short-term \(held 1 year or less\) - Box I/.test(t8), /Totals \(Schedule D line 3\)\s+\$53,963\.00\s+\$31,030\.00\s+\$22,933\.00/.test(t8), /Part II - Long-term \(held more than 1 year\) - Box L/.test(t8), /Totals \(Schedule D line 10\)/.test(t8), /Not on Form 8949 - not in the totals/.test(t8), /No Form 1099-DA received/.test(t8)], [true, true, true, true, true, true], 'PDF: Parts I/II, boxes, Schedule D totals, lines to verify apart');
     eq(/G, H or I - to verify/.test(pdfText(r, { now })), true, 'PDF: situation not chosen, to verify'); }
   eq(/Income \(staking \/ airdrops \/ interest\): \$495\.00/.test(pdfText(ic, { now })), true, 'PDF shows income total');
   eq(/Lot method: HIFO/.test(pdfText(U.compute(lt, { method: 'HIFO' }), { now })), true, 'PDF shows the lot method');
@@ -347,7 +347,7 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([JSON.stringify(a.rows) === JSON.stringify(b.rows), a.totals.gain === b.totals.gain, JSON.stringify(a.notes) === JSON.stringify(b.notes), w.line, w.loss, w.buys.map(x => x.line), /to verify/.test(w.msg)], [true, true, true, 3, -1000, [4], true], 'wash flag changes no row, total or note; loss and repurchase line listed, to verify');
   eq([U.forYear(b, 2025).wash.length, U.forYear(b, 2024).wash.length], [1, 0], 'wash flags filtered by tax year of the sale');
   const X = require('./us-export.js'), c = U.toCSV(b);
-  eq([/POSSIBLE WASH SALES - to verify/.test(c), /^Line 3,ETH,,03\/01\/2025,-1000\.00,/m.test(c), X.summaryData(b, {}).info.some(l => /Possible wash sales.*\(3\).*to verify/.test(l)), /WASH/.test(U.toCSV(a))], [true, true, true, false], 'exports: wash sale section in CSV/XLSX and PDF summary line, only when flagged'); }
+  eq([/^TO VERIFY \(\d+\)/m.test(c), /Possible wash sale, line 3: ETH sold at a loss \(-\$1,000\.00\)/.test(c), X.summaryData(b, {}).checks.some(l => /Possible wash sale, line 3/.test(l)), /wash/i.test(U.toCSV(a))], [true, true, true, false], 'exports: wash sale in the single TO VERIFY list (CSV/XLSX and PDF), only when flagged'); }
 // v2.11 export file names with local date and time
 { const a = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 7)), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 8));
   const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$/;
@@ -355,5 +355,21 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
 { const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8'), n = id => (src.match(new RegExp('<select id="' + id + '"', 'g')) || []).length;
   eq([n('usmethod'), n('uscat'), n('usfees'), n('usfstat'), /function optsHtml\(\)[\s\S]*id="usfstat"[\s\S]*insertBefore\(opts, imp\)/.test(src), /fstat = ''; cat = ''; drawOpts\(\)/.test(src), /if \(cur\) render\(\)/.test(src)],
     [1, 1, 1, 1, true, true, true], 'options block at the top: the 4 selects exist once, placed before the import, Reset restores defaults, change re-computes'); }
+// v2.12 guided result and single to-verify list
+{ const H = 'Date,Type,Asset,Quantity,Total (USD)\n', C = t => U.forYear(U.compute(U.fromCSVText(H + t).txs), 2025), X = require('./us-export.js');
+  const gain = C('2024-01-01,Buy,BTC,1,1000\n2025-03-01,Sell,BTC,0.5,3000\n2025-04-01,Buy,ETH,1,2000\n2025-05-01,Sell,ETH,1,2500\n2025-06-01,Sell,DOGE,10,50\n');
+  const loss = C('2025-01-01,Buy,ETH,1,3000\n2025-03-01,Sell,ETH,1,2000\n2025-03-10,Buy,ETH,1,2100\n');
+  const g = U.guide(gain, { cat: 'none' }), F = U.form8949(gain, 'none'), SD = U.scheduleD(gain, 'none'), csv = U.toCSV(gain, { cat: 'none' });
+  eq([g.chosen, g.parts.map(P => [P.box, P.sdLine, P.d, P.e, P.h]), [g.n7, g.n15, g.n16]], [true, F.parts.map(P => [P.box, P.box === 'I' ? '3' : '10', P.totals.d, P.totals.e, P.totals.h]), [SD.n7, SD.n15, SD.n16]], 'guide: Part totals, box, Schedule D line and lines 7/15/16 = the tables');
+  eq([g.parts[0].h + g.parts[1].h === gain.totals.gain, g.parts.every(P => csv.includes(`TOTAL PART ${P.part} -> Schedule D line ${P.sdLine},,,${P.d.toFixed(2)},${P.e.toFixed(2)},,,${P.h.toFixed(2)}`)), g.parts[0].h === 500 && g.parts[1].h === 2500, g.loss, g.l21], [true, true, true, false, null], 'guide = CSV export totals; gain: no line 21');
+  const g0 = U.guide(gain, {}); eq([g0.chosen, g0.parts[0].boxText, g0.parts[0].sdLine, U.checks(gain, {}).some(c => /Form 8949 box not chosen/.test(c.msg))], [false, 'G, H or I', '1b, 2 or 3', true], 'box not chosen: said in the guide and in the list');
+  const gl = U.guide(loss, { cat: 'none', fstat: 'other' }), gl0 = U.guide(loss, { cat: 'none', fstat: '' });
+  eq([gl.loss, gl.l21, gl0.l21, U.checks(loss, { cat: 'none', fstat: '' }).some(c => /filing status not chosen/.test(c.msg)), U.checks(loss, { cat: 'none', fstat: 'other' }).some(c => /filing status/.test(c.msg))], [true, { h: -1000, rest: 0 }, null, true, false], 'loss: line 21 with status, asked when not chosen');
+  const ck = U.checks(gain, {}), ck2 = U.checks(loss, { fstat: '' }), msgs = ck.concat(ck2).map(c => c.msg);
+  eq([ck.length, new Set(ck.map(c => c.msg)).size === ck.length, ck.every((c, i) => !i || ck[i - 1].rank <= c.rank), ck[0].rank, /DOGE|Line 6/.test(ck[0].msg), ck2.some(c => /wash sale, line 3/.test(c.msg)), msgs.every(m => m.length < 260)], [ck.length, true, true, 1, true, true, true], 'list: no duplicate, sorted by importance, not-in-totals first, wash sale included, short');
+  const cs = U.toCSV(loss, { fstat: '' }).split('\n'), i = cs.findIndex(l => l.startsWith('TO VERIFY (')), n = +/\((\d+)\)/.exec(cs[i])[1];
+  eq([n, cs.slice(i + 1, i + 1 + n).every(l => l.trim().length > 0), X.summaryData(loss, { fstat: '' }).checks.length], [U.checks(loss, { fstat: '' }).length, true, n], 'title count = number of lines, same list in CSV and PDF');
+  const e = U.forYear(U.compute(U.fromCSVText(H).txs), 2025), ge = U.guide(e, {});
+  eq([U.checks(e, {}).length, ge.parts.every(P => !P.n), ge.income, /TO VERIFY/.test(U.toCSV(e, {}))], [0, true, null, false], 'no data: empty list, nothing to copy'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 

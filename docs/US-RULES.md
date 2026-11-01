@@ -203,3 +203,9 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 ## v2.11 — Export file names
 - U.S.A. exports (PDF, CSV, Excel, income CSV) keep their prefix and add the browser's local date and time with seconds, e.g. `kryptax-us-summary_2026-11-01_10-15-32.pdf`, so two exports never share a name. FRANCE mode unchanged.
+
+## v2.12 — Guided result and single "to verify" list (v=20261101s)
+
+- **What to copy and where** (top of the U.S. result, selected year): for each Form 8949 Part with sales, the box (G/H/I or J/K/L, from the Options at the top) with totals (d), (e), (h) and the Schedule D line (1b/2/3 or 8b/9/10); then Schedule D lines 7, 15, 16, and line 21 when line 16 is a loss and the filing status is chosen; staking / airdrop / interest income as ordinary income (no tax computed, where to report: to verify). Box not chosen: said, with a link to the Options. Amounts come from `form8949`, `scheduleD` and the income total; nothing new is computed (`guide()`).
+- **To verify (N)**: one deduplicated list (`checks()`), sorted by importance: 1 lines not in the totals (missing cost, value, holding period; income without USD value), 2 Form 8949 box / filing status not chosen, 3 possible wash sales, transfer and network-fee notes, USD fees without quantity, 4 costs entered by you, 5 HIFO/manual records. Same list in the CSV/Excel (section `TO VERIFY (N)`, replaces the separate wash-sale section, detail lines below it) and in the PDF (list `To verify (N)` above the details table).
+- The detailed Form 8949 table stays below, in a foldable block (open by default).
