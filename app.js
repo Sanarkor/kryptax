@@ -32,6 +32,18 @@
     ['#kofinote > h3', 'Donations'], ['#kofinote > p', 'A “Support Kryptax” button leads to Ko-fi (external site, opens in a new tab). A donation is a small thank-you given from the heart: it is free and voluntary, gives no right to any service or benefit, and because it is made of your own free will it cannot be refunded or cancelled. Kryptax sends no data to Ko-fi: only your browser opens the page, if you click.'],
     ['#privacy .pv-in > :nth-child(13)', 'Publisher and hosting'], ['#privacy .pv-in > :nth-child(14)', 'Publisher: Damien M. aka “Sanarkor”. Hosting: GitHub Pages (GitHub, Inc.).'],
     ['#privclose', 'Close']];
+  /* Thème clair / sombre : défaut = préférence du système ; un clic mémorise le choix (clé kx-theme, rien d'autre). Icône seule, libellé anglais neutre. */
+  { const KT = 'kx-theme', root = document.documentElement, regs = document.querySelector('.regions');
+    const sys = () => { try { return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'; } catch (e) { return 'dark'; } };
+    let saved = null; try { const v = localStorage.getItem(KT); if (v === 'light' || v === 'dark') saved = v; } catch (e) {}
+    if (saved) root.dataset.theme = saved;
+    const MOON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+    const SUN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></g></svg>';
+    if (regs) { const b = document.createElement('button'); b.type = 'button'; b.id = 'themebtn'; b.className = 'small ghost themebtn';
+      const draw = () => { const cur = root.dataset.theme || sys(); b.innerHTML = cur === 'light' ? MOON : SUN; b.setAttribute('aria-label', cur === 'light' ? 'Dark mode' : 'Light mode'); b.title = b.getAttribute('aria-label'); b.setAttribute('aria-pressed', cur === 'light' ? 'true' : 'false'); };
+      b.addEventListener('click', () => { const nx = (root.dataset.theme || sys()) === 'light' ? 'dark' : 'light'; root.dataset.theme = nx; try { localStorage.setItem(KT, nx); } catch (e) {} draw(); });
+      try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', draw); } catch (e) {}
+      regs.appendChild(b); draw(); } }
   { const fr = $('#regfr'), us = $('#regus'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
     const tr = u => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
         if (!keep.has(el)) keep.set(el, { h: el.innerHTML, hid: el.hidden, a: attr ? el.getAttribute(attr) : null });
@@ -630,8 +642,10 @@
       const PP = precOf(yc), precH = (SHOW_PREC && PP.n ? `<p class="hint" id="precsum">${esc(precText(PP))}</p>` : '') + (lastIgn.length ? `<p class="hint" id="ignsum">Cours introuvable pour ${lastIgn.map(esc).join(', ')} (récompenses, valeur ignorée à la ligne 212).</p>` : '');
       blockers = pdfBlockers(t, est);
       const sel = `<label class="yearsel">Année <select id="fyear">${yrs.map(y => `<option value="${y}"${y === fyear ? ' selected' : ''}>${y} (déclaration ${y + 1})</option>`).join('')}</select></label>`;
+      const rate = t.year >= 2025 ? 0.314 : 0.30, prelev = t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30); // mêmes chiffres pour le cadre et le bandeau PC
+      const kpi = t.n ? `<div class="kxkpi halo" aria-hidden="true"><div><span>Plus-value nette ${t.year}</span><b class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</b></div><div><span>${t.exonere ? 'Cessions ≤ 305 €' : 'Case ' + t.box + ' (2042-C)'}</span><b>${t.exonere ? 'exonéré' : eur(t.report)}</b></div><div><span>Prélèvement estimé (${String(rate * 100).replace('.', ',')} %)</span><b>${eur(prelev)}</b></div></div>` : '';
       const tot = t.n ? `<div class="note total-global halo"><b>Total global plus-value nette ${t.year} : <span class="${t.l224 >= 0 ? 'pos' : 'neg'}">${t.l224 >= 0 ? '+' : ''}${eur(t.l224)}</span></b> (${t.n} cession${t.n > 1 ? 's' : ''})${t.incomplete ? ' (incomplet)' : ''}<br>${t.exonere ? 'Total des cessions ≤ 305 € : exonéré, rien à reporter. <small class="rnd">Le seuil de 305 € vaut pour tout le foyer fiscal : si une autre personne du foyer a aussi vendu des cryptos, ses cessions s’additionnent aux tiennes.</small>' : `À remplir, case <b>${t.box}</b> de la 2042-C : <b>${eur(t.report)}</b> <small class="rnd">(arrondi à l’euro le plus proche, comme l’exige l’administration fiscale ; 0,50 compte pour 1)</small>`}<br><span class="prelev">Prélèvement estimé selon le calcul : <b>${eur(t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30))}</b></span></div>` : `<div class="note total-global">Aucune cession imposable en ${t.year} : rien à déclarer sur la 2086 pour cette année.</div>`;
-      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + warns.map(e => `<div class="note warn">${e}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + precH + h;
+      h = '<div class="sechead"><h2>2. Résultat et export</h2>' + sel + '</div>' + kpi + (errs.length || !window.__kxDone || !$('#err').hidden ? '' : '<div class="note ok" id="noerr">✅ Aucune erreur</div>') + errs.map(e => `<div class="note warn">${e}${$('#run').hidden ? ' <button class="small ghost" id="rerun">↻ Relancer</button>' : ''}</div>`).join('') + warns.map(e => `<div class="note warn">${e}</div>`).join('') + specialNote(X.special(txs, fyear)) + tot + precH + h;
     }
     $('#results').innerHTML = h; lastOut = out; lastY = Y; pdfState();
   }
