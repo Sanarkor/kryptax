@@ -247,5 +247,84 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([f.cost, f.proceeds, f.gain], [1010, 1485, 475], 'Total = amount before fee: Buy cost = Total + Fee, Sell proceeds = Total - Fee');
   const g = U.compute(U.fromCSVText('Date,Type,Asset,Quantity,Price (USD),Fee (USD)\n2024-01-01,Buy,BTC,2,500,4\n2025-06-01,Sell,BTC,2,800,6\n').txs).rows[0];
   eq([g.cost, g.proceeds], [1004, 1594], 'without Total: Total = Price x Quantity, then the same fee rule'); }
+// v2.8 network fees on transfers (fee units = sent quantity minus received quantity); fictitious data
+{ const H = 'Date,Type,Asset,Quantity,Total (USD),Fee (USD),Wallet,Received Quantity,To Wallet\n';
+  const SC = {
+    paired: H + '2024-01-01,Buy,ETH,1,1000,,A\n2025-01-01,Buy,ETH,1,3000,,A\n2025-03-01,Send,ETH,1.5,,6,A\n2025-03-01,Receive,ETH,1.48,,,B\n2025-04-01,Sell,ETH,1,2500,,B\n2025-05-01,Sell,ETH,0.4,1200,,A\n',
+    chain: H + '2024-01-01,Buy,BTC,0.5,10000,,A\n2024-06-01,Buy,BTC,0.5,30000,,A\n2025-02-01,Send,BTC,0.8,,40,A\n2025-02-01,Receive,BTC,0.79,,,B\n2025-02-05,Send,BTC,0.79,,,B\n2025-02-05,Receive,BTC,0.78,,,C\n2025-06-01,Sell,BTC,0.7,60000,,C\n2025-06-02,Sell,BTC,0.2,15000,,A\n',
+    oneLine: H + '2024-01-01,Buy,SOL,10,1000,,A\n2024-02-01,Buy,SOL,10,2000,,A\n2025-03-01,Transfer,SOL,12,,,A,11.5,B\n2025-04-01,Sell,SOL,11.5,2300,,B\n',
+    bigFee: H + '2024-01-01,Buy,ETH,0.01,30,,A\n2024-02-01,Buy,ETH,0.01,40,,A\n2024-03-01,Buy,ETH,1,3000,,A\n2025-03-01,Send,ETH,1.02,,50,A\n2025-03-01,Receive,ETH,1.0,,,B\n2025-04-01,Sell,ETH,1,3500,,B\n',
+    wallets: H + '2024-01-01,Buy,ETH,2,4000,,A\n2024-01-02,Buy,ETH,1,2500,,C\n2025-03-01,Send,ETH,1,,,A\n2025-03-01,Receive,ETH,0.99,,,B\n2025-03-10,Send,ETH,1,,,C\n2025-03-11,Receive,ETH,0.985,,,B\n2025-05-01,Sell,ETH,1.9,5700,,B\n2025-05-02,Send,ETH,0.5,,,A\n',
+  };
+  const ledger = r => { const b = r.totals.basis; return Math.abs(b.in - b.sold - b.remaining - b.removedFees - b.removedUnpaired) < 1e-6; };
+  const comp = (csv, method, fees, picks) => U.compute(U.fromCSVText(csv).txs, { method, fees, picks: picks || {} });
+  const M = ['FIFO', 'HIFO', 'MANUAL'], F = ['IGNORE', 'DISPOSE', 'CAPITALIZE'];
+  const res = [];
+  for (const k in SC) for (const m of M) for (const f of F) { const r = comp(SC[k], m, f, m === 'MANUAL' ? { 5: { lot: 2, qty: 1 } } : null);
+    res.push(ledger(r) && (f === 'IGNORE' ? r.totals.basis.capitalized === 0 : r.totals.basis.removedFees === 0)); }
+  eq(res.every(Boolean), true, 'v2.8 basis conservation (in = sold + remaining + removed) for 5 scenarios x FIFO/HIFO/MANUAL x 3 options; nothing silently removed with DISPOSE/CAPITALIZE');
+  const pi = comp(SC.paired, 'FIFO', 'IGNORE'), pd = comp(SC.paired, 'FIFO', 'DISPOSE'), pc = comp(SC.paired, 'FIFO', 'CAPITALIZE');
+  eq([r2s(pi.totals.basis.removedFees), pi.totals.fees.removed, /\$60\.00/.test(U.feeLine(pi.totals.fees))], [60, 60, true], 'IGNORE: removed basis of the fee units shown (0.02 ETH from the $3000 lot = $60)');
+  const fr = pd.rows.find(x => x.fee);
+  eq([fr.desc, r2s(fr.qty), fr.cost, fr.proceeds, fr.gain, fr.term, fr.status], ['0.02 ETH network fee (to verify)', 0.02, 60, 6, -54, 'short', 'ok'], 'DISPOSE paired: one 8949 line, proceeds = Fee USD, basis = FIFO lot of the fee units');
+  eq([pc.rows.length, pc.rows[0].cost, pc.rows[0].acquired, r2s(pc.totals.basis.capitalized)], [2, 1040.54, Date.UTC(2024, 0, 1), 60], 'CAPITALIZE: fee basis spread pro rata on received units, original date kept, no 8949 line');
+  const hd = comp(SC.paired, 'HIFO', 'DISPOSE').rows.find(x => x.fee);
+  eq([hd.cost, hd.term], [20, 'long'], 'DISPOSE HIFO: fee units from the 2024 lot (moved units take the highest cost first), long term');
+  const md = comp(SC.paired, 'MANUAL', 'DISPOSE', { 5: { lot: 2, qty: 1 } }).rows.find(x => x.fee);
+  eq(md.cost, 60, 'DISPOSE MANUAL: transfer pieces follow FIFO (as in v2.7), fee basis from the actual lot');
+  // chain A -> B -> C: two fee events, each from its own lots
+  const cd = comp(SC.chain, 'FIFO', 'DISPOSE'), cf = cd.rows.filter(x => x.fee);
+  eq(cf.map(x => [r2s(x.qty), x.cost, x.proceeds, x.term]), [[0.01, 600, 40, 'short'], [0.01, 600, null, 'short']], 'chain A->B->C: fee of each hop is its own line, second hop basis from the lots carried');
+  const cc = comp(SC.chain, 'FIFO', 'CAPITALIZE');
+  eq([r2s(cc.totals.basis.capitalized), ledger(cc), cc.rows.filter(x => x.wallet === 'C').reduce((a, x) => a + x.cost, 0) > comp(SC.chain, 'FIFO', 'IGNORE').rows.filter(x => x.wallet === 'C').reduce((a, x) => a + x.cost, 0)], [1207.59, true, true], 'chain CAPITALIZE: both fees added to the units that end in wallet C (second hop fee basis includes the first capitalized fee)');
+  // one-line TRANSFER with Received Quantity, fee over two lots, fee larger than a lot
+  const od = comp(SC.oneLine, 'FIFO', 'DISPOSE').rows.filter(x => x.fee), oi = comp(SC.oneLine, 'FIFO', 'IGNORE');
+  eq([od.length, od[0].qty, od[0].cost, oi.totals.basis.removedFees, oi.rows.reduce((a, x) => a + x.qty, 0)], [1, 0.5, 100, 100, 11.5], 'one-line TRANSFER: Received Quantity below Quantity = 0.5 SOL fee units (v2.8; destination no longer overstated)');
+  const bd = comp(SC.bigFee, 'FIFO', 'DISPOSE').rows.filter(x => x.fee);
+  eq(bd.map(x => [r2s(x.qty), x.cost]), [[0.02, 60]], 'fee larger than a lot: FIFO moves the two small lots first, fee from the big lot');
+  const bh = comp(H + '2024-01-01,Buy,ETH,0.995,995,,A\n2025-01-01,Buy,ETH,1,2000,,A\n2025-03-01,Send,ETH,1,,9,A\n2025-03-01,Receive,ETH,0.99,,,B\n', 'FIFO', 'DISPOSE').rows.filter(x => x.fee);
+  eq(bh.map(x => [r2s(x.qty * 1000), x.cost, x.proceeds, x.term]), [[5, 5, 4.5, 'long'], [5, 10, 4.5, 'short']], 'fee spread over two lots: two 8949 lines, each with its own basis, term and prorated proceeds');
+  const wd = comp(SC.wallets, 'FIFO', 'DISPOSE');
+  eq([wd.rows.filter(x => x.fee).map(x => [x.wallet, r2s(x.qty * 1000) / 1000, x.cost]), wd.totals.basis.removedUnpaired, ledger(wd)], [[['A', 0.01, 20], ['C', 0.015, 37.5]], 1000, true], 'three wallets: fee per sending wallet; unpaired send counted apart (removedUnpaired)');
+  // DISPOSE: price equal / above / below basis, short and long lot
+  const one = (buy, fee) => comp(H + buy + ',Buy,ETH,1,1000,,A\n2025-03-01,Send,ETH,1,,' + fee + ',A\n2025-03-01,Receive,ETH,0.99,,,B\n', 'FIFO', 'DISPOSE').rows.find(x => x.fee);
+  eq([[10, 15, 5].map(f => one('2025-01-01', f).gain), one('2025-01-01', 10).term, [10, 15, 5].map(f => one('2023-01-01', f).gain), one('2023-01-01', 10).term], [[0, 5, -5], 'short', [0, 5, -5], 'long'], 'DISPOSE: fee value equal / above / below basis, short and long lots');
+  const tot = comp(H + '2025-01-01,Buy,ETH,1,1000,,A\n2025-03-01,Send,ETH,1,500,,A\n2025-03-01,Receive,ETH,0.99,,,B\n', 'FIFO', 'DISPOSE').rows.find(x => x.fee);
+  eq([tot.proceeds, tot.gain], [5, -5], 'DISPOSE without Fee: USD value from the line Total, pro rata (500 x 0.01)');
+  // missing USD value: "to verify", never 0, out of the totals
+  const nu = comp(H + '2025-01-01,Buy,ETH,1,1000,,A\n2025-03-01,Send,ETH,1,,,A\n2025-03-01,Receive,ETH,0.99,,,B\n', 'FIFO', 'DISPOSE'), nr = nu.rows[0];
+  eq([nr.proceeds, nr.gain, /to verify/.test(nr.status), nu.totals.short.proceeds, nu.totals.short.cost, nu.totals.toVerify, nu.totals.fees.noUsd], [null, null, true, 0, 0, 1, 1], 'missing fee USD: line to verify, proceeds/gain not 0, not in the totals');
+  const uo = comp(H + '2025-01-01,Buy,ETH,1,1000,,A\n2025-03-01,Send,ETH,1,,5,A\n2025-03-01,Receive,ETH,1,,,B\n', 'FIFO', 'DISPOSE');
+  eq([uo.rows.length, uo.totals.fees.usdOnly, /without a fee quantity: not computed/.test(U.feeLine(uo.totals.fees))], [0, 1, true], 'Fee USD without fee quantity: reported, not computed');
+  // changing the option only changes fee-related lines
+  const strip = r => r.rows.filter(x => !x.fee).map(x => JSON.stringify(x));
+  let same = true;
+  for (const k in SC) for (const m of M) { const pk = m === 'MANUAL' ? { 5: { lot: 2, qty: 1 } } : null, a = comp(SC[k], m, 'IGNORE', pk), d = comp(SC[k], m, 'DISPOSE', pk), c = comp(SC[k], m, 'CAPITALIZE', pk);
+    same = same && JSON.stringify(strip(a)) === JSON.stringify(strip(d)) && JSON.stringify(a.rows.map(x => [x.line, x.qty, x.proceeds, x.acquired])) === JSON.stringify(c.rows.map(x => [x.line, x.qty, x.proceeds, x.acquired]))
+      && Math.abs(c.totals.basis.sold + c.totals.basis.remaining - a.totals.basis.sold - a.totals.basis.remaining - a.totals.basis.removedFees) < 1e-6; }
+  eq(same, true, 'option change: DISPOSE adds only fee lines; CAPITALIZE changes only the cost of received units (by the basis IGNORE removes)');
+  // IGNORE = results before v2.8 (frozen from v2.7 output) and = default
+  const fz = r => r.rows.map(x => [x.desc, x.proceeds, x.cost, x.gain, x.term, x.status]);
+  eq([fz(pi), fz(comp(SC.chain, 'FIFO', 'IGNORE'))], [[['1 ETH', 2500, 1000, 1500, 'long', 'ok'], ['0.4 ETH', 1200, 1200, 0, 'short', 'ok']], [['0.5 BTC', 42857.14, 10000, 32857.14, 'long', 'ok'], ['0.2 BTC', 17142.86, 12000, 5142.86, 'short', 'ok'], ['0.2 BTC', 15000, 12000, 3000, 'long', 'ok']]], 'IGNORE: same rows as v2.7');
+  let def = true;
+  for (const f of fs.readdirSync(__dirname + '/testdata/us').filter(f => /\.csv$/.test(f))) for (const m of M) { const t = U.fromCSVText(fs.readFileSync(__dirname + '/testdata/us/' + f)).txs, a = U.compute(t, { method: m }), b = U.compute(t, { method: m, fees: 'IGNORE' });
+    def = def && JSON.stringify([a.rows, a.totals, a.notes]) === JSON.stringify([b.rows, b.totals, b.notes]) && b.rows.every(x => !x.fee); }
+  eq(def, true, 'IGNORE is the default, no fee lines, on every test file');
+  // random fixed-seed test: 3 wallets, variable fees
+  let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const Wn = ['A', 'B', 'C'], hold = { A: 0, B: 0, C: 0 }; let csv = H, day = Date.UTC(2023, 0, 1);
+  const ds = () => new Date(day += 86400000 * (1 + Math.floor(rnd() * 20))).toISOString().slice(0, 10);
+  for (let i = 0; i < 60; i++) { const w = Wn[Math.floor(rnd() * 3)], x = rnd();
+    if (x < 0.35 || hold[w] < 0.1) { const q = +(0.1 + rnd() * 2).toFixed(4); hold[w] += q; csv += `${ds()},Buy,ETH,${q},${(q * (1000 + rnd() * 3000)).toFixed(2)},,${w}\n`; }
+    else if (x < 0.75) { const to = Wn[(Wn.indexOf(w) + 1 + Math.floor(rnd() * 2)) % 3], q = +(hold[w] * (0.2 + rnd() * 0.7)).toFixed(4), rq = +(q * (1 - rnd() * 0.019)).toFixed(6), fee = rnd() < 0.3 ? '' : (rnd() * 20).toFixed(2), d = ds();
+      hold[w] -= q; hold[to] += rq;
+      csv += rnd() < 0.5 ? `${d},Send,ETH,${q},,${fee},${w}\n${d},Receive,ETH,${rq},,,${to}\n` : `${d},Transfer,ETH,${q},,${fee},${w},${rq},${to}\n`; }
+    else { const q = +(hold[w] * (0.1 + rnd() * 0.5)).toFixed(4); hold[w] -= q; csv += `${ds()},Sell,ETH,${q},${(q * (1000 + rnd() * 4000)).toFixed(2)},,${w}\n`; } }
+  let rok = true, nfee = 0;
+  for (const m of M) for (const f of F) { const r = comp(csv, m, f); rok = rok && ledger(r) && r.totals.toVerify === r.rows.filter(x => x.fee && x.proceeds == null).length; if (f === 'DISPOSE') nfee = r.rows.filter(x => x.fee).length; }
+  eq([rok, nfee > 5], [true, true], 'random fixed seed (3 wallets, variable fees): basis conserved for every method x option, missing fee USD only lines to verify');
+  // exports show the option
+  const X = require('./us-export.js'), sd = X.summaryData(pd, {}).info.join('\n'), cs = U.toCSV(pd);
+  eq([/Network fees on transfers: Dispose/.test(sd), /Network fees: 1 transfer/.test(sd), /Network fees on transfers,Dispose/.test(cs), /network fee \(to verify\)/.test(cs)], [true, true, true, true], 'PDF summary and CSV header show the option and the Network fees line'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
