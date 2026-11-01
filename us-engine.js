@@ -556,7 +556,15 @@
   const loadSettings = st => { try { return pickSettings(JSON.parse(st.getItem(SET_KEY))); } catch (e) { return {}; } };
   const saveSettings = (st, v) => { try { st.setItem(SET_KEY, JSON.stringify(pickSettings(v))); return true; } catch (e) { return false; } };
   const clearSettings = st => { try { st.removeItem(SET_KEY); return true; } catch (e) { return false; } };
-  const api = { stampName, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
+  /* v2.17 "To verify (N)" on screen: same points and order as checks(), grouped by importance under short headings, "Line N" in bold at the start. */
+  const CHK_GRP = { 1: 'Not in your totals', 2: 'Choose / confirm', 3: 'Possible issues', 4: 'Entered by you / methods', 5: 'Entered by you / methods' };
+  function checksBlock(C) {
+    const e = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const li = c => { const m = /^(Line \d+): ([\s\S]*)$/.exec(c.msg); return '<li>' + (m ? '<b>' + e(m[1]) + '</b>: ' + e(m[2]) : e(c.msg)) + '</li>'; };
+    let h = '', g = null; for (const c of C) { if (CHK_GRP[c.rank] !== g) { h += (g ? '</ul>' : '') + '<p class="uschk-h">' + e(CHK_GRP[c.rank]) + '</p><ul>'; g = CHK_GRP[c.rank]; } h += li(c); }
+    return `<div class="warn uschecks"><b>To verify (${C.length})</b>${h}</ul></div>`;
+  }
+  const api = { stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -688,7 +696,7 @@
     }
     function checksHtml(res) {
       const C = checks(res, { cat, fstat, carry: clNow() }); if (!C.length) return '';
-      return `<div class="warn uschecks"><b>To verify (${C.length})</b><ul>${C.map(c => '<li>' + esc(c.msg) + '</li>').join('')}</ul></div>`;
+      return checksBlock(C);
     }
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
