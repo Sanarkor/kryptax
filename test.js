@@ -113,6 +113,10 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   eq(X.pdfName(2026, new Date(Date.UTC(2026, 9, 25, 18, 48))) === 'kryptax-formulaire-2086-2026-sur-2027-25-10-2026-19-48.pdf' ? 1 : 0, 1, 'Nom du PDF : année, déclaration, date/heure de Paris (hiver)');
   eq(X.pdfName(2025, new Date(Date.UTC(2026, 6, 3, 22, 5))) === 'kryptax-formulaire-2086-2025-sur-2026-04-07-2026-00-05.pdf' ? 1 : 0, 1, 'Nom du PDF : heure d’été de Paris, sans accents ni espaces');
   eq(/X\.pdfName\(fyear, new Date\(\)\)/.test(require('fs').readFileSync(__dirname + '/app.js', 'utf8')) && !/kryptax-2086-/.test(require('fs').readFileSync(__dirname + '/app.js', 'utf8')) ? 1 : 0, 1, 'Nom du PDF appliqué partout (téléchargement, partage, ouverture)');
+  { const n1 = X.stateName('2025-12-31', new Date(2026, 10, 1, 10, 33, 59)), n2 = X.stateName('2025-12-31', new Date(2026, 10, 1, 10, 34, 0)), AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8');
+    eq(n1 === 'kryptax-etat-2025-12-31_2026-11-01_10-33.json' && /^kryptax-etat-\d{4}-\d\d-\d\d_\d{4}-\d\d-\d\d_\d\d-\d\d\.json$/.test(n2) && !/[\\/:*?"<>| ]/.test(n1) ? 1 : 0, 1, 'Nom de l’état JSON : préfixe + date de l’état + date/heure locale à la minute, sans caractère interdit');
+    eq(n1 !== n2 && X.pdfName(2025, new Date(Date.UTC(2026, 10, 1, 9, 33))) !== X.pdfName(2025, new Date(Date.UTC(2026, 10, 1, 9, 34))) ? 1 : 0, 1, 'Exports France : deux minutes différentes donnent des noms différents');
+    eq(AP.includes('X.stateName(st.date, new Date())') && !AP.includes("'kryptax-etat-' +") ? 1 : 0, 1, 'Nom horodaté appliqué à l’export d’état'); }
   const T = [{ id: 1, date: Date.UTC(2025, 0, 5), type: 'BUY', asset: 'AAA', qty: 10, eur: 500, fee: 0 },
     { id: 2, date: Date.UTC(2025, 5, 5), type: 'SELL', asset: 'AAA', qty: 1, eur: 100, fee: 0 },
     { id: 3, date: Date.UTC(2026, 2, 5), type: 'SELL', asset: 'AAA', qty: 2, eur: 200, fee: 0 },
