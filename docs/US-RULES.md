@@ -200,3 +200,6 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 ## v2.10 — Schedule D "Other gains" line
 - Lines 4, 5 (Part I) and 11, 12, 13 (Part II) — numbers checked on Schedule D (Form 1040) 2025, https://www.irs.gov/pub/irs-pdf/f1040sd.pdf (2026-11-01) — are shown as one line "Other gains (Forms 4797, 2439, 6252, 4684, 6781, 8824, Schedule K-1, capital gain distributions): not computed by Kryptax - leave blank if you only have crypto". Same on screen, CSV, Excel and PDF. No calculation or total changed.
+
+## v2.11 — Export file names
+- U.S.A. exports (PDF, CSV, Excel, income CSV) keep their prefix and add the browser's local date and time with seconds, e.g. `kryptax-us-summary_2026-11-01_10-15-32.pdf`, so two exports never share a name. FRANCE mode unchanged.
