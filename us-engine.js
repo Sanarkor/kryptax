@@ -323,6 +323,9 @@
       out.push([]); out.push(['Not on Form 8949 - to verify (missing cost or value; not in the totals)']); out.push(head);
       for (const r of F.toVerify) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.status]));
     }
+    const SD = scheduleD(res, opts.cat, opts.carry);
+    out.push([]); out.push([SD.title + ' - ' + SD.warn]); out.push(['Line', 'Description', '(d) Proceeds', '(e) Cost', '(g) Adjustments', '(h) Gain or (loss)', 'Note']);
+    for (const l of SD.lines) out.push([l.line, l.desc, m(l.d), m(l.e), m(l.g), l.answer || m(l.h), l.note]);
     const K = carryLines(res, opts.carry);
     if (K) { out.push([]); out.push(['Capital loss carryover (amounts you entered) - to verify']); out.push(['Item', 'Amount']);
       out.push(['Schedule D line 6 - short-term carryover', m(-K.s)]); out.push(['Net short-term, this file + carryover (Schedule D line 7 if no other items)', m(K.net7)]);
@@ -343,6 +346,33 @@
     return { s, l, net7: r2((T.short.gain || 0) - s), net15: r2((T.long.gain || 0) - l),
       note: 'Carryover amounts typed by you from the Capital Loss Carryover Worksheet (Instructions for Schedule D). Net amounts include only the sales in this file: if you have other capital gains or losses, Schedule D lines 7 and 15 differ - to verify. No loss limit and no tax computed.' };
   }
+  /* v2.5 Schedule D (Form 1040) 2025 draft. Only lines that are plain sums of Kryptax data: 1b/2/3 and 8b/9/10 = Form 8949 Part totals
+     (box G/H/I -> 1b/2/3, J/K/L -> 8b/9/10), 6 and 14 = carryover typed by the user, 7 = lines 1a-6, 15 = lines 8a-14, 16 = 7 + 15,
+     17 = "are lines 15 and 16 both gains". Lines 1a/8a (Exception 1), 4, 5, 11-13 and 18-22 are not computed. */
+  const SD_NC = 'not computed by Kryptax';
+  function scheduleD(res, cat, carry) {
+    const F = form8949(res, cat), K = carryLines(res, carry), L = [], sh = F.parts[0], lg = F.parts[1];
+    const nc = (line, desc, why) => L.push({ line, desc, nc: true, note: why || SD_NC });
+    const tot = (line, desc, P) => L.push({ line, desc, d: P.totals.d, e: P.totals.e, g: null, h: P.totals.h, note: P.box ? '' : 'box not chosen - to verify' });
+    const pick = (P, lines, descs) => { const i = P.box ? { G: 0, H: 1, I: 2, J: 0, K: 1, L: 2 }[P.box] : -1;
+      lines.forEach((ln, j) => { if (i === j) tot(ln, descs[j], P); else if (i < 0 && j === 0) tot(lines.join(' / '), descs[0].replace(/ with box \w\/\w/, '') + ' (choose the box)', P); else if (i >= 0) L.push({ line: ln, desc: descs[j], d: null, e: null, g: null, h: null, note: 'none in this file' }); }); };
+    nc('1a', 'Short-term totals reported directly (Exception 1)', 'not used: all sales listed on Form 8949');
+    pick(sh, ['1b', '2', '3'], ['Form 8949 totals with box A/G', 'Form 8949 totals with box B/H', 'Form 8949 totals with box C/I']);
+    nc('4', 'Short-term gain from Forms 6252, 4684, 6781, 8824'); nc('5', 'Net short-term gain or (loss) from Schedule(s) K-1');
+    L.push({ line: '6', desc: 'Short-term capital loss carryover', h: K && isFinite(carry.s) ? -K.s : null, note: K && isFinite(carry.s) ? 'entered by you - to verify' : 'none entered' });
+    const n7 = r2((sh.totals.h || 0) - (K ? K.s : 0)), n15 = r2((lg.totals.h || 0) - (K ? K.l : 0)), n16 = r2(n7 + n15);
+    L.push({ line: '7', desc: 'Net short-term capital gain or (loss)', h: n7, note: 'lines 1a-6 from Kryptax only - to verify' });
+    nc('8a', 'Long-term totals reported directly (Exception 1)', 'not used: all sales listed on Form 8949');
+    pick(lg, ['8b', '9', '10'], ['Form 8949 totals with box D/J', 'Form 8949 totals with box E/K', 'Form 8949 totals with box F/L']);
+    nc('11', 'Gain from Form 4797, 2439, 6252, 4684, 6781, 8824'); nc('12', 'Net long-term gain or (loss) from Schedule(s) K-1'); nc('13', 'Capital gain distributions');
+    L.push({ line: '14', desc: 'Long-term capital loss carryover', h: K && isFinite(carry.l) ? -K.l : null, note: K && isFinite(carry.l) ? 'entered by you - to verify' : 'none entered' });
+    L.push({ line: '15', desc: 'Net long-term capital gain or (loss)', h: n15, note: 'lines 8a-14 from Kryptax only - to verify' });
+    L.push({ line: '16', desc: 'Combine lines 7 and 15', h: n16, note: n16 > 0 ? 'gain: Form 1040 line 7a - to verify' : n16 < 0 ? 'loss: skip lines 17-20, see line 21' : 'zero: skip lines 17-21' });
+    L.push({ line: '17', desc: 'Are lines 15 and 16 both gains?', answer: n16 > 0 ? (n15 > 0 ? 'Yes' : 'No') : null, note: n16 > 0 ? 'to verify' : 'skipped (line 16 is not a gain)' });
+    nc('18', '28% Rate Gain Worksheet amount'); nc('19', 'Unrecaptured Section 1250 Gain Worksheet amount'); nc('20', 'Lines 18 and 19 zero or blank? (tax worksheet)');
+    nc('21', 'Capital loss allowed (limit depends on filing status)', SD_NC + ' (depends on filing status)'); nc('22', 'Qualified dividends? (tax worksheet)');
+    return { lines: L, cat: F.cat, n7, n15, n16, title: 'Schedule D (Form 1040) - draft', warn: 'Draft to verify - not tax advice' };
+  }
   function daLines(res, d) {
     if (!d || (!isFinite(d.p) && !isFinite(d.b))) return null;
     const o = daCompare(res.totals, d.p, d.b), lines = [];
@@ -357,7 +387,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -447,6 +477,13 @@
         + inp('s', c.s, 'Short-term (worksheet line 8 → Schedule D line 6)') + inp('l', c.l, 'Long-term (worksheet line 13 → Schedule D line 14)')
         + (K ? '<ul><li>Net short-term: ' + usd(K.net7) + '</li><li>Net long-term: ' + usd(K.net15) + '</li></ul><p class="usnote">' + esc(K.note) + '</p>' : '') + '</details>';
     }
+    function sdBlock(res) {
+      const SD = scheduleD(res, cat, clNow()), v = x => x == null ? '' : usd(x);
+      return `<h3 class="ussdh">Schedule D (draft)</h3><p class="warn">${SD.warn}.</p><div class="scroll"><table class="us8949 ussd"><tr class="hdr"><th>Line</th><th>Description</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(g) Adj.</th><th>(h) Gain/(loss)</th></tr>`
+        + SD.lines.map(l => l.nc ? `<tr class="usnc"><td data-l="Line">${l.line}</td><td data-l="Description">${esc(l.desc)}</td><td data-l="Status" colspan="4">${esc(l.note)}</td></tr>`
+          : `<tr><td data-l="Line">${l.line}</td><td data-l="Description">${esc(l.desc)}${l.note ? ' <span class="hint">(' + esc(l.note) + ')</span>' : ''}</td><td data-l="(d) Proceeds">${v(l.d)}</td><td data-l="(e) Cost">${v(l.e)}</td><td data-l="(g) Adj.">${v(l.g)}</td><td data-l="(h) Gain/(loss)">${l.answer || v(l.h)}</td></tr>`).join('')
+        + '</table></div><p class="hint">Uses the Form 8949 box chosen above and the carryover entered. Source: Schedule D (Form 1040) 2025 and its instructions.</p>';
+    }
     const daNow = () => ({ p: da[(year || 'all') + 'p'], b: da[(year || 'all') + 'b'] });
     function catSel() {
       const F = form8949(last, cat), o = (v, l) => `<option value="${v}"${cat === v ? ' selected' : ''}>${l}</option>`;
@@ -475,6 +512,7 @@
             + M.map(r => { const mc = mcost[r.line] || {}; return `<div class="grid"><p><b>Sale line ${r.line}</b>: ${esc(r.desc)} sold ${mdy(r.sold)}${r.wallet ? ' (' + esc(r.wallet) + ')' : ''}</p><label>Total cost (USD)<input class="usmc" data-line="${r.line}" inputmode="decimal" value="${mc.cost != null ? esc(String(mc.cost)) : ''}" placeholder="e.g. 250.00"></label><label>Date acquired<input type="date" class="usmd" data-line="${r.line}" value="${esc(iso(mc.date))}" max="${iso(r.sold)}"></label></div>`; }).join('') + '</details>'; })()
         + daBlock(T, year)
         + carryBlock(res)
+        + sdBlock(res)
         + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
         + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
         + `<div class="grid"><label>Lot method <select id="usmethod"><option value="FIFO"${method === 'FIFO' ? ' selected' : ''}>FIFO (first in, first out)</option><option value="HIFO"${method === 'HIFO' ? ' selected' : ''}>HIFO (highest cost first)</option><option value="MANUAL"${method === 'MANUAL' ? ' selected' : ''}>Manual choice per sale</option></select></label></div>`
