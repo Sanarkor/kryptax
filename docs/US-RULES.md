@@ -221,5 +221,5 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 ## v2.14 — Highlights (v=20261101u)
 
-- Screen: the "What to copy and where" block has a thin cyan border and a wide layered glow: cyan (accent #22d3ee), then gold, then orange outside (`box-shadow`, three layers). The summary box below is unchanged.
+- Screen: the "What to copy and where" block has a thin cyan border and a wide layered glow: cyan (accent #22d3ee), then gold, then orange outside (`box-shadow`, three layers). The summary box below is unchanged. The same rule (class `halo`) is used on the main France result box (« Total global plus-value nette … Prélèvement estimé »), v=20261101v.
 - PDF: only the amounts to copy are coloured dark amber #A16207 (RGB 161, 98, 7): Form 8949 Part totals (d), (e), (h) and Schedule D lines 7, 15, 16 and 21 (when computed). Text stays black; amounts unchanged. CSV/Excel unchanged.
