@@ -44,6 +44,10 @@
       b.addEventListener('click', () => { const nx = (root.dataset.theme || sys()) === 'light' ? 'dark' : 'light'; root.dataset.theme = nx; try { localStorage.setItem(KT, nx); } catch (e) {} draw(); });
       try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', draw); } catch (e) {}
       regs.appendChild(b); draw(); } }
+  // v2.26 PC (>= 1024 px) : « Pourquoi / Soutenir » en haut à droite de l'en-tête, au-dessus des pays ; mobile : retour en bas de page (même élément, pas de doublon)
+  { const kf = document.querySelector('.kofifoot'), hd = document.querySelector('header'); if (kf && hd && window.matchMedia) { const home = kf.parentNode, nx = kf.nextSibling, mq = matchMedia('(min-width: 1024px)');
+    const place = () => { if (mq.matches) { if (kf.parentNode !== hd) hd.appendChild(kf); kf.classList.add('kofitop'); } else if (kf.parentNode !== home) { home.insertBefore(kf, nx); kf.classList.remove('kofitop'); } };
+    place(); try { mq.addEventListener('change', place); } catch (e) { try { mq.addListener(place); } catch (x) {} } } }
   { const fr = $('#regfr'), us = $('#regus'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
     const tr = u => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
         if (!keep.has(el)) keep.set(el, { h: el.innerHTML, hid: el.hidden, a: attr ? el.getAttribute(attr) : null });
