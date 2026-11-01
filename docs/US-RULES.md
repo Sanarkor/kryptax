@@ -141,3 +141,11 @@ Not computed by Kryptax (shown greyed):
 - 18, 19 (worksheets), 20 and 22 (tax worksheets), 21 (loss limit depends on filing status).
 
 Shown on screen, in the CSV (section) and in the PDF (separate last page).
+
+## v2.6 — CSV summary and Excel (.xlsx) export
+
+- The CSV follows the PDF: title, tax year, time zones, lot method, Form 8949 situation, then sections separated by a blank line: Form 8949 Part I, Part II (each with a TOTAL row and its Schedule D line), lines to verify (grouped, not in the totals), Schedule D (draft), Form 1099-DA comparison and capital loss carryover (only when entered), final note.
+- Every row has the same number of columns; amounts are always in the same columns ((d), (e), (g), (h)), so a spreadsheet opens it cleanly. Downloaded with a UTF-8 BOM.
+- "Download Excel (.xlsx)" uses the SheetJS build already shipped (xlsx.mini.min.js, Community edition) — no external resource. Sheet "Summary" = same layout as the CSV, with column widths and amounts as numbers in `$#,##0.00` format; sheet "Form 8949 data" = one flat table (Part, Box, columns (a)–(h), status).
+- Limit: the Community edition does not write bold text or colours, so the .xlsx has no bold headers or coloured rows.
+- File names: kryptax-us-summary.csv / kryptax-us-summary.xlsx.
