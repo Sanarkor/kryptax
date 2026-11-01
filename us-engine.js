@@ -359,6 +359,11 @@
   }
   /* Tax year view: sales by the year of the sale date, income by the year received (UTC dates, like mdy; your local date may differ — to verify). */
   function years(res) { return [...new Set(res.rows.map(r => new Date(r.sold).getUTCFullYear()).concat(res.income.map(r => new Date(r.date).getUTCFullYear())))].filter(isFinite).sort(); }
+  function barData(full, res) { // v2.19: per year = forYear(...).totals.gain; per asset = sum of the gain of the "ok" lines (same lines as the totals)
+    const years = full ? [...new Set(full.rows.map(r => new Date(r.sold).getUTCFullYear()))].filter(isFinite).sort().map(y => ({ k: String(y), v: forYear(full, y).totals.gain })) : [], g = new Map();
+    res.rows.filter(r => r.status === 'ok').forEach(r => g.set(r.asset, (g.get(r.asset) || 0) + r.gain));
+    return { years, assets: [...g].map(([k, v]) => ({ k, v: r2(v) })).sort((a, b) => b.v - a.v) };
+  }
   function forYear(res, y) {
     if (!y) return res;
     const inY = t => t != null && new Date(t).getUTCFullYear() === y, rows = res.rows.filter(r => inY(r.sold)), income = res.income.filter(r => inY(r.date));
@@ -564,7 +569,7 @@
     let h = '', g = null; for (const c of C) { if (CHK_GRP[c.rank] !== g) { h += (g ? '</ul>' : '') + '<p class="uschk-h">' + e(CHK_GRP[c.rank]) + '</p><ul>'; g = CHK_GRP[c.rank]; } h += li(c); }
     return `<div class="warn uschecks"><b>To verify (${C.length})</b>${h}</ul></div>`;
   }
-  const api = { stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
+  const api = { stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -676,7 +681,7 @@
         + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p><p class="hint">These choices and the time zone are kept in this browser only (no file data, no amounts, no manual lot picks). <a href="#" id="ussetreset">Reset saved settings</a></p></details>';
     }
     const opts = doc.createElement('div'); opts.id = 'usopts'; const imp = doc.getElementById('usimp');
-    if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const drawOpts = () => { opts.innerHTML = optsHtml(); }; drawOpts();
+    if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const tips = () => opts.querySelectorAll('select').forEach(x => { const o = x.options[x.selectedIndex]; x.title = o ? o.text : ''; }); /* v2.19 full option text as a tooltip */ const drawOpts = () => { opts.innerHTML = optsHtml(); tips(); }; drawOpts(); opts.addEventListener('change', tips);
     // v2.18 wide screens (>= 1024px): options + import in a left column, "What to copy and where" + "To verify" in a side panel under them
     const left = doc.createElement('div'); left.id = 'usleft'; const side = doc.createElement('div'); side.id = 'usside';
     if (imp && imp.parentNode) { imp.parentNode.insertBefore(left, opts); left.appendChild(opts); left.appendChild(imp); left.appendChild(side); }
@@ -709,6 +714,17 @@
       return '<div class="kxkpi halo" aria-hidden="true">' + c('Net gain or loss', usd(T.gain), T.gain < 0 ? 'neg' : 'pos') + c('Short term', usd(T.short.gain)) + c('Long term', usd(T.long.gain))
         + (G.loss && G.l21 ? c('Loss allowed (line 21)', usd(G.l21.h)) + (G.l21.rest > 0 ? c('Carryover', usd(G.l21.rest)) : '') : '') + '</div>';
     }
+    // v2.19 charts (screen only): HTML/CSS bars, amounts already computed (totals of each year, gain of each "ok" line); lines "to verify" are left out like in the totals
+    function usBars(id, title, items, legend) {
+      if (!items.length) return ''; const mx = Math.max(...items.map(i => Math.abs(i.v)), 0.01);
+      return `<figure class="kxchart" id="${id}" role="group" aria-label="${esc(title)}"><figcaption>${esc(title)}</figcaption>` + items.map(i => `<div class="kxrow" role="img" aria-label="${esc(i.k + ': ' + usd(i.v))}"><span class="kxk">${esc(i.k)}</span><svg class="kxtrack" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true"><rect class="kxb ${i.v < 0 ? 'neg' : 'pos'}" width="${Math.max(1, Math.round(Math.abs(i.v) / mx * 100))}" height="12" rx="3"/></svg><span class="kxv ${i.v < 0 ? 'neg' : 'pos'}" data-v="${i.v}">${usd(i.v)}</span></div>`).join('') + (legend ? `<p class="hint">${esc(legend)}</p>` : '') + '</figure>';
+    }
+    function usCharts(full, res) {
+      const D = barData(full, res), T = res.totals, tv = T.toVerify ? `${T.toVerify} line${T.toVerify > 1 ? 's' : ''} marked "to verify" ${T.toVerify > 1 ? 'are' : 'is'} not included, as in the totals.` : '';
+      if (!D.assets.length && !D.years.length) return '';
+      return '<div class="kxcharts">' + usBars('kxyears', 'Net gain or loss by tax year', D.years, '')
+        + usBars('kxassets', `Net gain or loss by asset${year ? ' (' + year + ')' : ' (all years)'}`, D.assets, ((tv ? tv + ' ' : '') + 'Sum of the bars = net gain or loss above.').trim()) + '</div>';
+    }
     function render() {
       const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
@@ -721,6 +737,7 @@
           + `<div class="scroll"><table class="us8949 usincome"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value USD</th><th>Type</th></tr>${res.income.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${mdy(r.date)}</td><td>${esc(r.asset)}</td><td>${+r.qty.toPrecision(10)}</td><td>${r.usd == null ? 'to verify' : usd(r.usd)}</td><td>${r.type}</td></tr>`).join('')}</table></div>`
           + `<p><button type="button" id="usinccsv" class="small">Download CSV (income)</button></p>` : '')
         + (T.wallets.length > 1 ? `<p class="hint">${T.wallets.length} wallets (lots tracked in each wallet): ${esc(T.wallets.join(', '))}.</p>` : '')
+        + usCharts(full, res)
         + feeBlock(T.fees)
         + (T.transfers.paired ? `<p class="hint">${T.transfers.paired} transfer${T.transfers.paired > 1 ? 's' : ''} between your own wallets: not taxable, original dates and cost kept.</p>` : '')
         + (()=>{ const M = full.rows.filter(r => r.status.startsWith('to verify: no purchase found') || r.user); if (!M.length) return '';
