@@ -306,34 +306,65 @@
     return { cat: bx ? cat : null, parts: [part('short', 0), part('long', 1)], toVerify: res.rows.filter(r => r.status !== 'ok' || !r.term) };
   }
   const CATNOTE = { basis: 'Form 1099-DA received, basis reported to the IRS', nobasis: 'Form 1099-DA received, basis not shown or not reported to the IRS', none: 'No Form 1099-DA received' };
-  function toCSV(res, opts) {
+  /* v2.6 report layout shared by the CSV and the .xlsx export: one grid, money in the same columns everywhere
+     ((d) col 3, (e) col 4, (f) col 5, (g) col 6, (h) col 7, note col 8, wallet col 9). Rows: {k: kind, c: cells}; money cells are numbers. */
+  const METHOD_TXT = { FIFO: 'FIFO (first in, first out)', HIFO: 'HIFO (highest cost first)', MANUAL: 'Manual choice per sale (to verify)' };
+  function usReport(res, opts) {
     opts = opts || {};
-    const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), m = v => v == null ? '' : v.toFixed(2);
-    const F = form8949(res, opts.cat), hasW = res.rows.some(r => r.wallet), out = [];
-    const head = ['(a) Description of property', '(b) Date acquired', '(c) Date sold or disposed of', '(d) Proceeds (sales price)', '(e) Cost or other basis', '(f) Code(s)', '(g) Amount of adjustment', '(h) Gain or (loss)'].concat(hasW ? ['Wallet'] : []).concat(['Note']);
-    out.push(['# Form 8949 - digital assets - estimate, to verify. Situation: ' + (CATNOTE[F.cat] || 'not chosen - to verify')]);
-    if (res.totals.tz) out.push(['# Times in file: ' + res.totals.tz.file + '; tax dates: ' + res.totals.tz.tax + ' (to verify)']);
-    if (F.cat && F.cat !== 'none') out.push(['# With a Form 1099-DA: column (d) and (e) should show the amounts on the form; any correction goes in (f) and (g) - to verify']);
+    const F = form8949(res, opts.cat), T = res.totals, hasW = res.rows.some(r => r.wallet), W = hasW ? 10 : 9, out = [];
+    const row = (k, c) => { c = c.slice(); while (c.length < W) c.push(''); out.push({ k, c }); }, blank = () => out.push({ k: 'blank', c: Array(W).fill('') });
+    const head = ['(a) Description of property', '(b) Date acquired', '(c) Date sold or disposed of', '(d) Proceeds (sales price)', '(e) Cost or other basis', '(f) Code(s)', '(g) Amount of adjustment', '(h) Gain or (loss)', 'Note'].concat(hasW ? ['Wallet'] : []);
+    const line = (r, note) => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds, r.cost, '', null, r.gain, note].concat(hasW ? [r.wallet || ''] : []);
+    row('title', ['Kryptax - U.S. summary (estimate) - Draft to verify - not tax advice']);
+    row('kv', ['Tax year', T.year ? String(T.year) : 'All years']);
+    if (T.tz) row('kv', ['Time zones', 'File: ' + T.tz.file, 'Tax dates: ' + T.tz.tax + ' (to verify)']);
+    row('kv', ['Lot method', METHOD_TXT[T.method] || METHOD_TXT.FIFO]);
+    row('kv', ['Form 8949 situation', CATNOTE[F.cat] || 'not chosen - to verify']);
+    row('kv', ['Sales', T.sales + ' (' + T.rows + ' lines' + (T.toVerify ? ', ' + T.toVerify + ' to verify' : '') + ')']);
+    if (F.cat && F.cat !== 'none') row('kv', ['With a Form 1099-DA', 'Columns (d) and (e) should match the form; corrections go in (f) and (g) - to verify']);
     for (const P of F.parts) {
-      out.push([]); out.push([P.title + ' - Box ' + P.boxText]); out.push(head);
-      for (const r of P.lines) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.user ? 'cost and date acquired entered by you (to verify)' : '']));
-      out.push(['Totals (' + P.scheduleD + ')', '', '', m(P.totals.d), m(P.totals.e), '', '', m(P.totals.h)]);
+      blank(); row('section', ['FORM 8949 ' + P.title.toUpperCase() + ' - BOX ' + P.boxText]); row('head', head);
+      for (const r of P.lines) row('row', line(r, r.user ? 'cost and date acquired entered by you (to verify)' : ''));
+      if (!P.lines.length) row('row', ['No sale in this part']);
+      row('total', ['TOTAL ' + (P.part === 'I' ? 'PART I' : 'PART II') + ' -> ' + P.scheduleD, '', '', P.totals.d, P.totals.e, '', null, P.totals.h]);
     }
     if (F.toVerify.length) {
-      out.push([]); out.push(['Not on Form 8949 - to verify (missing cost or value; not in the totals)']); out.push(head);
-      for (const r of F.toVerify) out.push([r.desc, mdy(r.acquired), mdy(r.sold), m(r.proceeds), m(r.cost), '', '', m(r.gain)].concat(hasW ? [r.wallet || ''] : []).concat([r.status]));
+      blank(); row('section', ['TO VERIFY - not on Form 8949, not in the totals (missing cost or value)']); row('head', head);
+      for (const r of F.toVerify) row('tv', line(r, r.status));
     }
     const SD = scheduleD(res, opts.cat, opts.carry);
-    out.push([]); out.push([SD.title + ' - ' + SD.warn]); out.push(['Line', 'Description', '(d) Proceeds', '(e) Cost', '(g) Adjustments', '(h) Gain or (loss)', 'Note']);
-    for (const l of SD.lines) out.push([l.line, l.desc, m(l.d), m(l.e), m(l.g), l.answer || m(l.h), l.note]);
-    const K = carryLines(res, opts.carry);
-    if (K) { out.push([]); out.push(['Capital loss carryover (amounts you entered) - to verify']); out.push(['Item', 'Amount']);
-      out.push(['Schedule D line 6 - short-term carryover', m(-K.s)]); out.push(['Net short-term, this file + carryover (Schedule D line 7 if no other items)', m(K.net7)]);
-      out.push(['Schedule D line 14 - long-term carryover', m(-K.l)]); out.push(['Net long-term, this file + carryover (Schedule D line 15 if no other items)', m(K.net15)]); out.push([K.note]); }
+    blank(); row('section', ['SCHEDULE D (FORM 1040) - DRAFT - ' + SD.warn]);
+    row('head', ['Line', 'Description', '', '(d) Proceeds', '(e) Cost', '', '(g) Adjustments', '(h) Gain or (loss)', 'Note']);
+    for (const l of SD.lines) row(l.nc ? 'nc' : (['7', '15', '16'].includes(l.line) ? 'total' : 'row'), ['Line ' + l.line, l.desc, '', l.d, l.e, '', l.g, l.answer || l.h, l.note]);
     const D = daLines(res, opts.da);
-    if (D) { out.push([]); out.push(['Form 1099-DA comparison (totals you entered) - to verify']); out.push(['Item', 'Form 1099-DA', 'Kryptax', 'Difference', 'Note']);
-      for (const l of D.lines) out.push([l.label, m(l.form), m(l.mine), m(l.diff), l.flag ? 'to verify' : 'matches']); out.push([D.note]); }
-    return out.map(r => r.map(q).join(',')).join('\n') + '\n';
+    if (D) { blank(); row('section', ['FORM 1099-DA COMPARISON (totals you entered) - to verify']); row('head', ['Item', '', '', 'Form 1099-DA', 'Kryptax', '', '', 'Difference', 'Note']);
+      for (const l of D.lines) row(l.flag ? 'tv' : 'row', [l.label, '', '', l.form, l.mine, '', null, l.diff, l.flag ? 'to verify' : 'matches']); row('note', [D.note]); }
+    const K = carryLines(res, opts.carry);
+    if (K) { blank(); row('section', ['CAPITAL LOSS CARRYOVER (amounts you entered) - to verify']); row('head', ['Item', '', '', '', '', '', '', 'Amount', '']);
+      row('row', ['Schedule D line 6 - short-term carryover', '', '', null, null, '', null, -K.s]); row('total', ['Net short-term, this file + carryover', '', '', null, null, '', null, K.net7, 'Schedule D line 7 if no other items']);
+      row('row', ['Schedule D line 14 - long-term carryover', '', '', null, null, '', null, -K.l]); row('total', ['Net long-term, this file + carryover', '', '', null, null, '', null, K.net15, 'Schedule D line 15 if no other items']); row('note', [K.note]); }
+    blank(); row('note', ['Estimate - not tax advice - to be verified - state taxes not included. Sources: IRS Instructions for Form 8949 and for Schedule D (Form 1040).']);
+    return { rows: out, width: W, money: [3, 4, 6, 7] };
+  }
+  function toCSV(res, opts) {
+    const R = usReport(res, opts), q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+    const cell = (v, i) => typeof v === 'number' ? v.toFixed(2) : v == null ? '' : String(v);
+    return R.rows.map(r => r.c.map((v, i) => q(cell(v, i))).join(',')).join('\n') + '\n';
+  }
+  /* .xlsx with the SheetJS build already shipped (xlsx.mini.min.js, Community edition): column widths and $ number formats.
+     That edition does not write bold or colours. Sheet 1 = same layout as the CSV, sheet 2 = flat Form 8949 data. */
+  function toXLSX(XL, res, opts) {
+    const R = usReport(res, opts), FMT = '$#,##0.00;-$#,##0.00', ws = XL.utils.aoa_to_sheet(R.rows.map(r => r.c.map(v => v == null ? '' : v)));
+    R.rows.forEach((r, y) => r.c.forEach((v, x) => { if (typeof v === 'number') { const a = XL.utils.encode_cell({ r: y, c: x }); if (ws[a]) ws[a].z = FMT; } }));
+    ws['!cols'] = [44, 14, 14, 16, 16, 9, 14, 16, 46, 18].slice(0, R.width).map(wch => ({ wch }));
+    const F = form8949(res, (opts || {}).cat), hasW = res.rows.some(r => r.wallet);
+    const data = [['Part', 'Box', '(a) Description', '(b) Date acquired', '(c) Date sold', '(d) Proceeds', '(e) Cost or other basis', '(f) Code(s)', '(g) Adjustment', '(h) Gain or (loss)', 'Status'].concat(hasW ? ['Wallet'] : [])];
+    for (const P of F.parts) for (const r of P.lines) data.push([P.part, P.box || 'to verify', r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds, r.cost, '', '', r.gain, r.user ? 'entered by you (to verify)' : 'ok'].concat(hasW ? [r.wallet || ''] : []));
+    for (const r of F.toVerify) data.push(['', '', r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds == null ? '' : r.proceeds, r.cost == null ? '' : r.cost, '', '', r.gain == null ? '' : r.gain, r.status].concat(hasW ? [r.wallet || ''] : []));
+    const ws2 = XL.utils.aoa_to_sheet(data);
+    data.forEach((r, y) => r.forEach((v, x) => { if (y && typeof v === 'number') ws2[XL.utils.encode_cell({ r: y, c: x })].z = FMT; }));
+    ws2['!cols'] = [6, 10, 30, 14, 14, 14, 14, 9, 12, 14, 40, 18].slice(0, data[0].length).map(wch => ({ wch }));
+    const wb = XL.utils.book_new(); XL.utils.book_append_sheet(wb, ws, 'Summary'); XL.utils.book_append_sheet(wb, ws2, 'Form 8949 data'); return wb;
   }
   /* 1099-DA comparison lines, only when the user typed a total (box 1f and/or 1g). */
   const DANOTE = 'Box 1f is proceeds after transaction costs. Box 1g may be blank for noncovered assets (bought before 2026 or moved in). Rewards and staking are not on Form 1099-DA. Sales to verify are not in the Kryptax totals. A difference does not mean an error - to verify. Source: IRS Instructions for Form 1099-DA.';
@@ -387,7 +418,7 @@
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
   }
   function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
-  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD };
+  const api = { US_TZ, tzOffset, shiftTz, years, forYear, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -496,7 +527,7 @@
       const hasW = res.rows.some(r => r.wallet), tvN = res.notes.filter(n => !n.ok);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
-      const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (Form 8949 lines)</button></p>`;
+      const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsxmain" class="btn ghost">Download Excel (.xlsx)</button>' : ''}</p>`;
       out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
         + (T.toVerify ? `<p class="warn">${T.toVerify} line${T.toVerify > 1 ? 's' : ''} to verify (missing cost or value), not included in the totals.</p>` : '')
         + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
@@ -520,13 +551,14 @@
         + (method === 'MANUAL' ? manualHtml(res) : '')
         + catSel()
         + `<div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div>`
-        + `<p><button type="button" id="uscsv" class="small">Download CSV (Form 8949 lines)</button>${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
+        + `<p><button type="button" id="uscsv" class="small">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsx" class="small">Download Excel (.xlsx)</button>' : ''}${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;
     }
     out.addEventListener('click', e => {
-      if (e.target.id === 'uspdfmain' || e.target.id === 'uscsvmain') { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
+      if (/^us(pdf|csv|xlsx)main$/.test(e.target.id)) { const b = out.querySelector('#' + e.target.id.replace('main', '')); if (b) b.click(); return; }
       if (last && e.target.id === 'uspdf' && W0.KryptaxUSExport && W0.jspdf) { W0.KryptaxUSExport.download(W0.jspdf.jsPDF, last, doc, { cat, da: daNow(), carry: clNow() }); return; }
+      if (last && e.target.id === 'usxlsx' && W0.XLSX && W0.XLSX.write) { const a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([W0.XLSX.write(toXLSX(W0.XLSX, last, { cat, da: daNow(), carry: clNow() }), { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = 'kryptax-us-summary.xlsx'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); return; }
       if (!last || (e.target.id !== 'uscsv' && e.target.id !== 'usinccsv')) return;
-      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob([inc ? incomeCSV(last) : toCSV(last, { cat, da: daNow(), carry: clNow() })], { type: 'text/csv' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-form8949-lines.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF', inc ? incomeCSV(last) : toCSV(last, { cat, da: daNow(), carry: clNow() })], { type: 'text/csv;charset=utf-8' })); a.download = inc ? 'kryptax-income.csv' : 'kryptax-us-summary.csv'; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
   if (typeof module !== 'undefined') module.exports = api;
