@@ -218,3 +218,8 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
   - https://uscode.house.gov/us/usc/119-120/t26/s1091/
   - https://www.law.cornell.edu/uscode/text/26/1091
 - No IRS guidance on crypto wash sales has been read: none is cited (to verify).
+
+## v2.14 — Highlights (v=20261101u)
+
+- Screen: the "What to copy and where" block has a thin cyan border and a wide layered glow: cyan (accent #22d3ee), then gold, then orange outside (`box-shadow`, three layers). The summary box below is unchanged.
+- PDF: only the amounts to copy are coloured dark amber #A16207 (RGB 161, 98, 7): Form 8949 Part totals (d), (e), (h) and Schedule D lines 7, 15, 16 and 21 (when computed). Text stays black; amounts unchanged. CSV/Excel unchanged.
