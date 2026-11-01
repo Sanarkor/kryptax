@@ -377,5 +377,12 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([/26 U\.S\.C\. section 1091 applies to stock or securities/.test(m), /no verified IRS rule extends it to regular crypto assets/.test(m), /legally a security could be covered/.test(m), /Not applied in the totals — to verify\.$/.test(m), /Notice|Rev\. ?Rul|Publication|FAQ|irs\.gov/i.test(m)], [true, true, true, true, false], 'wash sale text: section 1091 scope, no IRS source invented, to verify');
   eq([U.checks(y, {}).some(c => c.msg === m), U.toCSV(y, {}).includes(m.replace(/ — /g, ' - ').replace(/"/g, '""')), X.summaryData(y, {}).checks.includes(m.replace(/ — /g, ' - ')), JSON.stringify(a.rows) === JSON.stringify(b.rows) && ['gain', 'short', 'long', 'sales', 'toVerify'].every(k => JSON.stringify(U.forYear(a, 2025).totals[k]) === JSON.stringify(y.totals[k]))], [true, true, true, true], 'wash sale text in the list, CSV and PDF; totals identical with or without the flag');
   eq(/Possible wash sale pattern, line \$\{o\.line\}/.test(require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8')) && /checksHtml\(res\)/.test(require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8')), true, 'screen shows the same text (single list)'); }
+// v2.14 PDF: amounts to copy in dark amber, text and amounts unchanged
+{ const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
+  const cp = require('child_process'), r = U.forYear(U.compute(U.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n2025-01-01,Buy,ETH,1,3000\n2025-03-01,Sell,ETH,1,2000\n').txs), 2025), o = { cat: 'none', fstat: 'other', now: new Date(Date.UTC(2026, 10, 1, 10)) };
+  const raw = () => Buffer.from(X.makePdf(jsPDF, r, o).output('arraybuffer')), txt = b => cp.execSync('pdftotext -layout - -', { input: b }).toString();
+  const c = X.COPY, a1 = raw(); X.COPY = [0, 0, 0]; const a0 = raw(); X.COPY = c;
+  const amb = '0.631 0.384 0.027 rg', n = b => b.toString('latin1').split(amb).length - 1;
+  eq([txt(a1) === txt(a0), JSON.stringify(c), n(a0), n(a1) >= 6, /-\$1,000\.00/.test(txt(a1))], [true, '[161,98,7]', 0, true, true], 'PDF: only the colour of the amounts to copy changes (dark amber #A16207), text and amounts identical'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
