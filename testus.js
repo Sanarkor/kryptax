@@ -357,14 +357,14 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
     'export names: prefix_YYYY-MM-DD_HH-MM.ext, suffix _2/_3 only when the same name was already given, never twice the same name'); }
 // v2.15 option choices kept in localStorage: only the 4 setting keys, invalid values ignored, reset clears, same totals
 { const mk = () => { const m = new Map(); return { m, getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
-  const s1 = mk(); U.saveSettings(s1, { method: 'HIFO', fees: 'DISPOSE', cat: 'none', fstat: 'mfs', txs: [1], amount: 123, file: 'x.csv' });
+  const s1 = mk(); U.saveSettings(s1, { method: 'HIFO', fees: 'DISPOSE', cat: 'none', fstat: 'mfs', tz: 'America/Chicago', picks: { 3: { lot: 1, qty: 1 } }, txs: [1], amount: 123, file: 'x.csv' });
   const st = JSON.parse(s1.m.get(U.SET_KEY));
-  const s2 = mk(); s2.setItem(U.SET_KEY, JSON.stringify({ method: 'LIFO', fees: 5, cat: 'zzz', fstat: 'mfs' })); const s3 = mk(); s3.setItem(U.SET_KEY, '{oops');
+  const s2 = mk(); s2.setItem(U.SET_KEY, JSON.stringify({ method: 'LIFO', fees: 5, cat: 'zzz', fstat: 'mfs', tz: 'Mars/Base' })); const s3 = mk(); s3.setItem(U.SET_KEY, '{oops');
   const bad = { getItem: () => { throw new Error('private'); }, setItem: () => { throw new Error('private'); }, removeItem: () => { throw new Error('private'); } };
   const s4 = mk(); U.saveSettings(s4, { method: 'HIFO' }); U.clearSettings(s4);
   const S = U.loadSettings(s1), fromSave = U.compute(lt, { method: S.method, fees: S.fees }).totals, fromClick = U.compute(lt, { method: 'HIFO', fees: 'DISPOSE' }).totals;
   eq([[...s1.m.keys()], Object.keys(st).sort(), JSON.stringify(U.loadSettings(s2)), JSON.stringify(U.loadSettings(s3)), JSON.stringify(U.loadSettings(bad)), U.saveSettings(bad, { method: 'HIFO' }), s4.m.size, JSON.stringify(fromSave) === JSON.stringify(fromClick)],
-    [[U.SET_KEY], ['cat', 'fees', 'fstat', 'method'], '{"fstat":"mfs"}', '{}', '{}', false, 0, true],
+    [[U.SET_KEY], ['cat', 'fees', 'fstat', 'method', 'tz'], '{"fstat":"mfs"}', '{}', '{}', false, 0, true],
     'saved settings: one key, only the 4 choices (no file data or amounts), invalid/corrupt/unavailable storage -> defaults without error, reset clears, same totals from save or click'); }
 { const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8');
   eq([/id="ussetreset">Reset saved settings<\/a>/.test(src), /if \(LS\) clearSettings\(LS\)/.test(src), /keepSet\(\); if \(cur\) render\(\)/.test(src)], [true, true, true], 'U.S. page: "Reset saved settings" link, saved on each option change'); }
