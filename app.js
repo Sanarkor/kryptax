@@ -59,7 +59,7 @@
       [[fr, !u], [us, us0], [uk, g]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
       if (rb) { const c = rb.querySelector('.regcur'), src = g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : FRANCE'); }
       document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
-      { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; document.documentElement.classList.toggle('kx-uk', !!g);
+      { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; document.documentElement.classList.toggle('kx-uk', !!g);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'United Kingdom'; }
       if (save) try { localStorage.setItem(K, g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
     let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK') v0 = s; } catch (e) {}

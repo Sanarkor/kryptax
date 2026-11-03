@@ -472,10 +472,11 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 @media (max-width:479.98px){#regbtn{font-size:.663rem;min-height:34px}#regbtn .flag{width:12.75px;height:8.5px}#regbtn .caret{margin-left:.38em;border-left-width:3.4px;border-right-width:3.4px;border-top-width:4.25px}.regions .themebtn{min-width:34px;min-height:34px;padding:0 .38em}.regions .themebtn svg{width:13.6px;height:13.6px}.regmenu{font-size:.663rem}}
 @media (max-width:359.98px){.regions .themebtn{min-width:32px;padding:0 .26em}}
 
-.ukmode{max-width:768px;margin:16px auto;box-sizing:border-box;text-align:left}.ukmode[hidden]{display:none}.ukcard h2{margin:0 0 .5em}.ukcard p{margin:0}
-@media (max-width:799.98px){.ukmode{margin:12px 4px}}
 /* zp : mentions du pied de page un peu plus grandes sur PC (+17 %) */
 @media (min-width:1024px){footer,.privlink{font-size:.84em}}
-footer .uslaw[hidden]{display:none}
+footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 /* zu : U.S.A. sur PC peu haut (<= 800 px) : colonne gauche un peu plus large et espacement resserre, pour tenir sans defilement */
 @media (min-width:1024px) and (max-height:800px){.usmode{grid-template-columns:minmax(380px,36%) minmax(0,1fr)}.usmode #usimp label.btn{padding-top:6px;padding-bottom:6px}.usmode #usimp .fhelp{margin-top:2px;padding-top:2px;padding-bottom:2px}.usmode #usimp .fhelp p{margin:2px 0}.usmode #usopts .hint{margin-top:1px}.usmode>.usbeta{margin:2px 0}.usmode{margin-top:2px;margin-bottom:2px}.usmode #usimp .sechead{margin-bottom:0}.usmode #usimp>.hint{margin:2px 0}}
+/* v2.32 U.K. : même parcours que U.S.A. (import à gauche, résultat à droite sur PC) */
+@media (min-width:1024px){.usmode>#ukleft{grid-column:1;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto;padding:0 8px 8px 2px}.usmode>#ukresult{grid-column:2}.usmode:has(#ukresult:empty)>#ukleft{position:static;max-height:none;overflow:visible}.usmode>#ukresult:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px #0006;color:var(--muted);font-style:italic;margin:8px 0}.usmode>#ukresult:empty::before{content:"Your results will appear here after the calculation."}}
+.ukm .scroll{overflow-x:auto;max-width:100%}.ukm .uksa{width:100%}.ukm .uksa td,.ukm .uksa th{white-space:normal}.ukm .uksa td:last-child{text-align:right}
