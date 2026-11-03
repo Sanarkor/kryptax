@@ -291,6 +291,29 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     q = await S2.minute('BBB', M0 + 20e3); eq(q && q.k === 'minute' && q.src === 'OKX' && q.p === 4 ? 1 : 0, 1, 'Minute : bougie d’une autre minute refusée, repli OKX 1 min converti en € (USDT → €)');
     q = await S2.minute('CCC', M0); eq(q, null, 'Minute : aucune source → null (repli sur le cours horaire)');
     eq(calls.filter(u => /binance/.test(u) && /symbol=(CCC|AAAUSDT|BBBEUR)/.test(u)).length + calls.filter(u => /ticker\/price/.test(u)).length, 1, 'Paires Binance inexistantes jamais demandées (liste des paires chargée une seule fois)');
+    eq(calls.some(u => /coinbase|bitstamp/.test(u) && /AAA|aaa|BBB|bbb/.test(u)) ? 1 : 0, 0, 'Minute : Binance/OKX ont la bougie → aucun appel Coinbase/Bitstamp (calcul inchangé)');
+    { // repli € Coinbase puis Bitstamp (sources simulées) ; USDT/EUR via Bitstamp si Binance n'a pas EURUSDT
+      const S = M0 / 1000, c3 = [];
+      const fb = async u => { c3.push(u); const R = (j, st = 200) => ({ status: st, json: async () => j });
+        if (/ticker\/price/.test(u)) return R(['GGGUSDT'].concat(Array.from({ length: 60 }, (_, i) => 'PAD' + i + 'USDT')).map(symbol => ({ symbol, price: '1' })));
+        if (/klines|aggTrades/.test(u)) return R({ code: -1121 }, 400);
+        if (/coinbase.*DDD-EUR/.test(u)) return R([[S + 60, 1, 1, 21, 21, 3], [S, 1, 1, 20, 20.5, 2]]);
+        if (/coinbase.*FFF-EUR/.test(u)) throw new Error('réseau simulé');
+        if (/coinbase/.test(u)) return R([]);
+        if (/bitstamp.*eeeeur/.test(u)) return R({ data: { ohlc: [{ timestamp: String(S - 60), open: '7', close: '7.5', volume: '1' }] } });
+        if (/bitstamp.*usdteur/.test(u)) return R({ data: { ohlc: [{ timestamp: String(S), open: '0.8', close: '0.8', volume: '5' }] } });
+        if (/bitstamp/.test(u)) return R({ data: { ohlc: [] } });
+        if (/okx\.com.*GGG-USDT&bar=1m/.test(u)) return R({ code: '0', data: [[String(M0), '10']] });
+        return R({ code: '51001', data: [] });
+      };
+      const S3 = P.makeSources(fb, { gap: 0 });
+      eq(P.precLabel({ k: 'minute', src: 'Bitstamp ±1 min' }) + ' | ' + P.precLabel({ k: 'minute', src: 'Coinbase' }) === 'cours à la minute (Bitstamp ±1 min) | cours à la minute (Coinbase)' ? 1 : 0, 1, 'Minute repli : source exacte dans le libellé de précision');
+      let r = await S3.minute('DDD', M0); eq(r && r.k === 'minute' && r.src === 'Coinbase' && r.p === 20 ? 1 : 0, 1, 'Minute repli : Coinbase €, bougie de la minute exacte (ouverture)');
+      r = await S3.minute('EEE', M0); eq(r && r.k === 'minute' && r.src === 'Bitstamp ±1 min' && r.p === 7.5 ? 1 : 0, 1, 'Minute repli : Bitstamp € à ±1 min (clôture de la minute d’avant), source « Bitstamp ±1 min »');
+      r = await S3.minute('FFF', M0); eq(r == null ? 1 : 0, 1, 'Minute repli : échec réseau Coinbase et rien chez Bitstamp → pas de cours minute (repli sur le cours horaire)');
+      r = await S3.minute('GGG', M0); eq(r && r.src === 'OKX' && Math.abs(r.p - 8) < 1e-9 ? 1 : 0, 1, 'Minute : USDT/EUR absent chez Binance → repli Bitstamp USDT/EUR (10 USDT × 0,8 = 8 €)');
+      eq(c3.some(u => /api\.exchange\.coinbase\.com|www\.bitstamp\.net/.test(u)) && !c3.some(u => /[?&](amount|qty|quantity)=/.test(u)) ? 1 : 0, 1, 'Minute repli : seuls la paire et l’horodatage partent (aucun montant)');
+    }
     eq(P.hasTime(M0 + 7000) && !P.hasTime(Date.UTC(2025, 2, 3)) ? 1 : 0, 1, 'Heure présente détectée ; date seule → cours journalier');
     const cache = { ['AAA|m' + Math.floor(M0 / 60e3)]: 12, ['AAA|m' + Math.floor(M0 / 60e3) + 's']: 'minute|Binance', ['BBB|h' + Math.floor(M0 / 36e5)]: 4, 'BBB|src': 'OKX' };
     const fn = P.priceLookup([], cache, {}, { zeroIfUnknown: true }); fn('AAA', M0); fn('BBB', M0); fn('ZZZ', M0);
