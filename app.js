@@ -25,7 +25,7 @@
     ['#privopen', 'Legal notice and privacy'],
     ['#privtitle', 'Legal notice and privacy'],
     ['#privacy .pv-in > :nth-child(2)', 'Your files stay with you'], ['#privacy .pv-in > :nth-child(3)', 'Everything runs in your browser. No file, transaction or amount is sent to a Kryptax server: Kryptax has no server, it is a simple web page.'],
-    ['#privacy .pv-in > :nth-child(4)', 'Crypto prices'], ['#privacy .pv-in > :nth-child(5)', 'To find the value of a crypto at a given date, your browser asks public price sources directly, with no account or key. Only the symbol and the date or period are sent, never your amounts, quantities or name. Like any website, these services see your IP address.'],
+    ['#privacy .pv-in > :nth-child(4)', 'Crypto prices'], ['#privacy .pv-in > :nth-child(5)', 'To find the value of a crypto at a given date, your browser asks public price sources directly, with no account or key; to convert another currency into GBP (U.K. version), it asks Frankfurter for the European Central Bank reference rates. Only the symbol or currency and the date or period are sent, never your amounts, quantities or name. Like any website, these services see your IP address.'],
     ['#privacy .pv-in > :nth-child(6)', 'Data kept in this browser'], ['#privacy .pv-in > :nth-child(7)', 'Your transactions, entries and prices already found are saved in this browser’s local storage, on this device only. The reset button erases everything.'],
     ['#privacy .pv-in > :nth-child(8)', 'No account, no tracking'], ['#privacy .pv-in > :nth-child(9)', 'No account, no ads, no cookies, no trackers, no audience measurement.'],
     ['#privacy .pv-in > :nth-child(10)', 'Responsibility'], ['#privacy .pv-in > :nth-child(11)', 'Kryptax is a free, source-available tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
@@ -60,7 +60,7 @@
       if (rb) { const c = rb.querySelector('.regcur'), src = g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : FRANCE'); }
       document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
       { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; document.documentElement.classList.toggle('kx-uk', !!g);
-      if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'United Kingdom'; }
+      if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
       if (save) try { localStorage.setItem(K, g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
     let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK') v0 = s; } catch (e) {}
     if (!v0) { let L = [], Z = ''; try { L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; } catch (e) {} try { Z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {} v0 = autoRegion(L, Z); }

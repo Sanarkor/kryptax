@@ -1,5 +1,5 @@
 /* Kryptax - U.K. module v1 (separate from the French and U.S. engines; engine.js / formats.js / us-engine.js are only READ, never changed).
-   Estimate of Capital Gains Tax figures on cryptoasset exchange tokens for a U.K. individual, from a CSV or Excel file with values in GBP.
+   Estimate of Capital Gains Tax figures on cryptoasset exchange tokens for a U.K. individual, from a CSV, Excel or PDF file; values in another currency are converted to GBP (ECB rates, CG78310).
    Not tax advice. Rules used, with their sources (read on gov.uk on 2026-11-03, see docs/UK-RULES.md):
    - Disposals: selling tokens, exchanging them for another token, using them to pay for goods or services, giving them away
      (gift: market value in GBP). Moving tokens between your own wallets is not a disposal. HMRC Cryptoassets Manual CRYPTO22100.
@@ -16,6 +16,7 @@
   const node = typeof require !== 'undefined' && typeof module !== 'undefined';
   const E = node ? require('./engine.js') : root.KryptaxEngine;
   const KF = node ? require('./formats.js') : root.KryptaxFormats;
+  const KP = node ? require('./pipeline.js') : root.KryptaxPipeline;
   const DAY = 864e5, LONDON = 'Europe/London';
   const COLS = {
     date: ['date', 'time', 'timestamp', 'date (utc)', 'datetime', 'date & time', 'date and time'],
@@ -29,9 +30,10 @@
     toQty: ['received quantity', 'to quantity', 'quantity received', 'buy quantity']
   };
   const norm = s => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
-  function mapHeader(head) { const h = head.map(norm), m = {}; for (const k in COLS) { const i = h.findIndex(x => COLS[k].includes(x)); if (i > -1) m[k] = i; } return m; }
-  /* A header naming another currency (USD, EUR, $, EUR sign) for the value columns: refused, values must be in GBP. */
-  function otherCurrency(head) { return head.map(norm).some(x => /^(price|total|value|fee|fees|subtotal|proceeds)\b.*(usd|eur|\$|\u20ac)/.test(x)); }
+  function mapHeader(head) { const h = head.map(x => { const n = norm(x), b = n.replace(/\s*\((?:usd|eur|chf|\$|\u20ac)\)$|\s+(?:usd|eur|chf)$/, ''); return Object.values(COLS).some(L => L.includes(n)) ? n : b; }), m = {}; for (const k in COLS) { const i = h.findIndex(x => COLS[k].includes(x)); if (i > -1) m[k] = i; } return m; }
+  /* v2.34: currency of a cell or of a value column header (GBP, EUR, USD or another ISO code); other currencies are converted to GBP with ECB reference rates. */
+  const curOf = v => { const s = String(v == null ? '' : v); if (/\u00a3|\bgbp\b/i.test(s)) return 'GBP'; if (/\$|\busd\b/i.test(s)) return 'USD'; if (/\u20ac|\beur\b/i.test(s)) return 'EUR'; const m = /\b(CHF|JPY|CAD|AUD|SEK|NOK|DKK|PLN|CZK|HUF|NZD|SGD|HKD)\b/i.exec(s); return m ? m[1].toUpperCase() : null; };
+  function otherCurrency(head) { for (const x of head.map(norm)) if (/^(price|total|value|fee|fees|subtotal|proceeds)\b/.test(x)) { const c = curOf(x); if (c && c !== 'GBP') return c; } return null; }
   function kind(t) {
     t = norm(t);
     if (/^(buy|purchase|bought)/.test(t)) return 'BUY';
@@ -44,8 +46,7 @@
     if (/send|sent|withdraw|transfer|receive|deposit/.test(t)) return 'TRANSFER';
     return null;
   }
-  const num = v => { if (v == null || String(v).trim() === '') return NaN; const s = String(v); if (/[$\u20ac]/.test(s)) return NaN; const n = E.parseNum(s.replace(/\u00a3/g, '')); return isFinite(n) ? Math.abs(n) : NaN; };
-  const foreign = v => /[$\u20ac]|\b(usd|eur)\b/i.test(String(v == null ? '' : v));
+  const num = v => { if (v == null || String(v).trim() === '') return NaN; if (typeof v === 'number') return Math.abs(v); const n = E.parseNum(String(v).replace(/[\u00a3$\u20ac]|\b(?:GBP|USD|EUR|CHF|JPY|CAD|AUD|SEK|NOK|DKK|PLN|CZK|HUF|NZD|SGD|HKD)\b/gi, '').trim()); return isFinite(n) ? Math.abs(n) : NaN; };
   const UTC_SUFFIX = /\s*(?:UTC|GMT|Z|[+-]00:?00)$/i;
   const ukDate = v => v instanceof Date ? Date.UTC(v.getFullYear(), v.getMonth(), v.getDate(), v.getHours(), v.getMinutes(), v.getSeconds())
     : typeof v === 'number' ? NaN : E.parseDate(String(v == null ? '' : v).trim().replace(UTC_SUFFIX, ''), 'DMY', 'UTC');
@@ -55,19 +56,55 @@
   }
   function parseRows(rows) {
     const hi = headerIndex(rows), head = rows[hi] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null), currency: otherCurrency(head) };
-    if (out.missingCols.length || out.currency) return out;
+    if (out.missingCols.length) return out;
     rows.slice(hi + 1).forEach((r, i) => {
       const g = k => m[k] == null ? '' : r[m[k]], line = hi + i + 2;
       if (!r.some(x => String(x).trim() !== '')) return;
       const type = kind(g('type')), date = ukDate(g('date')), asset = String(g('asset') || '').trim().toUpperCase(), qty = num(g('qty'));
       if (!type || !isFinite(date) || !asset || !(qty > 0)) { out.skipped.push({ line, why: !type ? 'unknown type' : !isFinite(date) ? 'unreadable date' : 'missing asset or quantity' }); return; }
-      if (['price', 'total', 'fee'].some(k => foreign(g(k)))) { out.skipped.push({ line, why: 'value not in GBP' }); return; }
+      const cs = [...new Set(['price', 'total', 'fee'].map(k => curOf(g(k))).filter(Boolean))];
+      if (cs.length > 1) { out.skipped.push({ line, why: 'mixed currencies in the line, to verify' }); return; }
       const price = num(g('price')), total0 = num(g('total')), fee = num(g('fee'));
-      const gbp = isFinite(total0) ? total0 : isFinite(price) ? price * qty : NaN;
-      out.txs.push({ line, date, type, rawType: String(g('type') || ''), asset, qty, gbp, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')) });
+      push(out, { line, date, type, rawType: String(g('type') || ''), asset, qty, amt: isFinite(total0) ? total0 : isFinite(price) ? price * qty : NaN, feeAmt: isFinite(fee) ? fee : 0, cur: cs[0] || out.currency || 'GBP', toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')) });
     });
     out.txs.sort((a, b) => a.date - b.date || a.line - b.line);
     return out;
+  }
+  /* A line in GBP keeps its values; another currency waits for convertFx (gbp = NaN until then). */
+  function push(out, t) { if (t.cur === 'GBP') { t.gbp = t.amt; t.fee = t.feeAmt; } else { t.gbp = NaN; t.fee = 0; t.needFx = true; } out.txs.push(t); }
+  /* PDF statement (v2.34): text lines read by the same PDF reader as the other modes; FR or EN words, dates and numbers. */
+  const TYPEMAP = { BUY: 'BUY', SELL: 'SELL', STAKING: 'INCOME', INTEREST: 'INCOME', AIRDROP: 'AIRDROP', PAY: 'SPEND', RECEIVE: 'TRANSFER', SEND: 'TRANSFER', GIFT: 'GIFT' };
+  function fromPdfLines(lines) {
+    const r = KP.parsePdfLines(lines, { keepCur: true }), out = { txs: [], skipped: [], missingCols: [], currency: null, pdf: true };
+    const add = (row, n, feeSeparate) => {
+      const raw = String(row[1] || ''), g = E.guessType(raw, '', true), type = TYPEMAP[g] || kind(raw), date = E.parseDate(String(row[6] || ''), 'DMY', 'UTC'), asset = String(row[0] || '').toUpperCase(), qty = num(row[2]);
+      if (!type || !isFinite(date) || !asset || !(qty > 0)) { out.skipped.push({ line: n, why: g === 'EXCH_OUT' ? 'exchange without the received asset, to verify' : !type ? 'unknown type' : 'unreadable line' }); return; }
+      const cs = [...new Set([row[3], row[4], row[5]].map(curOf).filter(Boolean))]; if (cs.length > 1) { out.skipped.push({ line: n, why: 'mixed currencies in the line, to verify' }); return; }
+      const price = num(row[3]), val = num(row[4]), fee = num(row[5]);
+      push(out, { line: n, date, type, rawType: raw, asset, qty, amt: isFinite(val) ? val : isFinite(price) ? price * qty : NaN, feeAmt: feeSeparate && isFinite(fee) ? fee : 0, cur: cs[0] || 'EUR', toAsset: '', toQty: NaN });
+      if (!feeSeparate && isFinite(fee) && fee > 0) out.skipped.push({ line: n, why: 'fee shown in the statement is taken as included in the value, to verify', kept: true });
+    };
+    r.rows.forEach((row, i) => add(row, 'PDF ' + (i + 1), false));
+    r.rows2.forEach((x, i) => add(x.row, 'PDF ' + (r.rows.length + i + 1), true));
+    r.amb.forEach(a => out.skipped.push({ line: 'PDF', why: a.why.replace(/quantité × prix ≠ valeur : importée avec la valeur indiquée, à vérifier/, 'quantity x price differs from the value; the value shown is used, to verify'), kept: !!a.kept }));
+    out.txs.sort((a, b) => a.date - b.date); return out;
+  }
+  /* Conversion to GBP (v2.34): ECB reference rates (Frankfurter), rate of the day or of the previous working day (up to 7 days back).
+     HMRC does not prescribe the source; a reasonable and consistent method is expected (Capital Gains Manual CG78310). No rate: line listed and excluded. */
+  const FX_SRC = 'ECB reference rates via Frankfurter (api.frankfurter.dev)';
+  const isoDay = t => new Date(t).toISOString().slice(0, 10);
+  function rateOn(map, day) { for (let i = 0; i <= 7; i++) { const d = isoDay(Date.parse(day) - i * DAY); if (map[d]) return { rate: map[d], on: d }; } return null; }
+  async function convertFx(p, getJson) {
+    const need = p.txs.filter(t => t.needFx), by = {}; need.forEach(t => (by[t.cur] = by[t.cur] || []).push(t));
+    p.fx = { src: FX_SRC, count: 0, cur: Object.keys(by), missing: 0 };
+    for (const c in by) {
+      const L = by[c], from = isoDay(Math.min(...L.map(t => t.date)) - 7 * DAY), to = isoDay(Math.max(...L.map(t => t.date))); let map = {};
+      try { const j = await getJson('https://api.frankfurter.dev/v1/' + from + '..' + to + '?from=' + c + '&to=GBP'); if (j && j.rates) for (const k in j.rates) if (j.rates[k].GBP) map[k] = j.rates[k].GBP; } catch (x) { map = {}; }
+      for (const t of L) { const r = rateOn(map, isoDay(t.date));
+        if (!r) { t.drop = true; p.skipped.push({ line: t.line, why: 'no ' + c + ' to GBP rate found for ' + isoDay(t.date) + ', excluded, to verify' }); p.fx.missing++; continue; }
+        t.gbp = t.amt * r.rate; t.fee = t.feeAmt * r.rate; t.fx = { cur: c, rate: r.rate, on: r.on }; delete t.needFx; p.fx.count++; }
+    }
+    p.txs = p.txs.filter(t => !t.drop); return p;
   }
   function fromCSVText(input) { return parseRows(Array.from(KF.parseCSV(input))); }
   function fromWorkbook(X, data) {
@@ -150,7 +187,7 @@
   const p2 = n => String(n).padStart(2, '0');
   const dmy = t => { if (t == null) return 'unknown'; const d = new Date(t); return p2(d.getUTCDate()) + '/' + p2(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear(); };
   const ruleText = p => p.rule === 'same day' ? 'same day' : p.rule === '30 day' ? '30 day (' + dmy(p.from * DAY) + ')' : 'S104 pool';
-  const LEGAL = 'Not tax advice - estimate to verify. Rules: HMRC Cryptoassets Manual CRYPTO22100, CRYPTO22150, CRYPTO22200 (TCGA92/S104, S105, S106A); Capital Gains Tax rates and allowances; SA108 notes 2026.';
+  const LEGAL = 'Not tax advice - estimate to verify. Rules: HMRC Cryptoassets Manual CRYPTO22100, CRYPTO22150, CRYPTO22200 (TCGA92/S104, S105, S106A); Capital Gains Manual CG78310 (currency conversion); Capital Gains Tax rates and allowances; SA108 notes 2026.';
   function toCSV(res, y) {
     const Y = yearSummary(res, y), q = v => { const s = String(v == null ? '' : v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }, n = v => v == null ? 'to verify' : v.toFixed(2);
     const L = [['Kryptax U.K. - Capital gains summary (estimate, to verify)'], ['Tax year', y + ' (6 April to 5 April)'], [],
@@ -160,6 +197,7 @@
       ['Date', 'Asset', 'Quantity', 'Proceeds', 'Allowable costs', 'Gain or loss', 'Matching', 'Status']];
     Y.disposals.forEach(x => L.push([dmy(x.date), x.asset, +x.qty.toPrecision(10), n(x.proceeds), n(x.cost), n(x.gain), x.parts.map(ruleText).join(' + '), x.status]));
     if (Y.income.length) { L.push([], ['Income (staking, mining, rewards, airdrops)'], ['Date', 'Asset', 'Quantity', 'Value (GBP)', 'Type']); Y.income.forEach(x => L.push([dmy(x.day * DAY), x.asset, +x.qty.toPrecision(10), x.airdrop ? 'to verify (airdrop)' : n(x.gbp), x.type])); }
+    if (res.fx && res.fx.count) L.push([], ['Currency conversion', res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + '), ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310: reasonable and consistent method)']);
     L.push([], [LEGAL]);
     return L.map(r => r.map(q).join(',')).join('\r\n') + '\r\n';
   }
@@ -172,6 +210,7 @@
       'SA108 Cryptoassets: 13.1 disposals ' + Y.count + ' | 13.2 proceeds ' + gbp(Y.proceeds) + ' | 13.3 allowable costs ' + gbp(Y.costs) + ' | 13.4 gains ' + gbp(Y.gains) + ' | 13.5 losses ' + gbp(Y.losses),
       'Net gain or loss ' + gbp(Y.net) + ' | annual exempt amount ' + (Y.aea == null ? 'to verify' : gbp(Y.aea)) + ' | above it ' + (Y.taxable == null ? 'to verify' : gbp(Y.taxable)) + '. No tax computed (rate depends on your taxable income).',
       (Y.toVerify.length ? Y.toVerify.length + ' disposal(s) to verify, not in the totals. ' : '') + 'Only the disposals in this file; losses of other years and other assets not included.'];
+    if (res.fx && res.fx.count) info.push(res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + ') with ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310).');
     if (Y.income.length) info.push('Income (staking, mining, rewards): ' + gbp(Y.incomeGbp) + ' (miscellaneous income, to verify; airdrops listed apart, to verify).');
     const rows = Y.disposals.map(x => [dmy(x.date), x.asset, String(+x.qty.toPrecision(10)), gbp(x.proceeds), gbp(x.cost), gbp(x.gain), x.parts.map(ruleText).join(' + '), x.status === 'ok' ? '' : x.status].map(ascii));
     return { title: 'Kryptax U.K. - Capital gains summary (estimate)', info: info.map(ascii), head: ['Date', 'Asset', 'Qty', 'Proceeds', 'Costs', 'Gain/loss', 'Matching', 'Status'], rows, foot: ascii(LEGAL) };
@@ -184,7 +223,7 @@
     const n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.text(D.foot, 40, doc.internal.pageSize.getHeight() - 20); }
     return doc;
   }
-  const api = { COLS, mapHeader, kind, parseRows, fromCSVText, fromWorkbook, ukDate, taxYear, AEA, compute, yearSummary, toCSV, pdfData, pdf, gbp, dmy, shiftTz, LEGAL };
+  const api = { curOf, fromPdfLines, convertFx, rateOn, FX_SRC, COLS, mapHeader, kind, parseRows, fromCSVText, fromWorkbook, ukDate, taxYear, AEA, compute, yearSummary, toCSV, pdfData, pdf, gbp, dmy, shiftTz, LEGAL };
   /* ---------- page (browser only) ---------- */
   function mount(doc) {
     const box = doc.getElementById('ukmode'); if (!box || box.dataset.ready) return; box.dataset.ready = '1';
@@ -197,7 +236,7 @@
     const stamp = (p, ext) => { const d = new Date(); return p + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.' + ext; };
     const save = (blob, fn) => { const a = doc.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fn; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
     function render() {
-      full = compute(cur.txs, { fileTz }); const Ys = full.years; if (!year || !Ys.includes(year)) year = Ys.length ? Ys[Ys.length - 1] : null;
+      full = compute(cur.txs, { fileTz }); full.fx = cur.fx; const Ys = full.years; if (!year || !Ys.includes(year)) year = Ys.length ? Ys[Ys.length - 1] : null;
       if (!year) { out.innerHTML = '<p class="warn">' + esc(name) + ': no disposal or income found. Nothing to report.</p>' + skippedHtml(); return; }
       const Y = yearSummary(full, year), c = (l, v, k) => `<div><span>${l}</span><b class="${k || ''}">${v}</b></div>`;
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="ukyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}</select></label></div>` : '';
@@ -207,6 +246,9 @@
       if (Y.disposals.some(x => x.gift)) chk.push('Gifts are disposals at market value, except to a spouse, civil partner or charity (remove those lines) — to verify.');
       if (Y.income.some(x => x.airdrop)) chk.push('Airdrops: pooled with a GBP 0 cost; Income Tax may or may not apply (CRYPTO21250) — to verify.');
       if (full.transfers.withFee) chk.push(full.transfers.withFee + ' transfer(s) with a fee: network fees paid in tokens are not handled — to verify.');
+      if (cur.fx && cur.fx.count) chk.push(cur.fx.count + ' line(s) converted to GBP (' + esc(cur.fx.cur.join(', ')) + ') with ' + FX_SRC + ', using the rate of the day or of the previous working day. HMRC does not prescribe the rate source but expects a reasonable and consistent method (CG78310) — to verify.');
+      if (cur.fx && cur.fx.missing) chk.push(cur.fx.missing + ' line(s) without an exchange rate: excluded from the totals — to verify.');
+      cur.skipped.filter(x => x.kept).forEach(x => chk.push(esc(x.line + ': ' + x.why) + '.'));
       full.notes.forEach(n => chk.push('Line ' + n.line + ': ' + esc(n.why) + '.'));
       if (Y.aea == null) chk.push('Annual exempt amount for ' + esc(year) + ': not in the table read on gov.uk — to verify.');
       chk.push('Losses brought forward, other assets and the Capital Gains Tax rate are not included — to verify.');
@@ -225,7 +267,7 @@
         + skippedHtml()
         + `<p class="usexp"><button type="button" id="ukpdf" class="btn"${W.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="ukcsv" class="btn ghost">Download CSV (summary)</button></p>`;
     }
-    const skippedHtml = () => cur && cur.skipped.length ? `<p class="hint">${cur.skipped.length} line${cur.skipped.length > 1 ? 's' : ''} skipped: ${esc(cur.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '';
+    const skippedHtml = () => { const S = cur ? cur.skipped.filter(x => !x.kept) : []; return S.length ? `<p class="hint">${S.length} line${S.length > 1 ? 's' : ''} skipped: ${esc(S.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : ''; };
     out.addEventListener('change', e => { if (e.target.id === 'ukyear') { year = e.target.value; render(); } });
     out.addEventListener('click', e => {
       if (!full || !year) return;
@@ -243,11 +285,16 @@
       const f = inp.files && inp.files[0]; if (!f) return; name = f.name;
       const data = new Uint8Array(await f.arrayBuffer()); let p;
       try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) { out.innerHTML = '<p class="warn">Excel reading is not available. Please reload the page.</p>'; return; } p = fromWorkbook(W.XLSX, data); }
-        else if (/\.pdf$/i.test(f.name)) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': PDF is not read in the U.K. version yet. Please export a CSV or Excel file.</p>'; return; }
+        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) { out.innerHTML = '<p class="warn">PDF reading is not available. Please reload the page.</p>'; return; }
+          W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; out.innerHTML = '<p class="hint">Reading the PDF…</p>';
+          const d = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
+          for (let i = 1; i <= d.numPages; i++) { const c = await (await d.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
+          p = fromPdfLines(lines); if (!p.txs.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': no crypto transaction found in this PDF. Nothing was computed.</p>'; return; } }
         else p = fromCSVText(data); }
       catch (x) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
-      if (p.currency) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': the values are not in GBP (USD or EUR column). Nothing was computed. Please export your history in GBP.</p>'; return; }
-      if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total or Price (GBP).</p>'; return; }
+      if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total or Price.</p>'; return; }
+      if (p.txs.some(t => t.needFx)) { out.innerHTML = '<p class="hint">Converting to GBP (ECB reference rates)…</p>';
+        await convertFx(p, async u => { const r = await fetch(u); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); }
       cur = p; year = null; render();
     });
   }
