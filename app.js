@@ -57,7 +57,7 @@
         el.innerHTML = u ? en : k.h; } };
     const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US';
       [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
-      if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? 'Country: Deutschland' : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : FRANCE'); }
+      if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? 'Country: Deutschland' : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
       document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
       { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
