@@ -10,14 +10,14 @@
   /* Boutons FRANCE / U.S.A. (en-tête) : U.S.A. = page en construction en anglais, sans aucune référence fiscale française ; FRANCE reste inchangé.
      EN : [sélecteur, texte anglais | null = masqué en U.S.A.]. Le texte français d'origine est gardé et restauré au retour en FRANCE. */
   const EN = [
-    ['header .sub', 'Form 8949 & Schedule D for U.S. crypto taxes'], ['header .sub2', 'Free, open-source and anonymous: keep full control of your data.'],
+    ['header .sub', 'Form 8949 & Schedule D for U.S. crypto taxes'], ['header .sub2', 'Free, source-available and anonymous: keep full control of your data.'],
     ['.regions', null, 'aria-label', 'Country'],
-    ['footer .law', null], ['footer .disclaim', 'Kryptax is a free, open-source tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
+    ['footer .law', null], ['footer .disclaim', 'Kryptax is a free, source-available tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
     ['#whyopen .fl', 'Why Kryptax?'], ['#whyopen .fs', 'Why?'],
     ['#kofi2 > span', '☕ Support Kryptax 🙏'], ['#kofi2', '', 'aria-label', 'Support Kryptax, thank you'],
     ['#whyclose', '', 'aria-label', 'Close'], ['#whytitle', 'Why I built Kryptax'],
     ['#why .pv-in > p:nth-of-type(2)', 'I started with crypto in 2026 and found that getting a simple report often costs money. So I built my own tool and I give it to everyone.'],
-    ['#why .pv-in > p:nth-of-type(3)', 'Free, open-source, no account, and your data stays on your device. The U.S.A. version is under construction: we’re building it together. If it helped you, a small coffee is always appreciated ☕'],
+    ['#why .pv-in > p:nth-of-type(3)', 'Free, source-available, no account, and your data stays on your device. The U.S.A. version is under construction: we’re building it together. If it helped you, a small coffee is always appreciated ☕'],
     ['#merciclose', '', 'aria-label', 'Close'], ['#mercititle', 'Thanks for your support 🙏'],
     ['#mercitext', 'If Kryptax helped you, you can buy the developer a small coffee on Ko-fi (external site, opens in a new tab).'],
     ['#merci .merci-legal', 'Kryptax stays free. A donation is a simple voluntary thank-you, with nothing in return, and it cannot be refunded or cancelled.'],
@@ -28,7 +28,7 @@
     ['#privacy .pv-in > :nth-child(4)', 'Crypto prices'], ['#privacy .pv-in > :nth-child(5)', 'To find the value of a crypto at a given date, your browser asks public price sources directly, with no account or key. Only the symbol and the date or period are sent, never your amounts, quantities or name. Like any website, these services see your IP address.'],
     ['#privacy .pv-in > :nth-child(6)', 'Data kept in this browser'], ['#privacy .pv-in > :nth-child(7)', 'Your transactions, entries and prices already found are saved in this browser’s local storage, on this device only. The reset button erases everything.'],
     ['#privacy .pv-in > :nth-child(8)', 'No account, no tracking'], ['#privacy .pv-in > :nth-child(9)', 'No account, no ads, no cookies, no trackers, no audience measurement.'],
-    ['#privacy .pv-in > :nth-child(10)', 'Responsibility'], ['#privacy .pv-in > :nth-child(11)', 'Kryptax is a free, open-source tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
+    ['#privacy .pv-in > :nth-child(10)', 'Responsibility'], ['#privacy .pv-in > :nth-child(11)', 'Kryptax is a free, source-available tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
     ['#kofinote > h3', 'Donations'], ['#kofinote > p', 'A “Support Kryptax” button leads to Ko-fi (external site, opens in a new tab). A donation is a small thank-you given from the heart: it is free and voluntary, gives no right to any service or benefit, and because it is made of your own free will it cannot be refunded or cancelled. Kryptax sends no data to Ko-fi: only your browser opens the page, if you click.'],
     ['#privacy .pv-in > :nth-child(13)', 'Publisher and hosting'], ['#privacy .pv-in > :nth-child(14)', 'Publisher: Damien M. aka “Sanarkor”. Hosting: GitHub Pages (GitHub, Inc.).'],
     ['#privclose', 'Close']];

@@ -1,7 +1,7 @@
 /* Export du formulaire 2086 (PDF via jsPDF embarqué) : uniquement les cessions imposables,
    un tableau avec une ligne par cession et les colonnes 211 à 224 de la déclaration 2086, synthèse courte et ligne GLOBAL.
    exportData() est pur (testé dans test.js) ; makePdf utilise jsPDF embarqué. */
-var KX_DISCLAIMER = "Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.";
+var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.";
 (function (root) {
   const d = t => new Date(t).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'medium' });
   const ascii = s => String(s).replace(/→/g, '->').replace(/≈/g, '~').replace(/’/g, "'").replace(/−/g, '-').replace(/—/g, '-').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/×/g, 'x').replace(/[^\x00-\xff€]/g, '');
