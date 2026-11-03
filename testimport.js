@@ -42,4 +42,7 @@ chk(sec.length === 2 && sec[0].rows.length === 2 && sec[1].rows.length === 2 && 
 const all = [].concat(...sec.map(x => { const mp = Object.assign({}, x.map); delete mp.cur; return P.importRows(x.rows, mp, { strict: true, tz: 'UTC', feeInKind: mp.fee == null ? undefined : false, source: 'z', line0: x.line0 }, uid).txs; }));
 chk(all.map(t => t.type + ':' + t.qty + ':' + t.eur + ':' + t.fee).join(' ') === 'STAKING:0.5:1:0 INTEREST:10:0.1:0 BUY:2.5:2500:1 SELL:1:1100:1', 'CSV : récompenses, achat et « Cession » lus');
 chk(P.sections(F.parseCSV('Date;Crypto;Quantité;Montant\n01/02/2026;AAA;1;10\n'), F.guessMap).length === 1, 'CSV à un seul tableau : inchangé (une section)');
+// v2.36 : relevé PDF, frais d'une vente en dollars reportés (ligne 214) ; frais en nature gardés pour les lignes en euros
+{ const R = [['AAA', 'Vente', '1', '10', '10', '0.5', '2026-05-01 10:00:00'], ['AAA', 'Vente', '1', '10', '10', '0.5', '2026-05-02 10:00:00']]; const f = c => P.importRows([R[0]], { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { feeInKind: true, feeInKindEurOnly: true, tz: 'UTC', strict: true, cur: c, source: 'w' }, uid).txs[0];
+  chk(f('USD').feeInKind === false && f('EUR').feeInKind === true, 'Relevé : frais en dollars comptés à part (l.214), frais en euros en nature (inchangé)'); }
 console.log(ok + ' OK, ' + ko + ' KO'); process.exit(ko ? 1 : 0);

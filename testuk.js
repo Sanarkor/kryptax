@@ -73,6 +73,15 @@ eq(K.ranges([1, 2, 3, 5, 7, 8, 3]), '1-3, 5, 7-8', 'line numbers condensed into 
   eq(K.pdfData(r, '2025-26').info.every(l => /^[\x20-\x7e]*$/.test(l)), true, 'PDF info lines stay ASCII');
   eq(K.groupLines([{ line: 3, why: 'unknown type' }, { line: 4, why: 'unknown type' }], 5).map(g => g.text), ['Line 3: unknown type', 'Line 4: unknown type'], 'few important lines: still detailed one by one');
   eq(K.groupLines([3, 4, 5, 6, 7, 9].map(l => ({ line: l, why: 'unknown type' })), 5).map(g => g.text), ['lines 3-7, 9: unknown type (6 lines)'], 'many of the same type: grouped by type with every line number'); }
+// v2.36: old-format PDF fees = allowable costs; exchange (sale + buy same second, same fee) counted once, 50/50 (CRYPTO22150); reward without value; no doubled 'to verify'
+{ const P = K.fromPdfLines(['AAA Achat 10,00000000 10,00 \u20ac 100,00 \u20ac 2,00 \u20ac 1 mai 2025, 10:00:00', 'AAA Vente 10,00000000 12,00 \u20ac 120,00 \u20ac 1,00 \u20ac 2 juin 2025, 10:00:00', 'BBB Achat 5,00000000 23,00 \u20ac 115,00 \u20ac 1,00 \u20ac 2 juin 2025, 10:00:00', 'CCC Récompense Apprendre 3,00000000 4 juin 2025, 10:00:00']);
+  eq(P.txs.map(t => [t.type, t.asset, t.feeAmt]), [['BUY', 'AAA', 2], ['SELL', 'AAA', 0.5], ['BUY', 'BBB', 0.5], ['INCOME', 'CCC', 0]], 'old format: buy fee in cost; exchange fee counted once, split 50/50');
+  P.txs.forEach(t => { t.gbp = t.amt; t.fee = t.feeAmt; delete t.needFx; });
+  const r = K.compute(P.txs, { fileTz: 'UTC' }); r.feeNote = P.feeNote; const Y = K.yearSummary(r, '2025-26'), C = K.checks(r, Y, '2025-26');
+  eq([+Y.costs.toFixed(2), +Y.proceeds.toFixed(2), Y.income[0].gbp], [102.5, 120, null], 'cost 100 + 2 + 0.5; reward without value stays unknown, not GBP 0');
+  eq([C.some(c => /split 50\/50.*CRYPTO22150/.test(c)), C.some(c => /^1 reward\(s\) without a value.*CRYPTO21200/.test(c)), /value missing - to verify/.test(K.toCSV(r, '2025-26'))], [true, true, true], 'fee method and missing reward value named once');
+  const q = K.compute(K.fromCSVText(csv([['2025-06-01', 'Sell', 'A', 1, '8']])).txs, { fileTz: 'UTC' }); const Cq = K.checks(q, K.yearSummary(q, '2025-26'), '2025-26');
+  eq([Cq.some(c => /to verify: .*to verify/.test(c)), Cq[0]], [false, '01/06/2025 A: no acquisition found for 1 A (not in the totals) — to verify.'], 'no doubled to verify'); }
 // exports: CSV boxes, PDF ASCII only, English only
 { const r = run([['2025-05-01', 'Buy', 'A', 10, 1000], ['2025-06-01', 'Sell', 'A', 5, 800]]), C = K.toCSV(r, '2025-26'), P = K.pdfData(r, '2025-26', new Date(Date.UTC(2026, 0, 1)));
   eq([/13\.2,Disposal proceeds,800\.00/.test(C), /13\.3,Allowable costs \(including purchase price\),500\.00/.test(C)], [true, true], 'CSV SA108 boxes');

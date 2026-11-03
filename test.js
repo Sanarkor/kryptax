@@ -507,7 +507,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/object-src 'none'; base-uri 'none'; form-action 'none'">/.test(IH) && IH.includes('<meta name="referrer" content="no-referrer">') && !/<form/i.test(IH) ? 1 : 0, 1, 'CSP : object-src, base-uri, form-action, referrer, aucun formulaire'); }
   { // Frais d'un CSV/Excel importé par le dialogue : colonne « Fees » explicite comptée (ligne 214), même avec la plateforme par défaut « Relevé »
     const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), KP = require('./pipeline.js');
-    eq(AP.includes('if (mp.fee != null) o.feeInKind = false;') && AP.includes("{ platform: 'Relevé', feeInKind: true, source: file.name") ? 1 : 0, 1, 'Frais : colonne explicite comptée en CSV/Excel, relevé PDF inchangé (frais en nature)');
+    eq(AP.includes('if (mp.fee != null) o.feeInKind = false;') && AP.includes("{ platform: 'Relevé', feeInKind: true, feeInKindEurOnly: true, source: file.name") ? 1 : 0, 1, 'Frais : colonne explicite comptée en CSV/Excel, relevé PDF : frais en nature pour les lignes en euros, frais des ventes en dollars à part (v2.36)');
     const head = ['Symbol', 'Type', 'Quantity', 'Price', 'Value', 'Fees', 'Date'], mp = { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 };
     const rows = [['AAA', 'Achat', '10', '10,00€', '100,00€', '1,00€', '10 mars 2026, 10:00:00'], ['AAA', 'Vente', '10', '40,00€', '400,00€', '2,00€', '10 juin 2026, 10:00:00']];
     let n = 0; const imp = o => KP.importRows(rows, mp, Object.assign({ platform: 'Relevé', tz: 'UTC', cur: 'EUR', strict: true, head }, o), () => 'q' + (++n)).txs;
@@ -530,6 +530,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(E.compute(U, (a, ts) => ts === T[2].date ? 2000 : null, null, { rewardCost: true }).total220, 1000, 'Récompense sans cours, case cochée : rien ajouté à 220');
     eq(E.compute(U, (a, ts) => ts === T[2].date || ts === T[1].date ? 2000 : null, null, { rewardCost: true }).total220, 1200, 'Récompense sans montant, case cochée : valeur au cours de réception (0,1 × 2000)');
     eq(+E.stateAt(T, P, 2025, null, { rewardCost: true }).l220, 1200, 'stateAt transmet la case'); }
+  { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'); // v2.36 : case l.220 cochée par défaut ; seul un « 0 » enregistré (décochage explicite) la décoche
+    eq(AP.includes('function rwOn() { return manual.rewardCost !== 0; }') && AP.includes('manual.rewardCost = e.target.checked ? 1 : 0;') && !AP.includes('!!manual.rewardCost') ? 1 : 0, 1, 'Case ligne 220 : cochée par défaut, décochage explicite conservé'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, code source disponible et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
