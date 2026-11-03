@@ -451,3 +451,20 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 /* v2.27 QR PayPal dans « Soutenir » : PC seulement, fond blanc et marge calme pour le scan */
 .merciqr{display:none}
 @media (min-width:1024px){.merciqr{display:block;margin:10px auto;width:max-content;background:#fff;padding:12px;border-radius:12px}.merciqr img{display:block;width:240px;height:240px}}
+
+/* v2.27 Sélecteur pays : un seul bouton + menu */
+.regpick{position:relative;display:inline-flex}
+#regbtn{min-height:40px;box-sizing:border-box}
+.regcur{display:inline-flex;align-items:center;gap:.4em}
+.caret{display:inline-block;width:0;height:0;margin-left:.45em;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor;opacity:.85}
+#regbtn[aria-expanded="true"] .caret{transform:rotate(180deg)}
+.regmenu{position:absolute;top:calc(100% + 6px);right:0;z-index:50;list-style:none;margin:0;padding:4px;min-width:100%;box-sizing:border-box;background:#0b1220;border:1px solid rgba(34,211,238,.6);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.regmenu[hidden]{display:none}
+.regopt{display:flex;align-items:center;gap:.45em;width:100%;min-height:40px;padding:0 .7em;font:inherit;font-weight:800;letter-spacing:.05em;white-space:nowrap;color:inherit;background:transparent;border:1px solid transparent;border-radius:8px;cursor:pointer;text-align:left}
+.regopt .flag{width:18px;height:12px;flex:none;border-radius:2px;box-shadow:0 0 0 1px rgba(127,127,127,.45)}
+.regopt:hover,.regopt:focus-visible{background:rgba(34,211,238,.15);outline:none;border-color:rgba(34,211,238,.6)}
+.regopt.on{color:#22d3ee}
+:root[data-theme="light"] .regmenu{background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.18)}
+:root[data-theme="light"] .regopt.on{color:#0e7490}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .regmenu{background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.18)}:root:not([data-theme="dark"]) .regopt.on{color:#0e7490}}
+@media (min-width:1024px){header .regions #regbtn{height:2.1rem;min-height:2.1rem}}
