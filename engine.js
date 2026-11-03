@@ -185,20 +185,23 @@
     return { kryptax: 'etat', version: 1, date: o.date, holdings, l220: num(o.l220, '220'), l221: num(o.l221, '221'), l222: num(o.l222, '222'), incomplete: !!o.incomplete };
   }
   /* Calcule l'état au 31/12/year (soldes et cumuls 220/221/222), à exporter pour l'année suivante. */
-  function stateAt(txs, priceFn, year, opening) {
+  function stateAt(txs, priceFn, year, opening, opts) {
     const date = year + '-12-31', end = stateTs({ date });
-    const r = compute(txs.filter(t => t.date <= end), priceFn, opening);
+    const r = compute(txs.filter(t => t.date <= end), priceFn, opening, opts);
     const holdings = {}; for (const [a, q] of Object.entries(r.holdings)) if (q > EPS && !FIATS.includes(a)) holdings[a] = +q.toPrecision(12);
     return { kryptax: 'etat', version: 1, date, holdings, l220: +r.total220.toFixed(2), l221: +r.frac221.toFixed(2), l222: +(r.soultes222 || 0).toFixed(2), incomplete: r.cessions.some(c => c.l224 == null) };
   }
-  function compute(txs, priceFn, opening) {
+  function compute(txs, priceFn, opening, opts) {
+    const rewardCost = !!(opts && opts.rewardCost); // case (défaut : non) : valeur à la réception des récompenses ajoutée au prix d'acquisition — à vérifier
     const h = Object.assign({}, opening ? opening.holdings : {}); let total220 = opening ? opening.l220 : 0, frac221 = opening ? opening.l221 : 0, soultes222 = opening ? opening.l222 || 0 : 0;
     const cessions = [], warnings = []; let blocked = false; const o = opening ? stateTs(opening) : -Infinity;
     for (const t of sortTx(txs)) {
       if (t.date <= o) continue;
       if (REWARDS.includes(t.type)) { // récompenses : coût 0 € (inchangé) ; avertissement court + signalement si aucun cours connu à la réception
         if (!(Math.abs(t.eur || 0) > 0) && !(priceFn(t.asset, t.date) > 0)) warnings.push({ t, msg: 'Récompense ' + t.type + ' sans cours connu à la réception : valeur inconnue, comptée 0 € — à vérifier.' });
-        warnings.push({ t, msg: 'Revenu ' + t.type + ' : acquis à 0 € de coût ici. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.' });
+        const rp = Math.abs(t.eur || 0) > 0 ? null : priceFn(t.asset, t.date), rv = Math.abs(t.eur || 0) > 0 ? Math.abs(t.eur) : (rp > 0 && isFinite(rp) ? rp * Math.abs(t.qty || 0) : null);
+        if (rewardCost && rv != null) total220 += rv;
+        warnings.push({ t, msg: 'Revenu ' + t.type + ' : ' + (rewardCost ? 'valeur à la réception ajoutée au prix d’acquisition (case cochée)' : 'acquis à 0 € de coût ici') + '. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.' });
       } else if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
       if ((t.type === 'RECEIVE' || t.type === 'SEND') && !t.xferWith && !t.sendChoice) warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
       if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // relevé de compte : la valeur payée inclut déjà les frais
