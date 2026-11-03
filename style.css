@@ -480,3 +480,5 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 /* v2.32 U.K. : même parcours que U.S.A. (import à gauche, résultat à droite sur PC) */
 @media (min-width:1024px){.usmode>#ukleft{grid-column:1;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto;padding:0 8px 8px 2px}.usmode>#ukresult{grid-column:2}.usmode:has(#ukresult:empty)>#ukleft{position:static;max-height:none;overflow:visible}.usmode>#ukresult:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px #0006;color:var(--muted);font-style:italic;margin:8px 0}.usmode>#ukresult:empty::before{content:"Your results will appear here after the calculation."}}
 .ukm .scroll{overflow-x:auto;max-width:100%}.ukm .uksa{width:100%}.ukm .uksa td,.ukm .uksa th{white-space:normal}.ukm .uksa td:last-child{text-align:right}
+/* v2.35 : liste « To verify » du mode U.K. alignée à gauche, puces proches du texte */
+#ukresult .note{text-align:left}#ukresult .note ul{margin:.35em 0 0;padding-left:1.2em}#ukresult .note li{margin:.15em 0}
