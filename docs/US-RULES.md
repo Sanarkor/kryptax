@@ -263,3 +263,22 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 ## v2.26 — Header buttons on PC (v=20261101zj)
 
 - 1024 px and wider: "Why Kryptax?" and "Support Kryptax" move (same buttons, no copy) to the top right of the header, with the country and theme buttons under them. Below 1024 px they stay at the bottom. No text or calculation change.
+
+## v2.30 — "To verify" points, ranked (docs only, v=20261101zu)
+
+Ranked by impact on the numbers. Sources are only those already listed in this file; "none verified" means no source was read for that point. Nothing here is new app text.
+
+1. **Sales without a matching purchase** (units missing from the file): left out of the totals until the user fills the optional form. Source: Instructions for Form 8949, "Basis and Recordkeeping"; IRS Virtual Currency FAQs Q8. The user's own records decide.
+2. **Form 8949 box (G/H/I, J/K/L) and Part split**: depends on whether the sales are on a Form 1099-DA, and with which basis reporting. Source: Instructions for Form 8949 (2025), "What's New", "Box C or Box I", "Box F or Box L". Not chosen = "to verify".
+3. **Income (staking, airdrops, rewards) value and timing**: the USD value comes from the file. Sources: Rev. Rul. 2023-14 (staking), FAQ Q23–Q25 and Rev. Rul. 2019-24 (airdrop after a hard fork). Missing value = out of the totals.
+4. **Lot identification (HIFO, manual)**: needs adequate identification at the time of sale. Sources: FAQ Q41; Treas. Reg. 1.1012-1(j)(3)(i), quoted in Notice 2026-20. Kryptax cannot check the user's records.
+5. **Wallet-by-wallet tracking before 2025**: Kryptax applies it to all dates. Source: Rev. Proc. 2024-28 (safe harbor for basis allocation as of January 1, 2025).
+6. **Network fees on self-transfers** (option IGNORE / DISPOSE / CAPITALIZE): none verified (see v2.8).
+7. **Wash sale pattern**: flag only, never in the totals. Section 1091 as quoted in v2.13 covers stock or securities; no verified IRS rule for regular crypto assets (see v2.13).
+8. **Schedule D lines 7, 15, 16, 21 and the carryover**: equal Kryptax's totals only if the file holds all capital items. Source: IRS Topic no. 409 for the $3,000 / $1,500 limit (see v2.9); the carryover worksheet is not computed.
+9. **Form 1099-DA comparison** (boxes 1f and 1g typed by the user): a difference of $0.01 or more is flagged. Columns (f)/(g) adjustments are not computed. Source: Instructions for Form 8949, "Column (d)" to "Column (h)".
+10. **PDF import**: best effort; lines that do not match the expected layout are not read.
+
+## v2.31 — U.S.A. on short PC screens (v=20261101zu)
+
+- 1024 px and wider, window height 800 px or less: in U.S.A. mode only, the left column is a little wider (minmax(380px, 36%)) so the import button fits on one line, and the vertical spacing of the Options, the import card and the beta line is tightened. The initial screen fits with no scroll at 1280x720 and 1024x768 (it had about 66 px of scroll). FRANCE, U.K., phones and taller PC screens are unchanged.

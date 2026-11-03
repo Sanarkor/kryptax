@@ -477,3 +477,5 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 /* zp : mentions du pied de page un peu plus grandes sur PC (+17 %) */
 @media (min-width:1024px){footer,.privlink{font-size:.84em}}
 footer .uslaw[hidden]{display:none}
+/* zu : U.S.A. sur PC peu haut (<= 800 px) : colonne gauche un peu plus large et espacement resserre, pour tenir sans defilement */
+@media (min-width:1024px) and (max-height:800px){.usmode{grid-template-columns:minmax(380px,36%) minmax(0,1fr)}.usmode #usimp label.btn{padding-top:6px;padding-bottom:6px}.usmode #usimp .fhelp{margin-top:2px;padding-top:2px;padding-bottom:2px}.usmode #usimp .fhelp p{margin:2px 0}.usmode #usopts .hint{margin-top:1px}.usmode>.usbeta{margin:2px 0}.usmode{margin-top:2px;margin-bottom:2px}.usmode #usimp .sechead{margin-bottom:0}.usmode #usimp>.hint{margin:2px 0}}
