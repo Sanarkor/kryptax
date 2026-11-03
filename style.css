@@ -468,3 +468,6 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 :root[data-theme="light"] .regopt.on{color:#0e7490}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .regmenu{background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.18)}:root:not([data-theme="dark"]) .regopt.on{color:#0e7490}}
 @media (min-width:1024px){header .regions #regbtn{height:2.1rem;min-height:2.1rem}}
+/* v2.zm smartphone : thème sur la même ligne que le bouton pays, tout à droite */
+@media (max-width:479.98px){header .topbar{position:static}.regions{align-items:center;gap:6px}.regions .themebtn{position:static;margin:0;min-width:40px;min-height:40px;padding:0 .45em;box-sizing:border-box}.regions .themebtn svg{width:16px;height:16px}}
+@media (max-width:359.98px){.regions{gap:4px}#regbtn{padding:.3em .35em}.regions .themebtn{min-width:38px;padding:0 .3em}}
