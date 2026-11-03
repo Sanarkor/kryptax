@@ -474,3 +474,6 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 /* v2.zn smartphone : bouton pays et bouton thème réduits de 15 % (ne touchent plus le « x » du logo) */
 @media (max-width:479.98px){#regbtn{font-size:.663rem;min-height:34px}#regbtn .flag{width:12.75px;height:8.5px}#regbtn .caret{margin-left:.38em;border-left-width:3.4px;border-right-width:3.4px;border-top-width:4.25px}.regions .themebtn{min-width:34px;min-height:34px;padding:0 .38em}.regions .themebtn svg{width:13.6px;height:13.6px}.regmenu{font-size:.663rem}}
 @media (max-width:359.98px){.regions .themebtn{min-width:32px;padding:0 .26em}}
+
+.ukmode{max-width:768px;margin:16px auto;box-sizing:border-box;text-align:left}.ukmode[hidden]{display:none}.ukcard h2{margin:0 0 .5em}.ukcard p{margin:0}
+@media (max-width:799.98px){.ukmode{margin:12px 4px}}

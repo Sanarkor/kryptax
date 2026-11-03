@@ -48,26 +48,28 @@
   { const kf = document.querySelector('.kofifoot'), hd = document.querySelector('header'); if (kf && hd && window.matchMedia) { const home = kf.parentNode, nx = kf.nextSibling, mq = matchMedia('(min-width: 1024px)');
     const place = () => { if (mq.matches) { if (kf.parentNode !== hd) hd.appendChild(kf); kf.classList.add('kofitop'); } else if (kf.parentNode !== home) { home.insertBefore(kf, nx); kf.classList.remove('kofitop'); } };
     place(); try { mq.addEventListener('change', place); } catch (e) { try { mq.addListener(place); } catch (x) {} } } }
-  { const fr = $('#regfr'), us = $('#regus'), rb = $('#regbtn'), rm = $('#regmenu'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
+  { const fr = $('#regfr'), us = $('#regus'), uk = $('#reguk'), ukp = $('#ukmode'), rb = $('#regbtn'), rm = $('#regmenu'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
     const tr = u => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
         if (!keep.has(el)) keep.set(el, { h: el.innerHTML, hid: el.hidden, a: attr ? el.getAttribute(attr) : null });
         const k = keep.get(el);
         if (attr) { el.setAttribute(attr, u ? enA : k.a); if (en === '') continue; }
         if (en === null) { if (!attr) el.hidden = u ? true : k.hid; continue; }
         el.innerHTML = u ? en : k.h; } };
-    const set = (v, save) => { const u = v === 'US';
-      [[fr, !u], [us, u]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
-      if (rb) { const c = rb.querySelector('.regcur'), src = u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', u ? 'Country: U.S.A.' : 'Pays : FRANCE'); }
+    const set = (v, save) => { const g = v === 'UK' && uk && ukp, u = v === 'US' || g, us0 = v === 'US';
+      [[fr, !u], [us, us0], [uk, g]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
+      if (rb) { const c = rb.querySelector('.regcur'), src = g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : FRANCE'); }
       document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
-      if (page) page.hidden = !u; if (m) m.hidden = u; if (save) try { localStorage.setItem(K, u ? 'US' : 'FR'); } catch (e) {} };
-    let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR') v0 = s; } catch (e) {}
+      if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; document.documentElement.classList.toggle('kx-uk', !!g);
+      if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'United Kingdom'; }
+      if (save) try { localStorage.setItem(K, g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
+    let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK') v0 = s; } catch (e) {}
     if (!v0) { let L = [], Z = ''; try { L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; } catch (e) {} try { Z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {} v0 = autoRegion(L, Z); }
     /* Sélecteur pays : un seul bouton (drapeau + pays choisi) qui ouvre un petit menu ; extensible à d'autres pays (ajouter un .regopt) */
     const opts = () => rm ? Array.from(rm.querySelectorAll('.regopt')) : [];
     const close = (focus) => { if (!rm || rm.hidden) return; rm.hidden = true; rb.setAttribute('aria-expanded', 'false'); if (focus) rb.focus(); };
     const open = (last) => { if (!rm) return; rm.hidden = false; rb.setAttribute('aria-expanded', 'true'); const o = opts(), i = o.findIndex(b => b.classList.contains('on')); const t = last ? o[o.length - 1] : (o[i] || o[0]); if (t) t.focus(); };
-    if (fr && us) { if (v0 === 'US') set('US'); else set('FR');
-      fr.addEventListener('click', () => { set('FR', true); close(true); }); us.addEventListener('click', () => { set('US', true); close(true); });
+    if (fr && us) { if (v0 === 'US' || v0 === 'UK') set(v0); else set('FR');
+      fr.addEventListener('click', () => { set('FR', true); close(true); }); us.addEventListener('click', () => { set('US', true); close(true); }); if (uk) uk.addEventListener('click', () => { set('UK', true); close(true); });
       if (rb && rm) { rb.addEventListener('click', () => rm.hidden ? open() : close());
         rb.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(e.key === 'ArrowUp'); } });
         rm.addEventListener('keydown', e => { const o = opts(), i = o.indexOf(document.activeElement);
