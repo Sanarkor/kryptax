@@ -5,7 +5,8 @@
   "description": "Aide au calcul du formulaire 2086 (plus-values crypto), 100 % dans le navigateur. Aucune dépendance : Node seul pour les tests.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
-    "test": "node test.js && node testformats.js && node testexport.js && node testgolden.js && node testus.js",
+    "test": "node test.js && node testformats.js && node testexport.js && node testgolden.js && node testus.js && node testuk.js",
+    "test:uk": "node testuk.js",
     "test:fr": "node test.js && node testformats.js && node testexport.js && node testgolden.js",
     "test:golden": "node testgolden.js",
     "test:us": "node testus.js",
