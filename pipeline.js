@@ -640,7 +640,7 @@
      + lignes des relevés en devises (« Vente de X » / « Achat de X ») pour la contre-vérification. */
   const DATE_RE = '(\\d{1,2}\\s+[a-zéèûô.]+\\s+\\d{4},?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)';
   const DATE2_RE = '((?:\\d{1,2}\\s+[a-zéèûô.]+\\s+\\d{4}|[a-z]{3,9}\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\/\\d{1,2}\\/\\d{4}),?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s*[AP]M)?)'; // v2.33 : dates FR/EN, ISO, JJ/MM/AAAA
-  function parsePdfLines(lines) {
+  function parsePdfLines(lines, popt) {
     const rows = [], rows2 = [], amb = [], fiat = [], skipped = [], closing = {}, opening = {}; let period = null, inRep = false, q3 = null;
     const NUM = '\\d{1,3}(?:[\\s\\u00a0\\u202f]\\d{3})+(?:,\\d+)?|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d+(?:[.,]\\d+)?', AMT = '\\s+-?(?:[€$£]\\s?(?:' + NUM + ')|(?:' + NUM + ')\\s?[€$£])';
     const dateFirst = new RegExp('^' + DATE2_RE + '\\s+([A-Z][A-Z0-9]{0,14})\\s+(.+?)\\s+(-?(?:' + NUM + '))(?:\\s+\\2)?((?:' + AMT + ')+)$', 'i');
@@ -673,7 +673,7 @@
       } else skipped.push(l);
     }
     { const n = {}; rows2.forEach(r => n[r.cur] = (n[r.cur] || 0) + 1); const main = Object.keys(n).sort((a, b) => n[b] - n[a])[0];
-      for (let i = rows2.length - 1; i >= 0; i--) if (rows2[i].cur !== main) { amb.push({ line: rows2[i].line, why: 'montants en ' + rows2[i].cur + ' dans un relevé en ' + main + ' : ligne non importée, à vérifier' }); rows2.splice(i, 1); }
+      if (!(popt && popt.keepCur)) for (let i = rows2.length - 1; i >= 0; i--) if (rows2[i].cur !== main) { /* keepCur (mode U.K., v2.34) : lignes gardées, converties ensuite */ amb.push({ line: rows2[i].line, why: 'montants en ' + rows2[i].cur + ' dans un relevé en ' + main + ' : ligne non importée, à vérifier' }); rows2.splice(i, 1); }
       for (const r of rows2) { const q = E.parseNum(r.row[2]), p = E.parseNum(r.row[3]), v = E.parseNum(r.row[4]); if (q > 0 && p > 0 && v > 0 && Math.abs(q * p - v) > Math.max(0.02, 0.02 * v)) amb.push({ line: r.line, why: 'quantité × prix ≠ valeur : importée avec la valeur indiquée, à vérifier', kept: true }); }
       rows2.cur = main; }
     const to = period ? E.parseDate(period.to + ', 23:59:59', 'DMY', 'Paris') : NaN;
