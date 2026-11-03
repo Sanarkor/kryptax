@@ -477,3 +477,6 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 
 .ukmode{max-width:768px;margin:16px auto;box-sizing:border-box;text-align:left}.ukmode[hidden]{display:none}.ukcard h2{margin:0 0 .5em}.ukcard p{margin:0}
 @media (max-width:799.98px){.ukmode{margin:12px 4px}}
+/* zp : mentions du pied de page un peu plus grandes sur PC (+17 %) */
+@media (min-width:1024px){footer,.privlink{font-size:.84em}}
+footer .uslaw[hidden]{display:none}
