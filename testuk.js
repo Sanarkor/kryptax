@@ -38,13 +38,33 @@ eq([K.taxYear(Date.UTC(2025, 3, 5) / 864e5), K.taxYear(Date.UTC(2025, 3, 6) / 86
 { const r = run([['2025-05-01', 'Staking reward', 'S', 2, 20], ['2025-05-02', 'Airdrop', 'S', 1, 30], ['2025-05-03', 'Send', 'S', 1, ''], ['2025-06-01', 'Sell', 'S', 3, 90], ['2025-06-02', 'Sell', 'Q', 1, 10]]);
   eq([r.income.length, r.income[0].gbp, r.disposals.find(x => x.asset === 'S').cost, r.disposals.find(x => x.asset === 'S').gain, r.transfers.count], [2, 20, 20, 70, 1], 'staking at value, airdrop at 0 (to verify), transfer not a disposal');
   eq(r.disposals.find(x => x.asset === 'Q').status.startsWith('to verify: no acquisition found'), true, 'sale without acquisition = to verify'); }
-eq(K.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n2025-05-01,Buy,A,1,10').currency, true, 'USD file refused');
-eq(K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 1, '$10']])).skipped[0].why, 'value not in GBP', 'line with $ skipped');
+eq(K.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n2025-05-01,Buy,A,1,10').txs.map(t => [t.cur, t.needFx]), [['USD', true]], 'USD column: line kept, waiting for conversion (v2.34)');
+eq(K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 1, '$10']])).txs[0].cur, 'USD', 'line with $ kept for conversion');
+eq(K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 1, '$10', '\u20ac1']])).skipped[0].why, 'mixed currencies in the line, to verify', 'mixed currencies in a line: skipped');
 eq(K.dmy(K.ukDate('05/04/2025')), '05/04/2025', 'U.K. dates are day/month/year');
+// v2.34: conversion to GBP, mocked rates (no network). Rate of the day, else previous working day (weekend), else excluded.
+const asyncT = (async () => {
+  const urls = [], mock = async u => { urls.push(u); return { rates: { '2025-05-02': { GBP: 0.85 }, '2025-06-02': { GBP: 0.84 } } }; };
+  const p = K.fromCSVText('Date,Type,Asset,Quantity,Total (EUR),Fee (EUR)\n2025-05-02,Buy,A,10,100,2\n2025-05-04,Buy,A,10,100,0\n2025-06-02,Sell,A,5,80,1\n2025-07-20,Sell,A,1,10,0');
+  await K.convertFx(p, mock);
+  eq(urls, ['https://api.frankfurter.dev/v1/2025-04-25..2025-07-20?from=EUR&to=GBP'], 'one Frankfurter call per currency (from EUR to GBP)');
+  eq(p.txs.map(t => [+t.gbp.toFixed(4), +t.fee.toFixed(4), t.fx.on]), [[85, 1.7, '2025-05-02'], [85, 0, '2025-05-02'], [67.2, 0.84, '2025-06-02']], 'EUR to GBP at the rate of the day, Sunday uses the previous working day');
+  eq([p.txs.length, p.fx.missing, p.skipped[0].why], [3, 1, 'no EUR to GBP rate found for 2025-07-20, excluded, to verify'], 'no rate within 7 days: line listed and excluded');
+  const r = K.compute(p.txs, { fileTz: 'UTC' }); r.fx = p.fx;
+  eq(/converted to GBP \(EUR\).*Frankfurter.*CG78310/.test(K.toCSV(r, '2025-26')) && /CG78310/.test(K.pdfData(r, '2025-26').info.join(' ')), true, 'conversion source and HMRC CG78310 named in CSV and PDF');
+  const q = K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 1, '10']])); await K.convertFx(q, async () => { throw new Error('no call expected'); }); eq(q.txs[0].gbp, 10, 'GBP lines: no conversion, no call');
+  const z = K.fromCSVText('Date,Type,Asset,Quantity,Total (USD)\n2025-05-01,Buy,A,1,10'); await K.convertFx(z, async () => { throw new Error('offline'); }); eq([z.txs.length, z.fx.missing], [0, 1], 'network failure: line excluded and listed, nothing guessed');
+  // PDF statement lines (invented structure, no real data)
+  const P = K.fromPdfLines(['HISTORY', 'Date Symbol Type Quantity Price Value Fee', '2 mai 2025, 10:00:00 AAA Achat 10,00000000 10,00 \u20ac 100,00 \u20ac 2,00 \u20ac', '4 June 2025, 09:00:00 AAA Staking reward 1,00000000 10,00 \u20ac 10,00 \u20ac', '2 juin 2025, 11:00:00 AAA Vente 5,00000000 16,00 \u20ac 80,00 \u20ac 1,00 \u20ac', '3 juin 2025, 11:00:00 BBB Achat (X) 2,00000000 5,00 $ 10,00 $ 0,01 $']);
+  eq(P.txs.map(t => [t.type, t.asset, t.qty, t.amt, t.feeAmt, t.cur]), [['BUY', 'AAA', 10, 100, 2, 'EUR'], ['SELL', 'AAA', 5, 80, 1, 'EUR'], ['BUY', 'BBB', 2, 10, 0.01, 'USD'], ['INCOME', 'AAA', 1, 10, 0, 'EUR']], 'PDF: buy, sell, reward and a $ line read (FR/EN words and dates)');
+  await K.convertFx(P, async u => /from=USD/.test(u) ? { rates: { '2025-06-03': { GBP: 0.8 } } } : { rates: { '2025-05-02': { GBP: 0.85 }, '2025-06-02': { GBP: 0.84 }, '2025-06-04': { GBP: 0.84 } } });
+  eq(P.txs.map(t => +t.gbp.toFixed(2)), [85, 67.2, 8, 8.4], 'PDF: EUR and USD lines converted to GBP');
+  console.log(ok + ' OK, ' + ko + ' KO'); process.exit(ko ? 1 : 0);
+})();
 // exports: CSV boxes, PDF ASCII only, English only
 { const r = run([['2025-05-01', 'Buy', 'A', 10, 1000], ['2025-06-01', 'Sell', 'A', 5, 800]]), C = K.toCSV(r, '2025-26'), P = K.pdfData(r, '2025-26', new Date(Date.UTC(2026, 0, 1)));
   eq([/13\.2,Disposal proceeds,800\.00/.test(C), /13\.3,Allowable costs \(including purchase price\),500\.00/.test(C)], [true, true], 'CSV SA108 boxes');
   const all = [P.title, P.foot].concat(P.info, P.head, ...P.rows).join('\n'); eq([/^[\x20-\x7e\n]*$/.test(all), /GBP 300\.00/.test(all)], [true, true], 'PDF text ASCII only'); }
 { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), m = H.match(/<section id="ukmode"[\s\S]*?<\/section><\/section>|<section id="ukmode"[\s\S]*?<div id="ukresult"/), L = H.match(/<span class="law uklaw" lang="en" hidden>([^<]*)<\/span>/);
   eq([!!m, m && /[àâçéèêëîïôûùüÿœ]/.test(m[0]), !!L, L && /CRYPTO22200/.test(L[1]), L && /[àâçéèêëîïôûùüÿœ]|CGI/.test(L[1])], [true, false, true, true, false], 'U.K. page in English, footer sources line'); }
-console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
+asyncT.catch(e => { console.log('FAIL  async: ' + e.message); process.exit(1); });

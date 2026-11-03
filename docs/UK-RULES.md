@@ -42,6 +42,6 @@ Only individuals (not a trade), Capital Gains Tax on cryptoassets. Scotland/Wale
 
 ## Not implemented
 
-- No currency conversion: values must already be in GBP; lines in USD/EUR are refused or skipped.
+- Currency conversion (v2.34): values in another currency (EUR, USD, ...) are converted to GBP with the European Central Bank reference rates published through Frankfurter (api.frankfurter.dev), at the rate of the operation day or, failing that, of the previous working day (up to 7 days back). HMRC does not prescribe the reference point for the rate but expects "a reasonable and consistent method" (Capital Gains Manual CG78310); cryptoassets themselves are not currency (CRYPTO22550). The source and rate date are shown and marked "to verify". A line with no rate found is listed, excluded and flagged; nothing is guessed. A line mixing two currencies is skipped.
 - No tax amount is computed (depends on taxable income).
-- PDF statements are not read in U.K. mode (CSV/Excel only).
+- PDF statements are read in U.K. mode (v2.34) with the same in-browser PDF reader as the French mode: date, type, asset, quantity, value, fee; values are then converted to GBP as above. Only text PDFs are read (no scans); unrecognised lines are listed as skipped. To verify against the statement.
