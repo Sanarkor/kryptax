@@ -21,7 +21,7 @@
     ['#merciclose', '', 'aria-label', 'Close'], ['#mercititle', 'Thanks for your support 🙏'],
     ['#mercitext', 'If Kryptax helped you, you can buy the developer a small coffee on Ko-fi (external site, opens in a new tab).'],
     ['#merci .merci-legal', 'Kryptax stays free. A donation is a simple voluntary thank-you, with nothing in return, and it cannot be refunded or cancelled.'],
-    ['#mercikofi', '☕ Donate on Ko-fi'], ['#merciok', 'Close'],
+    ['#mercikofi', '☕ Donate on Ko-fi'], ['#merciqr', '', 'alt', 'PayPal QR code to support Kryptax'], ['#merciok', 'Close'],
     ['#privopen', 'Legal notice and privacy'],
     ['#privtitle', 'Legal notice and privacy'],
     ['#privacy .pv-in > :nth-child(2)', 'Your files stay with you'], ['#privacy .pv-in > :nth-child(3)', 'Everything runs in your browser. No file, transaction or amount is sent to a Kryptax server: Kryptax has no server, it is a simple web page.'],
