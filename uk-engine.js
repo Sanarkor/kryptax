@@ -242,7 +242,7 @@
       (Y.toVerify.length ? Y.toVerify.length + ' disposal(s) to verify, not in the totals. ' : '') + 'Only the disposals in this file; losses of other years and other assets not included.'];
     if (res.fx && res.fx.count) info.push(res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + ') with ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310).');
     if (Y.income.length) info.push('Income (staking, mining, rewards): ' + gbp(Y.incomeGbp) + ' (miscellaneous income, to verify; airdrops listed apart, to verify).');
-    checks(res, Y, y).forEach(c => info.push('To verify: ' + c));
+    checks(res, Y, y).forEach(c => info.push('To verify: ' + c.replace(/ \u2014 to verify\b/g, '')));
     const rows = Y.disposals.map(x => [dmy(x.date), x.asset, String(+x.qty.toPrecision(10)), gbp(x.proceeds), gbp(x.cost), gbp(x.gain), x.parts.map(ruleText).join(' + '), x.status === 'ok' ? '' : x.status].map(ascii));
     return { title: 'Kryptax U.K. - Capital gains summary (estimate)', info: info.map(ascii), head: ['Date', 'Asset', 'Qty', 'Proceeds', 'Costs', 'Gain/loss', 'Matching', 'Status'], rows, foot: ascii(LEGAL) };
   }
