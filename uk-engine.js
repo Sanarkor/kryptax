@@ -297,29 +297,57 @@
       if (e.target.id === 'ukpdf' && W.jspdf) pdf(W.jspdf.jsPDF, full, year).save(stamp('kryptax-uk-summary', 'pdf'));
     });
     { const hb = doc.getElementById('ukhelpbtn'), hp = doc.getElementById('ukhelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); }); }
-    { const rb = doc.getElementById('ukreset'); if (rb) rb.addEventListener('click', () => { if (!W.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = full = null; year = null; inp.value = ''; out.innerHTML = ''; }); }
+    { const rb = doc.getElementById('ukreset'); if (rb) rb.addEventListener('click', () => { if (!W.confirm('Reset everything? The imported files and the results on this page will be cleared.')) return; cur = full = null; year = null; inp.value = ''; out.innerHTML = ''; files.length = 0; fmsg.innerHTML = ''; dirtyFiles(); }); }
     const zone = doc.getElementById('ukimp');
     if (zone) { const has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragover', e => { if (has(e)) { e.preventDefault(); zone.classList.add('dropover'); } });
       zone.addEventListener('dragleave', () => zone.classList.remove('dropover'));
       zone.addEventListener('drop', e => { zone.classList.remove('dropover'); if (!has(e)) return; e.preventDefault(); try { inp.files = e.dataTransfer.files; inp.dispatchEvent(new Event('change')); } catch (x) {} }); }
+
+    /* v2.37: several files, like the French mode: each import is added to the list, then "Confirm imports" computes one result on all of them. */
+    inp.multiple = true; const files = [], flist = doc.createElement('ul'), vbtn = doc.createElement('button'), fmsg = doc.createElement('div');
+    flist.className = 'flist'; flist.id = 'ukflist'; flist.hidden = true; vbtn.type = 'button'; vbtn.className = 'btn validate'; vbtn.id = 'ukvalidate'; vbtn.textContent = 'Confirm imports'; vbtn.disabled = true; fmsg.id = 'ukfmsg';
+    { const ib = doc.getElementById('ukimp'); if (ib) { ib.appendChild(flist); ib.appendChild(vbtn); ib.appendChild(fmsg); } else { out.parentNode.insertBefore(flist, out); out.parentNode.insertBefore(vbtn, out); out.parentNode.insertBefore(fmsg, out); } }
+    const drawFiles = () => { flist.innerHTML = files.map((x, i) => `<li><span>${esc(x.name)} (${x.p.txs.length} line${x.p.txs.length > 1 ? 's' : ''})</span> <button type="button" class="small ghost" data-rmi="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`).join(''); flist.hidden = !files.length; };
+    const dirtyFiles = () => { drawFiles(); vbtn.disabled = !files.length; cur = full = null; year = null; out.innerHTML = ''; };
+    flist.addEventListener('click', e => { const b = e.target.closest('[data-rmi]'); if (!b) return; files.splice(+b.dataset.rmi, 1); fmsg.innerHTML = ''; dirtyFiles(); });
     inp.addEventListener('change', async () => {
-      const f = inp.files && inp.files[0]; if (!f) return; name = f.name;
+      const F = Array.from(inp.files || []); if (!F.length) return; const notes = [];
+      for (const f of F) { if (files.some(x => x.name === f.name && x.size === f.size)) { notes.push('<p class="warn">' + esc(f.name) + ': already imported, skipped.</p>'); continue; }
+        const r = await readOne(f); if (r.err) notes.push(r.err); else files.push({ name: f.name, size: f.size, p: r.p, note: r.note || '' }); }
+      inp.value = ''; dirtyFiles(); fmsg.innerHTML = notes.join('');
+    });
+    vbtn.addEventListener('click', () => { if (!files.length) return; const m = mergeFiles(files.map(x => ({ name: x.name, p: x.p }))); fmsg.innerHTML = '';
+      const note = files.map(x => x.note).join('') + (m.dupes ? '<p class="warn">' + m.dupes + ' line' + (m.dupes > 1 ? 's' : '') + ' already found in an earlier file: counted once (to verify).</p>' : '') + (m.tzMix ? '<p class="warn">The files do not use the same time zone; the time zone of the first file is used (to verify).</p>' : '');
+      vbtn.disabled = true; name = files.map(x => x.name).join(', '); cur = m; year = null; render(); if (note) out.insertAdjacentHTML('afterbegin', note); });
+    async function readOne(f) {
       const data = new Uint8Array(await f.arrayBuffer()); let p;
-      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) { out.innerHTML = '<p class="warn">Excel reading is not available. Please reload the page.</p>'; return; } p = fromWorkbook(W.XLSX, data); }
-        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) { out.innerHTML = '<p class="warn">PDF reading is not available. Please reload the page.</p>'; return; }
+      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; } p = fromWorkbook(W.XLSX, data); }
+        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) { return { err: '<p class="warn">PDF reading is not available. Please reload the page.</p>' }; }
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; out.innerHTML = '<p class="hint">Reading the PDF…</p>';
           const d = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           for (let i = 1; i <= d.numPages; i++) { const c = await (await d.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
-          p = fromPdfLines(lines); if (!p.txs.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': no crypto transaction found in this PDF. Nothing was computed.</p>'; return; } }
+          p = fromPdfLines(lines); if (!p.txs.length) { return { err: '<p class="warn">' + esc(f.name) + ': no crypto transaction found in this PDF. Nothing was computed.</p>' }; } }
         else p = fromCSVText(data); }
-      catch (x) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
-      if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total or Price.</p>'; return; }
+      catch (x) { return { err: '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>' }; }
+      if (p.missingCols.length) { return { err: '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total or Price.</p>' }; }
       if (p.txs.some(t => t.needFx)) { out.innerHTML = '<p class="hint">Converting to GBP (ECB reference rates)…</p>';
         await convertFx(p, async u => { const r = await fetch(u); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); }
-      cur = p; year = null; render();
-    });
+      return { p };
+    }
   }
+
+  /* v2.37: merge several imported files. Lines are renamed "F<n>:<line>" when there is more than one file; a line identical to one of an earlier file is counted once. */
+  function mergeFiles(L) {
+    if (L.length === 1) return Object.assign({}, L[0].p, { dupes: 0, tzMix: false });
+    const K = t => [t.date, t.type, t.asset, t.qty, t.amt, t.toAsset || '', t.toQty || ''].join('|'), seen = new Set(), out = Object.assign({}, L[0].p, { txs: [], skipped: [], dupes: 0, tzMix: false });
+    L.forEach((f, i) => { const mine = new Set(), pre = 'F' + (i + 1) + ':';
+      f.p.txs.forEach(t => { const k = K(t); if (seen.has(k)) { out.dupes++; return; } mine.add(k); out.txs.push(Object.assign({}, t, { line: pre + t.line })); });
+      mine.forEach(k => seen.add(k)); (f.p.skipped || []).forEach(s => out.skipped.push(Object.assign({}, s, { line: pre + s.line })));
+      if (i && (f.p.fileTz || '') !== (L[0].p.fileTz || '')) out.tzMix = true; if (f.p.fx) { out.fx = out.fx || { src: f.p.fx.src, count: 0, cur: [], missing: 0 }; if (i) { out.fx.count += f.p.fx.count; out.fx.missing += f.p.fx.missing || 0; f.p.fx.cur.forEach(c => { if (!out.fx.cur.includes(c)) out.fx.cur.push(c); }); } } if (f.p.feeNote) out.feeNote = true; });
+    out.txs.sort((a, b) => a.date - b.date); return out;
+  }
+  api.mergeFiles = mergeFiles;
   api.mount = mount;
   if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => mount(document)); else mount(document); }
   if (node) module.exports = api; else root.KryptaxUK = api;
