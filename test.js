@@ -522,7 +522,14 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(d.warnings.some(w => /sans cours connu/.test(w.msg)) ? 1 : 0, 0, 'Staking avec valeur : pas de signalement sans cours');
     const U = [T[0], Object.assign({}, T[1], { eur: 0 }), T[2]], du = E.compute(U, (a, ts) => ts === T[2].date ? 2000 : null);
     eq(du.warnings.some(w => /sans cours connu/.test(w.msg) && /STAKING/.test(w.msg)) ? 1 : 0, 1, 'Récompense sans cours : signalée'); eq(du.total220, 1000, 'Récompense sans cours : 220 inchangé');
-    eq(E.compute(U, P).warnings.some(w => /sans cours connu/.test(w.msg)) ? 1 : 0, 0, 'Récompense sans montant mais cours connu : pas signalée'); }
+    eq(E.compute(U, P).warnings.some(w => /sans cours connu/.test(w.msg)) ? 1 : 0, 0, 'Récompense sans montant mais cours connu : pas signalée');
+    const o = E.compute(T, P, null, { rewardCost: true }), b = E.compute(T.filter(t => t.id !== 2), P), b2 = E.compute(T.filter(t => t.id !== 2), P, null, { rewardCost: true });
+    eq(o.total220, 1200, 'Staking case cochée : 220 = 1200'); eq(+o.cessions[0].l224.toFixed(2), 454.55, 'Staking case cochée : PV 454,55');
+    eq(b2.cessions[0].l224, b.cessions[0].l224, 'Sans staking : case sans effet'); eq(b.cessions[0].l224, 500, 'Sans staking : PV 500');
+    eq(o.warnings.some(w => /case cochée/.test(w.msg) && /150 VH bis III-B/.test(w.msg) && /À vérifier/.test(w.msg)) ? 1 : 0, 1, 'Staking case cochée : avertissement « à vérifier » avec l’article');
+    eq(E.compute(U, (a, ts) => ts === T[2].date ? 2000 : null, null, { rewardCost: true }).total220, 1000, 'Récompense sans cours, case cochée : rien ajouté à 220');
+    eq(E.compute(U, (a, ts) => ts === T[2].date || ts === T[1].date ? 2000 : null, null, { rewardCost: true }).total220, 1200, 'Récompense sans montant, case cochée : valeur au cours de réception (0,1 × 2000)');
+    eq(+E.stateAt(T, P, 2025, null, { rewardCost: true }).l220, 1200, 'stateAt transmet la case'); }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, code source disponible et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
