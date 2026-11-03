@@ -31,8 +31,8 @@
     if (/airdrop/.test(s)) return 'AIRDROP';
     if (/learn|reward|interest|intérêt|cashback|earn/.test(s)) return 'INTEREST';
     if (/exchange|échange|swap|convert/.test(s)) return 'EXCH_OUT';
-    if (/sell|vente|vendre/.test(s)) return 'SELL';
-    if (/buy|achat|acheter/.test(s)) return 'BUY';
+    if (/sell|vente|vendre|cession|disposal|\bsale\b|\bsold\b/.test(s)) return 'SELL'; // v2.33 : Cession, Disposal, Sale, Sold
+    if (/buy|achat|acheter|purchase|bought/.test(s)) return 'BUY';
     if (/pay|card|paiement|carte/.test(s)) return 'PAY';
     if (/receiv|réception|deposit|dépôt|transfer in|topup/.test(s)) return 'RECEIVE';
     if (/send|envoi|withdraw|retrait|transfer out/.test(s)) return 'SEND';
@@ -88,8 +88,13 @@
     if (v instanceof Date) return v.getTime();
     const s = fixText(String(v)).trim();
     const MOIS = { janv: 0, jan: 0, 'févr': 1, fevr: 1, 'fév': 1, feb: 1, mars: 2, mar: 2, avr: 3, apr: 3, mai: 4, may: 4, juin: 5, jun: 5, juil: 6, jul: 6, 'août': 7, aout: 7, aug: 7, sept: 8, sep: 8, oct: 9, nov: 10, 'déc': 11, dec: 11 };
-    let f = s.match(/^(\d{1,2})\s+([a-zéû]+)\.?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/i);
-    if (f && MOIS[f[2].toLowerCase()] != null) return mk(+f[3], MOIS[f[2].toLowerCase()], +f[1], +(f[4] || 0), +(f[5] || 0), +(f[6] || 0));
+    const FULL = ['janvier|january', 'février|fevrier|february', 'mars|march', 'avril|april', 'mai|may', 'juin|june', 'juillet|july', 'août|aout|august', 'septembre|september', 'octobre|october', 'novembre|november', 'décembre|decembre|december'];
+    const mo = n => { n = n.toLowerCase(); if (MOIS[n] != null) return MOIS[n]; const i = FULL.findIndex(x => x.split('|').includes(n)); return i > -1 ? i : null; }; // v2.33 : mois en toutes lettres FR/EN
+    const hm = (h, ap) => { h = +(h || 0); if (ap) { if (/pm/i.test(ap) && h < 12) h += 12; if (/am/i.test(ap) && h === 12) h = 0; } return h; };
+    let f = s.match(/^(\d{1,2})\s+([a-zéû]+)\.?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
+    if (f && (MOIS[f[2].toLowerCase()] != null || (tz && mo(f[2]) != null))) return mk(+f[3], mo(f[2]), +f[1], hm(f[4], f[7]), +(f[5] || 0), +(f[6] || 0));
+    f = s.match(/^([a-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i); // « Oct 12, 2026, 11:55 » (fuseau indiqué seulement : sans fuseau, lecture historique inchangée)
+    if (f && tz && mo(f[1]) != null) return mk(+f[3], mo(f[1]), +f[2], hm(f[4], f[7]), +(f[5] || 0), +(f[6] || 0));
     let m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
     if (m && !/^\d{4}/.test(s)) {
       let a = +m[1], b = +m[2], y = +m[3]; if (y < 100) y += 2000;
