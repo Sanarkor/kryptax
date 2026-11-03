@@ -7,7 +7,7 @@
   const FOOT = 'Estimate - not tax advice - to be verified - state taxes not included';
   const BOXNOTE = 'Digital assets: Part I uses box G, H or I and Part II box J, K or L (never A-F). G/J: Form 1099-DA with basis reported to the IRS; H/K: Form 1099-DA without basis or basis not reported; I/L: no Form 1099-DA. Columns (f) and (g) left blank. Source: IRS Instructions for Form 8949 (2025). To verify.';
   const eng = () => typeof module !== 'undefined' ? require('./us-engine.js') : root.KryptaxUS;
-  const ascii = s => String(s == null ? '' : s).replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\u2192/g, '->').replace(/[^\x20-\x7e]/g, '?');
+  const ascii = s => String(s == null ? '' : s).replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\u2192/g, '->').replace(/[\u00a0\u2007\u2009\u202f]/g, ' ').replace(/\u2026/g, '...').replace(/\u2212/g, '-').replace(/\u00d7/g, 'x').replace(/\u2264/g, '<=').replace(/\u2265/g, '>=').replace(/\u20ac/g, 'EUR ').replace(/[^\x20-\x7e]/g, '?');
   const pad = n => String(n).padStart(2, '0');
   const mdy = t => { if (t == null) return 'unknown'; const d = new Date(t); return isNaN(d) ? 'unknown' : pad(d.getUTCMonth() + 1) + '/' + pad(d.getUTCDate()) + '/' + d.getUTCFullYear(); };
   const usd = v => v == null || !isFinite(v) ? 'to verify' : (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -59,7 +59,8 @@
   const COPY = [161, 98, 7];
   function makePdf(jsPDF, res, opts) {
     const D = summaryData(res, opts), doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' }), W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 10;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('Kryptax \u2014 U.S. summary (estimate)', M, 16);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('Kryptax - U.S. summary (estimate)', M, 16);
+    const t0 = doc.text.bind(doc); doc.text = (s, ...a) => t0(Array.isArray(s) ? s.map(ascii) : ascii(s), ...a); /* v2.36a: every PDF text line ASCII (tested) */ 
     let y = 22; doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(D.copyTitle, M, y); doc.setFont('helvetica', 'normal');
     doc.autoTable({ startY: y + 2, head: [['', '(d) Proceeds', '(e) Cost', '(h) Gain or (loss)']], body: D.copy.map(r => r.text ? [{ content: r.label, colSpan: 4 }] : [r.label, r.d, r.e, r.h]), margin: { left: M, right: M, bottom: 16, top: 12 },
       styles: { fontSize: 8, cellPadding: 1.2, overflow: 'linebreak' }, headStyles: { fillColor: [40, 40, 40] }, columnStyles: { 1: { halign: 'right', cellWidth: 30 }, 2: { halign: 'right', cellWidth: 30 }, 3: { halign: 'right', cellWidth: 34 } }, tableLineColor: [161, 98, 7], tableLineWidth: 0.4,

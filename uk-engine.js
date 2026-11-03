@@ -231,7 +231,7 @@
     L.push([], [LEGAL]);
     return L.map(r => r.map(q).join(',')).join('\r\n') + '\r\n';
   }
-  const ascii = s => String(s == null ? '' : s).replace(/\u00a3/g, 'GBP ').replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[^\x20-\x7e]/g, '?');
+  const ascii = s => String(s == null ? '' : s).replace(/\u00a3/g, 'GBP ').replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u00a0\u2007\u2009\u202f]/g, ' ').replace(/\u2026/g, '...').replace(/\u2212/g, '-').replace(/\u00d7/g, 'x').replace(/\u2264/g, '<=').replace(/\u2265/g, '>=').replace(/\u20ac/g, 'EUR ').replace(/[^\x20-\x7e]/g, '?');
   /* PDF lines, ASCII only (tested). */
   function pdfData(res, y, now) {
     const Y = yearSummary(res, y); now = now || new Date();
@@ -248,6 +248,7 @@
   }
   function pdf(jsPDF, res, y) {
     const D = pdfData(res, y), doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' }); let yy = 40;
+    const t0 = doc.text.bind(doc); doc.text = (s, ...a) => t0(Array.isArray(s) ? s.map(ascii) : ascii(s), ...a); /* v2.36a: every PDF text line ASCII (tested) */ 
     doc.setFontSize(14); doc.text(D.title, 40, yy); yy += 20; doc.setFontSize(9);
     D.info.forEach(l => { doc.splitTextToSize(l, 760).forEach(s => { doc.text(s, 40, yy); yy += 12; }); });
     if (doc.autoTable) doc.autoTable({ head: [D.head], body: D.rows, startY: yy + 6, styles: { fontSize: 8 }, margin: { left: 40, right: 40 } });
