@@ -482,3 +482,7 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 .ukm .scroll{overflow-x:auto;max-width:100%}.ukm .uksa{width:100%}.ukm .uksa td,.ukm .uksa th{white-space:normal}.ukm .uksa td:last-child{text-align:right}
 /* v2.35 : liste « To verify » du mode U.K. alignée à gauche, puces proches du texte */
 #ukresult .note{text-align:left}#ukresult .note ul{margin:.35em 0 0;padding-left:1.2em}#ukresult .note li{margin:.15em 0}
+/* v2.38: Deutschland in the country button: full name in the menu, shorter text in the button on narrow screens (never over the logo) */
+.regmenu .rs{display:none}.regcur .rs{display:none}.regcur .rl{font-size:.86em;letter-spacing:.02em}
+@media (max-width:480px){.regcur .rl{display:none}.regcur .rs{display:inline}}
+.dem .usimp p{margin:.4rem 0}
