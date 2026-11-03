@@ -639,8 +639,11 @@
   /* Relevé PDF de l'exchange : lignes de texte -> lignes à 7 colonnes (Symbole, Type, Quantité, Prix, Valeur, Frais, Date)
      + lignes des relevés en devises (« Vente de X » / « Achat de X ») pour la contre-vérification. */
   const DATE_RE = '(\\d{1,2}\\s+[a-zéèûô.]+\\s+\\d{4},?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)';
+  const DATE2_RE = '((?:\\d{1,2}\\s+[a-zéèûô.]+\\s+\\d{4}|[a-z]{3,9}\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\/\\d{1,2}\\/\\d{4}),?\\s+\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s*[AP]M)?)'; // v2.33 : dates FR/EN, ISO, JJ/MM/AAAA
   function parsePdfLines(lines) {
-    const rows = [], fiat = [], skipped = [], closing = {}, opening = {}; let period = null, inRep = false;
+    const rows = [], rows2 = [], amb = [], fiat = [], skipped = [], closing = {}, opening = {}; let period = null, inRep = false, q3 = null;
+    const NUM = '\\d{1,3}(?:[\\s\\u00a0\\u202f]\\d{3})+(?:,\\d+)?|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d+(?:[.,]\\d+)?', AMT = '\\s+-?(?:[€$£]\\s?(?:' + NUM + ')|(?:' + NUM + ')\\s?[€$£])';
+    const dateFirst = new RegExp('^' + DATE2_RE + '\\s+([A-Z][A-Z0-9]{0,14})\\s+(.+?)\\s+(-?(?:' + NUM + '))(?:\\s+\\2)?((?:' + AMT + ')+)$', 'i');
     const trade = new RegExp('^([A-Z0-9]{1,15})\\s+(.+?)\\s+(-?\\d[\\d\\u00a0\\u202f]*(?:[.,]\\d+)?)((?:\\s+-?[\\d\\u00a0\\u202f.,]+\\s?[€$£])*)\\s+' + DATE_RE + '$', 'i');
     const fiatRe = new RegExp('^' + DATE_RE + '\\s+(.*)$', 'i');
     for (let l of lines) {
@@ -652,8 +655,16 @@
       // Résumé du compte : « 0 BTC 0,02726735 BTC » = valeur d'ouverture, valeur de clôture
       pm = /^(-?\d[\d\u00a0\u202f]*(?:,\d+)?)\s+([A-Z0-9]{1,15})\s+(-?\d[\d\u00a0\u202f]*(?:,\d+)?)\s+\2$/.exec(l);
       if (pm) { opening[pm[2]] = E.parseNum(pm[1], 'FR'); closing[pm[2]] = E.parseNum(pm[3], 'FR'); continue; }
+      // v2.33 : résumé en 3 lignes (« q1 q2 q3 » / « SYM Nom … € » / « SYM SYM SYM ») : q3 = solde de clôture
+      if (!/[€$£]/.test(l) && /^(?:[^\d€$£]*\s)?(?:-?\d[\d \u00a0\u202f]*,\d+\s*){3}$/.test(l)) { q3 = /(\d{1,3}(?:[\s\u00a0\u202f]\d{3})*,\d+)$/.exec(l)[1]; continue; }
+      pm = /^(?:.*?\s)?([A-Z][A-Z0-9]{0,14})\s+\1\s+\1$/.exec(l); if (pm && q3 != null) { closing[pm[1]] = E.parseNum(q3, 'FR'); q3 = null; continue; }
       if (inRep) { pm = /^([A-Z0-9]{1,15})\s+.*?\s(\d[\d\u00a0\u202f]*(?:,\d+)?)\s+-?[\d\u00a0\u202f.,]+\s?€\s+-?[\d\u00a0\u202f.,]+\s?€/.exec(l); if (pm) { closing[pm[1]] = E.parseNum(pm[2], 'FR'); continue; } }
-      let m = fiatRe.exec(l);
+      let m;
+      m = dateFirst.exec(l); // v2.33 : tableaux « Date | Symbole | Type | Quantité | Prix | Valeur | Frais » (date en tête, montants avec devise)
+      if (m && m[2] === m[2].toUpperCase() && /[a-zé]/i.test(m[3]) && !/^(vente|achat) de\s/i.test(m[2] + ' ' + m[3])) { const am = (m[5].match(new RegExp(AMT, 'g')) || []).map(x => x.trim()), cs = [...new Set(am.map(x => (/[€$£]/.exec(x) || ['?'])[0]))];
+        if (am.length < 2 || am.length > 3) skipped.push(l); else if (cs.length !== 1) amb.push({ line: l, why: 'devises mélangées dans la ligne' }); else rows2.push({ row: [m[2], m[3], m[4], am[0], am[1], am[2] || '', m[1]], cur: cs[0], line: l });
+        continue; }
+      m = fiatRe.exec(l);
       if (m) { if (/(vente|achat) de\s+[A-Za-z0-9]+/i.test(m[2])) fiat.push(l); continue; }
       m = trade.exec(l);
       if (m && /^[A-Z0-9]+$/.test(m[1]) && /[a-zé]/i.test(m[2]) && !/\d/.test(m[2])) {
@@ -661,8 +672,25 @@
         rows.push([m[1], m[2], m[3], am[0] || '', am[1] || '', am[2] || '', m[5]]);
       } else skipped.push(l);
     }
+    { const n = {}; rows2.forEach(r => n[r.cur] = (n[r.cur] || 0) + 1); const main = Object.keys(n).sort((a, b) => n[b] - n[a])[0];
+      for (let i = rows2.length - 1; i >= 0; i--) if (rows2[i].cur !== main) { amb.push({ line: rows2[i].line, why: 'montants en ' + rows2[i].cur + ' dans un relevé en ' + main + ' : ligne non importée, à vérifier' }); rows2.splice(i, 1); }
+      for (const r of rows2) { const q = E.parseNum(r.row[2]), p = E.parseNum(r.row[3]), v = E.parseNum(r.row[4]); if (q > 0 && p > 0 && v > 0 && Math.abs(q * p - v) > Math.max(0.02, 0.02 * v)) amb.push({ line: r.line, why: 'quantité × prix ≠ valeur : importée avec la valeur indiquée, à vérifier', kept: true }); }
+      rows2.cur = main; }
     const to = period ? E.parseDate(period.to + ', 23:59:59', 'DMY', 'Paris') : NaN;
-    return { rows, fiat, skipped, balances: Object.keys(closing).length ? { closing, opening, period, to } : null };
+    return { rows, rows2, amb, fiat, skipped, balances: Object.keys(closing).length ? { closing, opening, period, to } : null };
+  }
+  /* v2.33 : CSV/Excel à plusieurs tableaux (titres de section, en-têtes répétés ou différents) -> sections { head, rows, line0 }.
+     Une ligne d'en-têtes = colonnes Date et Quantité/Crypto reconnues, au moins 3 cellules, aucune date lisible. Lignes d'une seule cellule sans date (titres) ignorées. */
+  function sections(rows, guessMap) {
+    const out = []; let cur = null; const cells = r => (r || []).filter(x => String(x == null ? '' : x).trim() !== '');
+    rows.forEach((r, i) => {
+      const c = cells(r); if (!c.length) return;
+      const isDate = c.some(x => x instanceof Date || (/\d/.test(String(x)) && /\d{4}/.test(String(x)) && isFinite(E.parseDate(String(x), 'DMY', 'UTC'))));
+      if (!isDate && c.length >= 3) { const m = guessMap(r.map(x => E.fixText(String(x == null ? '' : x)))); if (m.date != null && (m.qty != null || m.asset != null)) { out.push(cur = { head: r.map(x => E.fixText(String(x == null ? '' : x))), map: m, rows: [], line0: i + 2 }); return; } }
+      if (!cur || (c.length === 1 && !isDate)) return;
+      cur.rows.push(r);
+    });
+    return out.filter(x => x.rows.length);
   }
   /* Regroupe les fragments de texte pdf.js en lignes (même ordonnée). */
   function itemsToLines(items) {
@@ -764,6 +792,6 @@
     if (dt.items && dt.items.length) return Array.from(dt.items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
     return Array.from(dt.files || []);
   }
-  const api = { hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, twinFix, resolveRecon, reconList, qtyChoices, makeSources, prepare, observed };
+  const api = { sections, hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, twinFix, resolveRecon, reconList, qtyChoices, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);

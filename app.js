@@ -200,10 +200,16 @@
     for (let i = 1; i <= doc.numPages; i++) { const c = await (await doc.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
     $('#progress').textContent = '';
     const r = KP.parsePdfLines(lines);
-    if (!r.rows.length && !r.fiat.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.');
+    if (!r.rows.length && !r.fiat.length && !r.rows2.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.' + (r.amb.length ? ' ' + r.amb.length + ' ligne(s) ambiguë(s) non importée(s) : ' + r.amb.map(a => a.why).join(' ; ') + '.' : ''));
     holders[file.name] = KP.holderFromLines(lines); saveHolders();
     const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, uid);
-    txs = txs.concat(res.txs); const nsw = E.detectSwaps(txs).length;
+    txs = txs.concat(res.txs);
+    if (r.rows2.length) { // v2.33 : tableaux à date en tête (frais en colonne séparée : comptés comme pour un CSV ; heures lues en UTC comme le relevé connu)
+      const r2 = KP.importRows(r.rows2.map(x => x.row), { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: false, source: file.name, dmode: 'DMY', tz: 'UTC', strict: true, cur: { '€': 'EUR', '$': 'USD', '£': 'GBP' }[r.rows2.cur] }, uid);
+      txs = txs.concat(r2.txs); if (r2.bad.length) r.amb.push(...r2.bad.map((b, k) => ({ line: r.rows2[b].line, why: r2.why[k] })));
+    }
+    const nsw = E.detectSwaps(txs).length;
+    if (r.amb.length) setTimeout(() => showErr(file.name + ' : ' + r.amb.length + ' ligne(s) à vérifier — ' + r.amb.map(a => a.why).filter((x, i, A) => A.indexOf(x) === i).join(' ; ') + '.'), 0);
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
     if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
     save(); renderTx(); autoRun();
@@ -223,6 +229,16 @@
       if (res.bad.length) showErr(res.bad.length + ' ligne' + (res.bad.length > 1 ? 's' : '') + ' de ' + name + ' non lue' + (res.bad.length > 1 ? 's' : '') + ' (type d’opération inconnu ou valeur manquante) : vérifiez ce fichier.');
       return;
     }
+    { const sec = KP.sections(rows, KF.guessMap); // v2.33 : plusieurs tableaux dans un même fichier -> chaque tableau lu avec ses propres colonnes
+      if (sec.length > 1 && sec.every(x => x.map.date != null && x.map.asset != null && x.map.qty != null && (x.map.eur != null || x.map.price != null))) {
+        let all = [], bad = [];
+        for (const x of sec) { const mp = Object.assign({}, x.map), o = { source: name, strict: true, head: x.head, line0: x.line0, xlsx: isXlsx, tz: 'UTC', platform: 'Relevé', cur: KF.headCur(x.head[mp.eur != null ? mp.eur : mp.price]) }; delete mp.cur; if (mp.fee != null) o.feeInKind = false;
+          const res = KP.importRows(x.rows, mp, o, uid); if (res.fatal) return showErr(name + ' : fichier refusé, ' + res.fatal + '.'); all = all.concat(res.txs); if (res.bad.length) bad.push(KP.badSummary(res, x.line0)); }
+        if (!all.length) return showErr(name + ' : aucune opération lisible. ' + bad.join(' '));
+        holders[name] = KP.holderFromRows(rows); saveHolders(); txs = txs.concat(all); E.detectSwaps(txs); save(); renderTx(); autoRun();
+        if (bad.length) setTimeout(() => showErr(name + ' (' + sec.length + ' tableaux lus, heures en UTC) : ' + bad.join(' ') + ' Corrigez ces lignes ou saisissez-les à la main.'), 0);
+        return;
+      } }
     let hi0 = 0; { const hi = KF.headerRow(rows); if (hi > 0) { rows = rows.slice(hi); hi0 = hi; } }
     if (rows[0].some(h => /sent amount|received amount|montant envoy|montant re/i.test(h))) return showMapping2(name, rows);
     rows[0] = rows[0].map(x => E.fixText(String(x)));
