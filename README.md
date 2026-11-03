@@ -4,13 +4,13 @@ Kryptax propose deux modes, choisis par un onglet en haut de la page :
 - **FRANCE** : aide à remplir le **formulaire 2086** (plus-values de cession d'actifs numériques) : art. 150 VH bis du CGI, imposition forfaitaire de **12,8 %** (art. 200 C du CGI), BOI-RPPM-PVBMC-30.
 - **U.S.A.** (interface en anglais) : estimation des gains et pertes en USD au format **Form 8949** (Part I court terme / Part II long terme, cases G à L) et brouillon de **Schedule D (Form 1040)**, à vérifier. Méthodes FIFO, HIFO ou choix manuel du lot, suivi par portefeuille, comparaison avec un Form 1099-DA, pertes reportées. Export PDF, CSV et Excel (.xlsx). Règles et sources IRS : [docs/US-RULES.md](docs/US-RULES.md).
 
-Gratuit, open-source et anonyme : gardez le contrôle total de vos données.
+Gratuit, code source disponible et anonyme : gardez le contrôle total de vos données.
 
 En ligne : https://sanarkor.github.io/kryptax/
 
-> ⚠️ **Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas (ni en mode FRANCE ni en mode U.S.A.) un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
+> ⚠️ **Kryptax est un outil gratuit, à code source disponible, d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas (ni en mode FRANCE ni en mode U.S.A.) un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
 
-Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
+Licence : [PolyForm Noncommercial 1.0.0](LICENSE) — logiciel fourni « tel quel », sans garantie.
 
 ## Fonctionnement 100 % dans le navigateur
 - Page statique hébergée sur GitHub Pages : **aucun compte, aucune clé API, aucun serveur Kryptax**.
@@ -102,4 +102,4 @@ node test.js && node testformats.js && node testexport.js && node testgolden.js 
 Ouvrez une issue ou une pull request sur https://github.com/Sanarkor/kryptax. N'ajoutez **jamais de données réelles** (relevés, noms, montants) : uniquement des jeux fictifs. Lancez les tests avant de proposer une modification.
 
 ## Licence
-Code sous licence MIT (voir [LICENSE](LICENSE)). Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
+Code source disponible sous licence PolyForm Noncommercial 1.0.0 (voir [LICENSE](LICENSE)) : utilisation, copie et modification gratuites pour un usage non commercial ; tout usage commercial est exclu sans accord écrit de l'auteur. Droits d'auteur conservés par Damien K. Metzler (Copyright 2026). Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
