@@ -59,7 +59,7 @@ State taxes are not included.
 
 ## To be verified (not coded in v1)
 
-- **Wash sales.** Section 1091 is written for "stock or securities". Bill H.R. 9172 (introduced June 8, 2026) would extend it to digital assets, but it was still only introduced in October 2026. Kryptax does not apply it; check the current law.
+- **Wash sales.** Section 1091 is written for "stock or securities". Bill H.R. 9172 (Applying Existing Tax Anti-Abuse Rules to Digital Assets Act) was introduced on June 8, 2026 and referred to the House Committee on Ways and Means; its latest action is dated June 8, 2026, and as of November 1, 2026 it is still at the "introduced" stage, with no vote. Its text would replace "stock or securities" with "specified assets" in section 1091 (digital assets, excluding qualified USD stablecoins). Sources: https://www.congress.gov/bill/119th-congress/house-bill/9172 and https://www.congress.gov/bill/119th-congress/house-bill/9172/text. Kryptax does not apply it; check the current law.
 - **Transfers between your own wallets.** Kryptax pairs a send with a receive of the same asset, within 3 days, with 98–100% of the quantity received. The received units keep their original acquisition date and cost. This follows from the transfer not being taxable (FAQ Q38); it is not an explicit IRS text, so it is to verify. Network fees on transfers (units not received, or a fee) are flagged and not counted as a sale; their tax treatment is to verify. An unpaired send or receive is always listed "to verify". An unpaired send removes the units with no gain computed; an unpaired receive adds a lot with an unknown cost.
 - **Before 2025.** Kryptax applies wallet-by-wallet tracking to all dates. Before 2025, a universal (multi-wallet) approach was possible, and Rev. Proc. 2024-28 gives a safe harbor to allocate unused basis to wallets as of January 1, 2025. Kryptax does not do this allocation: to verify.
 - **Income in Kryptax.** Types read: Staking, Reward, Airdrop, Interest, Income (also Earn, Mining, Learn). Kryptax shows the USD value given in the file as ordinary income and uses it as the cost of the new lot. It does not check that this is the value at the date and time of control, applies no tax rate and computes no tax. A missing USD value is "to verify" and left out of the total (never $0). Interest, "learn" rewards and airdrops not linked to a hard fork are not covered by the texts above: to verify. Where the income goes on the return: to verify.
@@ -200,3 +200,85 @@ Buy fee (added to cost) and Sell fee (deducted from proceeds) do not lose basis.
 
 ## v2.10 — Schedule D "Other gains" line
 - Lines 4, 5 (Part I) and 11, 12, 13 (Part II) — numbers checked on Schedule D (Form 1040) 2025, https://www.irs.gov/pub/irs-pdf/f1040sd.pdf (2026-11-01) — are shown as one line "Other gains (Forms 4797, 2439, 6252, 4684, 6781, 8824, Schedule K-1, capital gain distributions): not computed by Kryptax - leave blank if you only have crypto". Same on screen, CSV, Excel and PDF. No calculation or total changed.
+
+## v2.11 — Export file names
+- U.S.A. exports (PDF, CSV, Excel, income CSV) keep their prefix and add the browser's local date and time with seconds, e.g. `kryptax-us-summary_2026-11-01_10-15-32.pdf`, so two exports never share a name. FRANCE mode unchanged. (Replaced in v2.15: to the minute.)
+
+## v2.12 — Guided result and single "to verify" list (v=20261101s)
+
+- **What to copy and where** (top of the U.S. result, selected year): for each Form 8949 Part with sales, the box (G/H/I or J/K/L, from the Options at the top) with totals (d), (e), (h) and the Schedule D line (1b/2/3 or 8b/9/10); then Schedule D lines 7, 15, 16, and line 21 when line 16 is a loss and the filing status is chosen; staking / airdrop / interest income as ordinary income (no tax computed, where to report: to verify). Box not chosen: said, with a link to the Options. Amounts come from `form8949`, `scheduleD` and the income total; nothing new is computed (`guide()`).
+- **To verify (N)**: one deduplicated list (`checks()`), sorted by importance: 1 lines not in the totals (missing cost, value, holding period; income without USD value), 2 Form 8949 box / filing status not chosen, 3 possible wash sales, transfer and network-fee notes, USD fees without quantity, 4 costs entered by you, 5 HIFO/manual records. Same list in the CSV/Excel (section `TO VERIFY (N)`, replaces the separate wash-sale section, detail lines below it) and in the PDF (list `To verify (N)` above the details table).
+- The detailed Form 8949 table stays below, in a foldable block (open by default).
+
+## v2.13 — Wash sale wording (v=20261101t)
+
+- Trigger and amounts unchanged (flag only, nothing applied in the totals).
+- New text (screen list "To verify (N)", CSV/Excel section `TO VERIFY (N)`, PDF list): *Possible wash sale pattern, line N: ASSET sold at a loss ($X) and the same asset bought within 30 days before or after (line M). 26 U.S.C. section 1091 applies to stock or securities; no verified IRS rule extends it to regular crypto assets, and a token that is legally a security could be covered. Not applied in the totals — to verify.*
+- Legal text checked: 26 U.S.C. §1091(a) covers losses on "shares of stock or securities" with a 30-day window before and after the sale and the acquisition of "substantially identical" stock or securities; it neither names nor excludes crypto assets.
+  - https://uscode.house.gov/us/usc/119-120/t26/s1091/
+  - https://www.law.cornell.edu/uscode/text/26/1091
+- No IRS guidance on crypto wash sales has been read: none is cited (to verify).
+
+## v2.14 — Highlights (v=20261101u)
+
+- Screen: the "What to copy and where" block has a thin cyan border and a wide layered glow: cyan (accent #22d3ee), then gold, then orange outside (`box-shadow`, three layers). The summary box below is unchanged. The same rule (class `halo`) is used on the main France result box (« Total global plus-value nette … Prélèvement estimé »), v=20261101v.
+- PDF: only the amounts to copy are coloured dark amber #A16207 (RGB 161, 98, 7): Form 8949 Part totals (d), (e), (h) and Schedule D lines 7, 15, 16 and 21 (when computed). Text stays black; amounts unchanged. CSV/Excel unchanged.
+
+## v2.15 — Saved option choices and export names (v=20261101w)
+- **Saved option choices**: lot method (FIFO/HIFO/MANUAL), Form 8949 box, network fee option (IGNORE/DISPOSE/CAPITALIZE) filing status and the time zone of the file dates (the U.S.A. method/option selectors) are kept in this browser's localStorage (one key, `kryptax.us.settings`) and restored on the next visit. The region (FRANCE/U.S.A.) was already kept (`kx-region`). Not saved because they depend on the file: the year, the manual lot picks per sale (MANUAL), the costs, Form 1099-DA totals and carryover amounts entered. A time zone found in the file still takes priority for that file. Never saved: file data, transactions, amounts. Storage unavailable or value invalid: defaults are used, without error. Link "Reset saved settings" under the Options; "Reset everything" also clears them. Same totals whether a choice comes from the saved value or a click. FRANCE mode: no equivalent setting to save (date/number formats and year are per file), unchanged.
+- **Export names** (PDF, CSV, Excel, income CSV): `prefix_YYYY-MM-DD_HH-MM.ext`, local time, to the minute, like the FRANCE mode. If the same name was already given in this session (two exports in the same minute), and only then, a short suffix is added: `_2`, `_3`…
+- **Comparison block (FRANCE, v=20261101x)**: "🔎 Comparer avec un autre calcul (facultatif)" is back under the results (visible from v=20261101y, outside the hidden detail), worded neutrally (no tool named): yearly totals from any other calculation, typed or imported as CSV `année;prix de cession;plus-value`, shown next to the Kryptax totals with the difference. Display only, no calculation changed.
+
+## v2.16 — PDF guide and column alignment (v=20261101z)
+- **Alignment** (reported 2026-11-01): in the Form 8949 tables the totals row (foot) was left-aligned while the line amounts are right-aligned, so the amber totals did not sit under the amounts; this existed before the colour (v=u). The foot and head cells of (d), (e), (h) are now right-aligned; on Schedule D the headers of (d), (e), (g), (h) too. Texts and amounts unchanged.
+- **What to copy and where** at the top of page 1, then **To verify (N)**: same content as the screen, from `guide()` (Form 8949 Part, box, proceeds/cost/gain or loss, Schedule D line 1b/2/3 or 8b/9/10; Schedule D lines 7, 15, 16, and 21 when line 16 is a loss and the filing status is chosen; staking / airdrop / interest income: where to report: to verify). Box or filing status not chosen: said, as on screen. Amounts in amber under the columns (d) Proceeds, (e) Cost, (h) Gain or (loss). Nothing new computed; ASCII only.
+
+
+## v2.17 — Simpler "To verify" list on screen (v=20261101za)
+- Same points, same texts, same order (importance 1 to 5) as before; N in the title = number of points. Grouped under short headings: "Not in your totals", "Choose / confirm", "Possible issues", "Entered by you / methods"; a line number at the start ("Line 29") is shown in bold; more spacing. PDF, CSV and Excel keep the existing list unchanged. No calculation changed.
+
+## v2.18 — Wide-screen layout and light/dark theme (v=20261101zb)
+
+- Screens 1024 px and wider: two columns. Options and import on the left (sticky), result on the right. "What to copy and where" and "To verify" move to the left panel, shown once. A key-figures banner repeats numbers already computed: net gain or loss, short term, long term, and the line 21 loss allowed and carryover when present. No new calculation.
+- Below 1024 px nothing changes.
+- Moon/sun button next to FRANCE / U.S.A.: default follows the system setting; a click stores the choice under `kx-theme` in this browser (no other data). PDF, CSV and Excel exports are unchanged (white background).
+
+## v2.19 — Bar charts on screen (v=20261101zc)
+
+- Two bar charts under the result, side by side from 1024 px, stacked full width below: net gain or loss by tax year (the totals already shown for each year) and by asset (sum of the gain of each line counted in the totals). Lines marked "to verify" are left out, as in the totals, and the legend says so. Sum of the asset bars = net gain or loss shown. Screen only: not in the PDF, CSV, Excel or print. No calculation changed.
+- Wide screens: more compact and wider layout (smaller header, footer and disclaimer; before any result, options and import side by side) to avoid vertical scrolling at common heights. Light theme: brighter red disclaimer and brighter blue "Why Kryptax?" / "Support Kryptax" buttons. Below 1024 px and in the dark theme, nothing else changes.
+
+## v2.23 — Time zone in Options (v=20261101zg)
+
+- "Time zone of your file" moved from 1. Import to the first, full-width line of Options (set before import). Same select, same default (this browser), same saved settings (kryptax.us.settings). No calculation or text change.
+
+## v2.24 — Result card shown before import (v=20261101zh)
+
+- 1024 px and wider: two columns from the start (Options and 1. Import on the left), the result card on the right stays empty with "Your results will appear here after the calculation." until a file is processed. Nothing else is shown before a result. Below 1024 px nothing changes. No calculation change.
+
+## v2.25 — Import under Options before import (v=20261101zi)
+
+- 1024 px and wider, before import: Options then 1. Import stacked in the left column (same as the result layout), the empty result card on the right; only the spacing of these two blocks is tightened. No text or calculation change.
+
+## v2.26 — Header buttons on PC (v=20261101zj)
+
+- 1024 px and wider: "Why Kryptax?" and "Support Kryptax" move (same buttons, no copy) to the top right of the header, with the country and theme buttons under them. Below 1024 px they stay at the bottom. No text or calculation change.
+
+## v2.30 — "To verify" points, ranked (docs only, v=20261101zu)
+
+Ranked by impact on the numbers. Sources are only those already listed in this file; "none verified" means no source was read for that point. Nothing here is new app text.
+
+1. **Sales without a matching purchase** (units missing from the file): left out of the totals until the user fills the optional form. Source: Instructions for Form 8949, "Basis and Recordkeeping"; IRS Virtual Currency FAQs Q8. The user's own records decide.
+2. **Form 8949 box (G/H/I, J/K/L) and Part split**: depends on whether the sales are on a Form 1099-DA, and with which basis reporting. Source: Instructions for Form 8949 (2025), "What's New", "Box C or Box I", "Box F or Box L". Not chosen = "to verify".
+3. **Income (staking, airdrops, rewards) value and timing**: the USD value comes from the file. Sources: Rev. Rul. 2023-14 (staking), FAQ Q23–Q25 and Rev. Rul. 2019-24 (airdrop after a hard fork). Missing value = out of the totals.
+4. **Lot identification (HIFO, manual)**: needs adequate identification at the time of sale. Sources: FAQ Q41; Treas. Reg. 1.1012-1(j)(3)(i), quoted in Notice 2026-20. Kryptax cannot check the user's records.
+5. **Wallet-by-wallet tracking before 2025**: Kryptax applies it to all dates. Source: Rev. Proc. 2024-28 (safe harbor for basis allocation as of January 1, 2025).
+6. **Network fees on self-transfers** (option IGNORE / DISPOSE / CAPITALIZE): none verified (see v2.8).
+7. **Wash sale pattern**: flag only, never in the totals. Section 1091 as quoted in v2.13 covers stock or securities; no verified IRS rule for regular crypto assets (see v2.13).
+8. **Schedule D lines 7, 15, 16, 21 and the carryover**: equal Kryptax's totals only if the file holds all capital items. Source: IRS Topic no. 409 for the $3,000 / $1,500 limit (see v2.9); the carryover worksheet is not computed.
+9. **Form 1099-DA comparison** (boxes 1f and 1g typed by the user): a difference of $0.01 or more is flagged. Columns (f)/(g) adjustments are not computed. Source: Instructions for Form 8949, "Column (d)" to "Column (h)".
+10. **PDF import**: best effort; lines that do not match the expected layout are not read.
+
+## v2.31 — U.S.A. on short PC screens (v=20261101zu)
+
+- 1024 px and wider, window height 800 px or less: in U.S.A. mode only, the left column is a little wider (minmax(380px, 36%)) so the import button fits on one line, and the vertical spacing of the Options, the import card and the beta line is tightened. The initial screen fits with no scroll at 1280x720 and 1024x768 (it had about 66 px of scroll). FRANCE, U.K., phones and taller PC screens are unchanged.
