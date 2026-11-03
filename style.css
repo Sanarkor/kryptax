@@ -448,9 +448,6 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 .yearsel,#usresult label:has(#usyear){font-size:1.05rem;font-weight:700}.yearsel,#usresult label:has(#usyear){display:inline-flex;align-items:center;gap:10px;margin:0}#fyear,#usyear{width:auto;max-width:none;flex:none}
 #fyear,#usyear{font-size:1rem;font-weight:700;min-height:2.3rem;padding:.3em .7em;border:2px solid var(--acc);border-radius:10px;color:var(--text)}}
 @media (min-width:1024px){#usresult .grid:has(#usyear){display:block;margin:2px 0}#usresult .grid label:has(#usyear){display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;margin:0}#usresult .grid label:has(#usyear) select{margin:0}}
-/* v2.27 QR PayPal dans « Soutenir » : PC seulement, fond blanc et marge calme pour le scan */
-.merciqr{display:none}
-@media (min-width:1024px){.merciqr{display:block;margin:10px auto;width:max-content;background:#fff;padding:12px;border-radius:12px}.merciqr img{display:block;width:240px;height:240px}}
 
 /* v2.27 Sélecteur pays : un seul bouton + menu */
 .regpick{position:relative;display:inline-flex}
