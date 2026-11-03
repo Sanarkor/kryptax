@@ -474,7 +474,8 @@
       return undefined;
     }
     async function usdtEur(m) { // 1 USDT en € à la minute m (Binance EURUSDT), mutualisé entre actifs
-      if (minEur[m] === undefined) minEur[m] = binMin('EURUSDT', m).then(v => v ? 1 / v : null);
+      if (minEur[m] === undefined) minEur[m] = binMin('EURUSDT', m).then(async v => { if (v) return 1 / v; // repli : Bitstamp USDT/EUR 1 min (même minute, sinon ±2 min)
+        const b = await euroMin('Bitstamp', 'usdt', m); return b ? b.p : null; });
       return minEur[m];
     }
     async function minute(a0, ts) {
@@ -497,7 +498,25 @@
       if (r1.err) net = true; else { const c = r1.j && Array.isArray(r1.j.data) && r1.j.data[0]; if (c && +c[0] === m) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'OKX', k: 'minute' }; } }
       const r2 = await get('Bitget', `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${a}USDT&granularity=1min&endTime=${m + MIN}&limit=2`);
       if (r2.err) net = true; else { const c = r2.j && Array.isArray(r2.j.data) && r2.j.data.find(x => +x[0] === m); if (c && +c[5] > 0) { const f = await usdtEur(m); if (f) return { p: +c[1] * f, src: 'Bitget', k: 'minute' }; } }
+      // Paires en euros sans conversion (Coinbase, Bitstamp, CORS ouvert, historique profond) : minute exacte, puis la plus proche à ±2 min
+      const near = []; for (const n of ['Coinbase', 'Bitstamp']) { const x = await euroMin(n, a, m); if (x === undefined) { net = true; continue; } if (x && x.d === 0) return { p: x.p, src: n, k: 'minute' }; if (x) near.push([x, n]); }
+      if (near.length) { near.sort((x, y) => x[0].d - y[0].d); const [x, n] = near[0]; return { p: x.p, src: n + ' ±' + Math.round(x.d / MIN) + ' min', k: 'minute' }; }
       return net ? undefined : null;
+    }
+    /* Bougie 1 min en € (Coinbase / Bitstamp) autour de la minute m : { p, d (écart ms) } | null | undefined (réseau). Avant m : clôture ; après m : ouverture. */
+    const eMemo = {};
+    function euroMin(n, a, m) {
+      const k = n + '|' + a + '|' + m; if (eMemo[k]) return eMemo[k];
+      return (eMemo[k] = (async () => {
+        const s = m - 2 * MIN, e = m + 2 * MIN, r = n === 'Coinbase'
+          ? await get(n, `https://api.exchange.coinbase.com/products/${a.toUpperCase()}-EUR/candles?granularity=60&start=${new Date(s).toISOString()}&end=${new Date(e).toISOString()}`)
+          : await get(n, `https://www.bitstamp.net/api/v2/ohlc/${a.toLowerCase()}eur/?step=60&limit=5&start=${s / 1000}`);
+        if (r.err) return undefined;
+        const L = n === 'Coinbase' ? (Array.isArray(r.j) ? r.j.map(c => [c[0] * 1000, +c[3], +c[4], +c[5]]) : [])
+          : (r.j && r.j.data && Array.isArray(r.j.data.ohlc) ? r.j.data.ohlc.map(c => [+c.timestamp * 1000, +c.open, +c.close, +c.volume]) : []);
+        let b = null; for (const [t, o, c, v] of L) { if (!(v > 0) || !(o > 0) || t < s || t > e) continue; const d = Math.abs(t - m); if (!b || d < b.d || (d === b.d && t < m)) b = { p: t === m ? o : t < m ? c : o, d }; }
+        return b;
+      })());
     }
     /* Crypto identifiée : présente dans la table d'identifiants ou cotée sur Binance (liste des paires). Sinon : aucun appel. */
     async function known(a0) {
