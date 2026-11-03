@@ -188,6 +188,29 @@
   const dmy = t => { if (t == null) return 'unknown'; const d = new Date(t); return p2(d.getUTCDate()) + '/' + p2(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear(); };
   const ruleText = p => p.rule === 'same day' ? 'same day' : p.rule === '30 day' ? '30 day (' + dmy(p.from * DAY) + ')' : 'S104 pool';
   const LEGAL = 'Not tax advice - estimate to verify. Rules: HMRC Cryptoassets Manual CRYPTO22100, CRYPTO22150, CRYPTO22200 (TCGA92/S104, S105, S106A); Capital Gains Manual CG78310 (currency conversion); Capital Gains Tax rates and allowances; SA108 notes 2026.';
+  /* v2.35: repeated warnings grouped, one line per message, line numbers condensed into ranges (ex. PDF lines 1-14, 20-33). */
+  function ranges(ns) { ns = [...new Set(ns)].sort((a, b) => a - b); const o = []; for (let i = 0; i < ns.length; i++) { let j = i; while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1) j++; o.push(j > i ? ns[i] + '-' + ns[j] : String(ns[i])); i = j; } return o.join(', '); }
+  function groupLines(items, max) { const G = new Map(); items.forEach(x => { const k = x.why; if (!G.has(k)) G.set(k, []); G.get(k).push(x.line); }); const out = [];
+    G.forEach((ls, why) => { if (ls.length <= (max || 1)) { ls.forEach(l => out.push({ text: (/^\d+$/.test(String(l)) ? 'Line ' + l : String(l)) + ': ' + why, n: 1 })); return; }
+      const pdf = [], csv = [], other = []; ls.forEach(l => { const m = /^PDF (\d+)$/.exec(String(l)); if (m) pdf.push(+m[1]); else if (/^\d+$/.test(String(l))) csv.push(+l); else other.push(l); });
+      const parts = []; if (pdf.length) parts.push('PDF line' + (pdf.length > 1 ? 's ' : ' ') + ranges(pdf)); if (csv.length) parts.push('line' + (csv.length > 1 ? 's ' : ' ') + ranges(csv)); if (other.length) parts.push(other.length > 1 && new Set(other).size === 1 ? other[0] + ' (' + other.length + ' times)' : [...new Set(other)].join(', '));
+      out.push({ text: parts.join('; ') + ': ' + why + ' (' + ls.length + ' lines)', n: ls.length }); });
+    return out; }
+  function checks(res, Y, y) { const chk = [], tv = Y.toVerify;
+    if (tv.length > 10) { const G = new Map(); tv.forEach(x => { if (!G.has(x.status)) G.set(x.status, []); G.get(x.status).push(dmy(x.date) + ' ' + x.asset); }); G.forEach((L, st) => chk.push(L.length + ' disposals: ' + st + ' (not in the totals): ' + L.join(', ') + '.')); }
+    else tv.forEach(x => chk.push(`${dmy(x.date)} ${x.asset}: ${x.status} (not in the totals).`));
+    if (Y.disposals.some(x => x.gift)) chk.push('Gifts are disposals at market value, except to a spouse, civil partner or charity (remove those lines) — to verify.');
+    if (Y.income.some(x => x.airdrop)) chk.push('Airdrops: pooled with a GBP 0 cost; Income Tax may or may not apply (CRYPTO21250) — to verify.');
+    if (res.transfers && res.transfers.withFee) chk.push(res.transfers.withFee + ' transfer(s) with a fee: network fees paid in tokens are not handled — to verify.');
+    if (res.fx && res.fx.count) chk.push(res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + ') with ' + FX_SRC + ', using the rate of the day or of the previous working day. HMRC does not prescribe the rate source but expects a reasonable and consistent method (CG78310) — to verify.');
+    if (res.fx && res.fx.missing) chk.push(res.fx.missing + ' line(s) without an exchange rate: excluded from the totals — to verify.');
+    { const K = (res.skipped || []).filter(x => x.kept), FEE = /^fee shown in the statement is taken as included/; /* v2.35: one method sentence, not one line per operation */
+      if (K.some(x => FEE.test(x.why))) chk.push('Fees shown in the PDF statement are taken as included in the value — to verify.');
+      groupLines(K.filter(x => !FEE.test(x.why)), 1).forEach(g => chk.push(g.text + '.')); }
+    groupLines(res.notes || [], 5).forEach(g => chk.push(g.text + '.'));
+    if (Y.aea == null) chk.push('Annual exempt amount for ' + y + ': not in the table read on gov.uk — to verify.');
+    chk.push('Losses brought forward, other assets and the Capital Gains Tax rate are not included — to verify.');
+    return chk; }
   function toCSV(res, y) {
     const Y = yearSummary(res, y), q = v => { const s = String(v == null ? '' : v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }, n = v => v == null ? 'to verify' : v.toFixed(2);
     const L = [['Kryptax U.K. - Capital gains summary (estimate, to verify)'], ['Tax year', y + ' (6 April to 5 April)'], [],
@@ -198,6 +221,7 @@
     Y.disposals.forEach(x => L.push([dmy(x.date), x.asset, +x.qty.toPrecision(10), n(x.proceeds), n(x.cost), n(x.gain), x.parts.map(ruleText).join(' + '), x.status]));
     if (Y.income.length) { L.push([], ['Income (staking, mining, rewards, airdrops)'], ['Date', 'Asset', 'Quantity', 'Value (GBP)', 'Type']); Y.income.forEach(x => L.push([dmy(x.day * DAY), x.asset, +x.qty.toPrecision(10), x.airdrop ? 'to verify (airdrop)' : n(x.gbp), x.type])); }
     if (res.fx && res.fx.count) L.push([], ['Currency conversion', res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + '), ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310: reasonable and consistent method)']);
+    L.push([], ['To verify']); checks(res, Y, y).forEach(c => L.push([c]));
     L.push([], [LEGAL]);
     return L.map(r => r.map(q).join(',')).join('\r\n') + '\r\n';
   }
@@ -212,6 +236,7 @@
       (Y.toVerify.length ? Y.toVerify.length + ' disposal(s) to verify, not in the totals. ' : '') + 'Only the disposals in this file; losses of other years and other assets not included.'];
     if (res.fx && res.fx.count) info.push(res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + ') with ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310).');
     if (Y.income.length) info.push('Income (staking, mining, rewards): ' + gbp(Y.incomeGbp) + ' (miscellaneous income, to verify; airdrops listed apart, to verify).');
+    checks(res, Y, y).forEach(c => info.push('To verify: ' + c));
     const rows = Y.disposals.map(x => [dmy(x.date), x.asset, String(+x.qty.toPrecision(10)), gbp(x.proceeds), gbp(x.cost), gbp(x.gain), x.parts.map(ruleText).join(' + '), x.status === 'ok' ? '' : x.status].map(ascii));
     return { title: 'Kryptax U.K. - Capital gains summary (estimate)', info: info.map(ascii), head: ['Date', 'Asset', 'Qty', 'Proceeds', 'Costs', 'Gain/loss', 'Matching', 'Status'], rows, foot: ascii(LEGAL) };
   }
@@ -223,7 +248,7 @@
     const n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.text(D.foot, 40, doc.internal.pageSize.getHeight() - 20); }
     return doc;
   }
-  const api = { curOf, fromPdfLines, convertFx, rateOn, FX_SRC, COLS, mapHeader, kind, parseRows, fromCSVText, fromWorkbook, ukDate, taxYear, AEA, compute, yearSummary, toCSV, pdfData, pdf, gbp, dmy, shiftTz, LEGAL };
+  const api = { ranges, groupLines, checks, curOf, fromPdfLines, convertFx, rateOn, FX_SRC, COLS, mapHeader, kind, parseRows, fromCSVText, fromWorkbook, ukDate, taxYear, AEA, compute, yearSummary, toCSV, pdfData, pdf, gbp, dmy, shiftTz, LEGAL };
   /* ---------- page (browser only) ---------- */
   function mount(doc) {
     const box = doc.getElementById('ukmode'); if (!box || box.dataset.ready) return; box.dataset.ready = '1';
@@ -236,22 +261,12 @@
     const stamp = (p, ext) => { const d = new Date(); return p + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.' + ext; };
     const save = (blob, fn) => { const a = doc.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fn; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
     function render() {
-      full = compute(cur.txs, { fileTz }); full.fx = cur.fx; const Ys = full.years; if (!year || !Ys.includes(year)) year = Ys.length ? Ys[Ys.length - 1] : null;
+      full = compute(cur.txs, { fileTz }); full.fx = cur.fx; full.skipped = cur.skipped; const Ys = full.years; if (!year || !Ys.includes(year)) year = Ys.length ? Ys[Ys.length - 1] : null;
       if (!year) { out.innerHTML = '<p class="warn">' + esc(name) + ': no disposal or income found. Nothing to report.</p>' + skippedHtml(); return; }
       const Y = yearSummary(full, year), c = (l, v, k) => `<div><span>${l}</span><b class="${k || ''}">${v}</b></div>`;
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="ukyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}</select></label></div>` : '';
       const tr = Y.disposals.map(x => `<tr class="${x.status === 'ok' ? '' : 'tv'}"><td>${dmy(x.date)}</td><td>${esc(x.asset)}${x.gift ? ' <span class="hint">(gift)</span>' : ''}</td><td>${+x.qty.toPrecision(10)}</td><td>${gbp(x.proceeds)}</td><td>${gbp(x.cost)}</td><td>${gbp(x.gain)}</td><td>${esc(x.parts.map(ruleText).join(' + ') || '-')}${x.status === 'ok' ? '' : '<br><b>' + esc(x.status) + '</b>'}</td></tr>`).join('');
-      const chk = [];
-      Y.toVerify.forEach(x => chk.push(`${dmy(x.date)} ${esc(x.asset)}: ${esc(x.status)} (not in the totals).`));
-      if (Y.disposals.some(x => x.gift)) chk.push('Gifts are disposals at market value, except to a spouse, civil partner or charity (remove those lines) — to verify.');
-      if (Y.income.some(x => x.airdrop)) chk.push('Airdrops: pooled with a GBP 0 cost; Income Tax may or may not apply (CRYPTO21250) — to verify.');
-      if (full.transfers.withFee) chk.push(full.transfers.withFee + ' transfer(s) with a fee: network fees paid in tokens are not handled — to verify.');
-      if (cur.fx && cur.fx.count) chk.push(cur.fx.count + ' line(s) converted to GBP (' + esc(cur.fx.cur.join(', ')) + ') with ' + FX_SRC + ', using the rate of the day or of the previous working day. HMRC does not prescribe the rate source but expects a reasonable and consistent method (CG78310) — to verify.');
-      if (cur.fx && cur.fx.missing) chk.push(cur.fx.missing + ' line(s) without an exchange rate: excluded from the totals — to verify.');
-      cur.skipped.filter(x => x.kept).forEach(x => chk.push(esc(x.line + ': ' + x.why) + '.'));
-      full.notes.forEach(n => chk.push('Line ' + n.line + ': ' + esc(n.why) + '.'));
-      if (Y.aea == null) chk.push('Annual exempt amount for ' + esc(year) + ': not in the table read on gov.uk — to verify.');
-      chk.push('Losses brought forward, other assets and the Capital Gains Tax rate are not included — to verify.');
+      const chk = checks(full, Y, year).map(esc);
       out.innerHTML = `<h2 class="usreshead">2. Result ${esc(year)}</h2>` + sel
         + '<div class="kxkpi halo" aria-hidden="true">' + c('Net gain or loss', gbp(Y.net), Y.net < 0 ? 'neg' : 'pos') + c('Gains', gbp(Y.gains)) + c('Losses', gbp(Y.losses)) + (Y.taxable != null ? c('Above tax-free allowance', gbp(Y.taxable)) : '') + '</div>'
         + `<div class="note usguide"><b>What to copy on SA108 (Cryptoassets, ${esc(year)})</b><div class="scroll"><table class="us8949 uksa"><tr><th>Box</th><th>Description</th><th>Amount</th></tr>`
@@ -267,7 +282,7 @@
         + skippedHtml()
         + `<p class="usexp"><button type="button" id="ukpdf" class="btn"${W.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="ukcsv" class="btn ghost">Download CSV (summary)</button></p>`;
     }
-    const skippedHtml = () => { const S = cur ? cur.skipped.filter(x => !x.kept) : []; return S.length ? `<p class="hint">${S.length} line${S.length > 1 ? 's' : ''} skipped: ${esc(S.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : ''; };
+    const skippedHtml = () => { const S = cur ? cur.skipped.filter(x => !x.kept) : []; return S.length ? `<p class="hint">${S.length} line${S.length > 1 ? 's' : ''} skipped: ${esc(groupLines(S, 5).map(g => g.text).join('; '))}.</p>` : ''; };
     out.addEventListener('change', e => { if (e.target.id === 'ukyear') { year = e.target.value; render(); } });
     out.addEventListener('click', e => {
       if (!full || !year) return;
