@@ -614,35 +614,50 @@
     });
     { const hb = doc.getElementById('ushelpbtn'), hp = doc.getElementById('ushelppanel'); if (hb && hp) hb.addEventListener('click', () => { const op = hp.hidden; hp.hidden = !op; hb.setAttribute('aria-expanded', String(op)); if (op) hp.scrollIntoView({ block: 'nearest' }); }); }
     { const rb = doc.getElementById('usreset'); if (rb) rb.addEventListener('click', () => { const w = typeof window !== 'undefined' ? window : root;
-      if (!w.confirm('Reset everything? The imported file and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); if (LS) clearSettings(LS); pdfN = ''; inp.value = ''; out.innerHTML = ''; side.innerHTML = ''; }); }
+      if (!w.confirm('Reset everything? The imported files and the results on this page will be cleared.')) return; cur = last = null; picks = {}; mcost = {}; da = {}; year = null; method = 'FIFO'; fees = 'IGNORE'; fstat = ''; cat = ''; drawOpts(); if (LS) clearSettings(LS); pdfN = ''; inp.value = ''; out.innerHTML = ''; files.length = 0; fmsg.innerHTML = ''; dirtyFiles(); side.innerHTML = ''; }); }
     const zone = doc.getElementById('usimp'); let depth = 0; // drag & drop: same path as « Choose a file »
     if (zone) { const off = () => { depth = 0; zone.classList.remove('dropover'); }, has = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
       zone.addEventListener('dragenter', e => { if (has(e)) { depth++; zone.classList.add('dropover'); } });
       zone.addEventListener('dragover', e => { if (has(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; } });
       zone.addEventListener('dragleave', () => { if (--depth <= 0) off(); });
       zone.addEventListener('drop', e => { off(); if (!has(e)) return; e.preventDefault(); e.stopPropagation(); try { inp.files = e.dataTransfer.files; inp.dispatchEvent(new Event('change')); } catch (x) {} }); }
+    /* v2.37: several files, like the French mode: each import is added to the list, then "Confirm imports" computes one result on all of them. */
+    inp.multiple = true; const files = [], flist = doc.createElement('ul'), vbtn = doc.createElement('button'), fmsg = doc.createElement('div');
+    flist.className = 'flist'; flist.id = 'usflist'; flist.hidden = true; vbtn.type = 'button'; vbtn.className = 'btn validate'; vbtn.id = 'usvalidate'; vbtn.textContent = 'Confirm imports'; vbtn.disabled = true; fmsg.id = 'usfmsg';
+    { const ib = doc.getElementById('usimp'); if (ib) { ib.appendChild(flist); ib.appendChild(vbtn); ib.appendChild(fmsg); } else { out.parentNode.insertBefore(flist, out); out.parentNode.insertBefore(vbtn, out); out.parentNode.insertBefore(fmsg, out); } }
+    const drawFiles = () => { flist.innerHTML = files.map((x, i) => `<li><span>${esc(x.name)} (${x.p.txs.length} line${x.p.txs.length > 1 ? 's' : ''})</span> <button type="button" class="small ghost" data-rmi="${i}" aria-label="Remove ${esc(x.name)}">✕</button></li>`).join(''); flist.hidden = !files.length; };
+    const dirtyFiles = () => { drawFiles(); vbtn.disabled = !files.length; cur = last = null; out.innerHTML = ''; if (side) side.innerHTML = ''; };
+    flist.addEventListener('click', e => { const b = e.target.closest('[data-rmi]'); if (!b) return; files.splice(+b.dataset.rmi, 1); fmsg.innerHTML = ''; dirtyFiles(); });
     inp.addEventListener('change', async () => {
-      const f = inp.files && inp.files[0]; if (!f) return;
+      const F = Array.from(inp.files || []); if (!F.length) return; const notes = [];
+      for (const f of F) { if (files.some(x => x.name === f.name && x.size === f.size)) { notes.push('<p class="warn">' + esc(f.name) + ': already imported, skipped.</p>'); continue; }
+        const r = await readOne(f); if (r.err) notes.push(r.err); else files.push({ name: f.name, size: f.size, p: r.p, note: r.note || '' }); }
+      inp.value = ''; dirtyFiles(); fmsg.innerHTML = notes.join('');
+    });
+    vbtn.addEventListener('click', () => { if (!files.length) return; const m = mergeFiles(files.map(x => ({ name: x.name, p: x.p }))); fmsg.innerHTML = '';
+      const note = files.map(x => x.note).join('') + (m.dupes ? '<p class="warn">' + m.dupes + ' line' + (m.dupes > 1 ? 's' : '') + ' already found in an earlier file: counted once (to verify).</p>' : '') + (m.tzMix ? '<p class="warn">The files do not use the same time zone; the time zone of the first file is used (to verify).</p>' : '');
+      vbtn.disabled = true; cur = m; pdfN = note; picks = {}; year = null; mcost = {}; da = {}; carry = {}; if (m.fileTz && tzSel) { fileTz = m.fileTz; tzSel.value = m.fileTz; } render(); });
+    async function readOne(f) {
       const name = f.name.toLowerCase(), data = new Uint8Array(await f.arrayBuffer()), W = typeof window !== 'undefined' ? window : root;
       let p, pdfNote = '';
       try {
         if (/\.pdf$/.test(name) || (data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46)) {
-          if (!W.pdfjsLib) { out.innerHTML = '<p class="warn">PDF reading is not available. Please reload the page.</p>'; return; }
+          if (!W.pdfjsLib) { return { err: '<p class="warn">PDF reading is not available. Please reload the page.</p>' }; }
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
           const doc = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           const toLines = W.KryptaxPipeline && W.KryptaxPipeline.itemsToLines;
           for (let i = 1; i <= doc.numPages; i++) { const c = await (await doc.getPage(i)).getTextContent(); lines = lines.concat(toLines ? toLines(c.items) : c.items.map(x => x.str)); }
           p = fromPdfLines(lines);
-          if (!p.txs.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this PDF was not recognised. No USD transaction line was found (expected lines like “01/10/2025 Sell BTC 0.5 $35,000.00 $25.00”). Nothing was computed. Please export a CSV or Excel file instead.</p>'; return; }
+          if (!p.txs.length) { return { err: '<p class="warn">' + esc(f.name) + ': this PDF was not recognised. No USD transaction line was found (expected lines like “01/10/2025 Sell BTC 0.5 $35,000.00 $25.00”). Nothing was computed. Please export a CSV or Excel file instead.</p>' }; }
           pdfNote = '<p class="warn">PDF import is best effort: ' + p.txs.length + ' line' + (p.txs.length > 1 ? 's' : '') + ' read. Please check every line against your statement (to verify).</p>';
         } else if (/\.(xlsx|xls)$/.test(name)) {
-          if (!W.XLSX) { out.innerHTML = '<p class="warn">Excel reading is not available. Please reload the page.</p>'; return; }
+          if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; }
           p = fromWorkbook(W.XLSX, data);
         } else p = fromCSVText(data);
-      } catch (e) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>'; return; }
-      if (p.missingCols.length) { out.innerHTML = '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>'; return; }
-      cur = p; pdfN = pdfNote; picks = {}; year = null; mcost = {}; da = {}; carry = {}; if (p.fileTz && tzSel) { fileTz = p.fileTz; tzSel.value = p.fileTz; } render();
-    });
+      } catch (e) { return { err: '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>' }; }
+      if (p.missingCols.length) { return { err: '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>' }; }
+      return { p, note: pdfNote };
+    }
     function daBlock(T, y) {
       const k = y || 'all', f = da[k + 'p'], g = da[k + 'b'], o = daCompare(T, f, g);
       const inp = (key, v, lab) => '<label class="usdal">' + lab + ' <input class="usda" data-k="' + key + '" inputmode="decimal" placeholder="$0.00" value="' + (v == null ? '' : esc(v)) + '"></label>';
@@ -762,6 +777,17 @@
       const inc = e.target.id === 'usinccsv', a = doc.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF', inc ? incomeCSV(last) : toCSV(last, { cat, fstat, da: daNow(), carry: clNow() })], { type: 'text/csv;charset=utf-8' })); a.download = stampName(inc ? 'kryptax-income' : 'kryptax-us-summary', 'csv'); doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     });
   }
+  /* v2.37: merge several imported files. Lines are renamed "F<n>:<line>" when there is more than one file; a line identical to one of an earlier file is counted once. */
+  function mergeFiles(L) {
+    if (L.length === 1) return Object.assign({}, L[0].p, { dupes: 0, tzMix: false });
+    const K = t => [t.date, t.type, t.asset, t.qty, t.usd, t.toAsset || '', t.toQty || ''].join('|'), seen = new Set(), out = Object.assign({}, L[0].p, { txs: [], skipped: [], dupes: 0, tzMix: false });
+    L.forEach((f, i) => { const mine = new Set(), pre = 'F' + (i + 1) + ':';
+      f.p.txs.forEach(t => { const k = K(t); if (seen.has(k)) { out.dupes++; return; } mine.add(k); out.txs.push(Object.assign({}, t, { line: pre + t.line })); });
+      mine.forEach(k => seen.add(k)); (f.p.skipped || []).forEach(s => out.skipped.push(Object.assign({}, s, { line: pre + s.line })));
+      if (i && (f.p.fileTz || '') !== (L[0].p.fileTz || '')) out.tzMix = true; });
+    out.txs.sort((a, b) => a.date - b.date); return out;
+  }
+  api.mergeFiles = mergeFiles;
   if (typeof module !== 'undefined') module.exports = api;
   else { root.KryptaxUS = api; if (root.document) { if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', () => mount(root.document)); else mount(root.document); } }
 })(this);
