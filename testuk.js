@@ -61,6 +61,18 @@ const asyncT = (async () => {
   eq(P.txs.map(t => +t.gbp.toFixed(2)), [85, 67.2, 8, 8.4], 'PDF: EUR and USD lines converted to GBP');
   console.log(ok + ' OK, ' + ko + ' KO'); process.exit(ko ? 1 : 0);
 })();
+// v2.35: repeated warnings grouped (one line per message, ranges)
+eq(K.ranges([1, 2, 3, 5, 7, 8, 3]), '1-3, 5, 7-8', 'line numbers condensed into ranges');
+{ const ns = [...Array(14)].map((_, i) => i + 1).concat([...Array(14)].map((_, i) => i + 20), [40]), W = 'fee shown in the statement is taken as included in the value, to verify';
+  const sk = ns.map(n => ({ line: 'PDF ' + n, why: W, kept: true })).concat([{ line: 'PDF 50', why: 'mixed currencies in the line, to verify' }]);
+  const r = K.compute(K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 2, '10'], ['2025-06-01', 'Sell', 'A', 1, '8']])).txs, { fileTz: 'UTC' }); r.skipped = sk;
+  const Y = K.yearSummary(r, '2025-26'), C = K.checks(r, Y, '2025-26');
+  const F = /fees? shown in the (PDF )?statement/i;
+  eq([C.filter(c => F.test(c)), C.length], [['Fees shown in the PDF statement are taken as included in the value — to verify.'], 2], 'screen: 29 per-line fee notes replaced by one method sentence, counter reflects it');
+  eq([K.toCSV(r, '2025-26').split('\n').filter(l => F.test(l)).length, K.pdfData(r, '2025-26').info.filter(l => F.test(l)).length, /PDF \d/.test(K.toCSV(r, '2025-26'))], [1, 1, false], 'CSV and PDF: one sentence, no per-line list');
+  eq(K.pdfData(r, '2025-26').info.every(l => /^[\x20-\x7e]*$/.test(l)), true, 'PDF info lines stay ASCII');
+  eq(K.groupLines([{ line: 3, why: 'unknown type' }, { line: 4, why: 'unknown type' }], 5).map(g => g.text), ['Line 3: unknown type', 'Line 4: unknown type'], 'few important lines: still detailed one by one');
+  eq(K.groupLines([3, 4, 5, 6, 7, 9].map(l => ({ line: l, why: 'unknown type' })), 5).map(g => g.text), ['lines 3-7, 9: unknown type (6 lines)'], 'many of the same type: grouped by type with every line number'); }
 // exports: CSV boxes, PDF ASCII only, English only
 { const r = run([['2025-05-01', 'Buy', 'A', 10, 1000], ['2025-06-01', 'Sell', 'A', 5, 800]]), C = K.toCSV(r, '2025-26'), P = K.pdfData(r, '2025-26', new Date(Date.UTC(2026, 0, 1)));
   eq([/13\.2,Disposal proceeds,800\.00/.test(C), /13\.3,Allowable costs \(including purchase price\),500\.00/.test(C)], [true, true], 'CSV SA108 boxes');
