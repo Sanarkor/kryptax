@@ -124,6 +124,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     }
     if (!n) lines.unshift(['Cessions', `Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`]);
     if (x.prec) lines.push(['Précision des cours', x.prec]);
+    if (x.unread && x.unread.length) lines.push(['Lignes du relevé non importées (à vérifier)', x.unread.length + ' : ' + x.unread.join(' ; ') + '. Non comptées dans le calcul.']);
     lines.push(['Échanges crypto -> crypto exclus', `${x.swapCount} (non imposables)`]);
     let y = doc.lastAutoTable.finalY + 4; const need = lines.length * 5.2 + 4;
     if (y + need > H - 10) { doc.addPage(); y = 14; }

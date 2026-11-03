@@ -81,10 +81,14 @@
       if (!type || !isFinite(date) || !asset || !(qty > 0)) { out.skipped.push({ line: n, why: g === 'EXCH_OUT' ? 'exchange without the received asset, to verify' : !type ? 'unknown type' : 'unreadable line' }); return; }
       const cs = [...new Set([row[3], row[4], row[5]].map(curOf).filter(Boolean))]; if (cs.length > 1) { out.skipped.push({ line: n, why: 'mixed currencies in the line, to verify' }); return; }
       const price = num(row[3]), val = num(row[4]), fee = num(row[5]);
-      push(out, { line: n, date, type, rawType: raw, asset, qty, amt: isFinite(val) ? val : isFinite(price) ? price * qty : NaN, feeAmt: feeSeparate && isFinite(fee) ? fee : 0, cur: cs[0] || 'EUR', toAsset: '', toQty: NaN });
-      if (!feeSeparate && isFinite(fee) && fee > 0) out.skipped.push({ line: n, why: 'fee shown in the statement is taken as included in the value, to verify', kept: true });
+      push(out, { line: n, date, type, rawType: raw, asset, qty, amt: isFinite(val) ? val : isFinite(price) ? price * qty : NaN, feeAmt: isFinite(fee) && fee > 0 ? fee : 0, cur: cs[0] || 'EUR', toAsset: '', toQty: NaN, rawDate: String(row[6] || ''), oldFmt: !feeSeparate });
     };
     r.rows.forEach((row, i) => add(row, 'PDF ' + (i + 1), false));
+    /* v2.36: old format, fee shown apart from the value (value = quantity x price). Allowable cost (CRYPTO22150, TCGA92/S38). A sale and a buy at the same second
+       with the same fee are one exchange of token A for token B: the fee is counted once, split 50/50 between the disposal and the acquisition (CRYPTO22150, TCGA92/S52). */
+    { const G = {}; out.txs.forEach(t => { if (t.oldFmt && t.feeAmt > 0) (G[t.rawDate + '|' + t.cur + '|' + t.feeAmt] = G[t.rawDate + '|' + t.cur + '|' + t.feeAmt] || []).push(t); });
+      Object.values(G).forEach(L => { const s = L.filter(t => t.type === 'SELL'), b = L.filter(t => t.type === 'BUY'); if (s.length === 1 && b.length === 1) { s[0].feeAmt /= 2; b[0].feeAmt /= 2; s[0].pairFee = b[0].pairFee = true; out.pairs = (out.pairs || 0) + 1; } });
+      if (out.txs.some(t => t.oldFmt && t.feeAmt > 0)) out.feeNote = true; out.txs.forEach(t => { delete t.rawDate; delete t.oldFmt; }); }
     r.rows2.forEach((x, i) => add(x.row, 'PDF ' + (r.rows.length + i + 1), true));
     r.amb.forEach(a => out.skipped.push({ line: 'PDF', why: a.why.replace(/quantité × prix ≠ valeur : importée avec la valeur indiquée, à vérifier/, 'quantity x price differs from the value; the value shown is used, to verify'), kept: !!a.kept }));
     out.txs.sort((a, b) => a.date - b.date); return out;
@@ -197,8 +201,8 @@
       out.push({ text: parts.join('; ') + ': ' + why + ' (' + ls.length + ' lines)', n: ls.length }); });
     return out; }
   function checks(res, Y, y) { const chk = [], tv = Y.toVerify;
-    if (tv.length > 10) { const G = new Map(); tv.forEach(x => { if (!G.has(x.status)) G.set(x.status, []); G.get(x.status).push(dmy(x.date) + ' ' + x.asset); }); G.forEach((L, st) => chk.push(L.length + ' disposals: ' + st + ' (not in the totals): ' + L.join(', ') + '.')); }
-    else tv.forEach(x => chk.push(`${dmy(x.date)} ${x.asset}: ${x.status} (not in the totals).`));
+    if (tv.length > 10) { const G = new Map(); tv.forEach(x => { if (!G.has(x.status)) G.set(x.status, []); G.get(x.status).push(dmy(x.date) + ' ' + x.asset); }); G.forEach((L, st) => chk.push(L.length + ' disposals: ' + st.replace(/^to verify: /, '') + ' — to verify (not in the totals): ' + L.join(', ') + '.')); }
+    else tv.forEach(x => chk.push(`${dmy(x.date)} ${x.asset}: ${x.status.replace(/^to verify: /, '')} (not in the totals) — to verify.`));
     if (Y.disposals.some(x => x.gift)) chk.push('Gifts are disposals at market value, except to a spouse, civil partner or charity (remove those lines) — to verify.');
     if (Y.income.some(x => x.airdrop)) chk.push('Airdrops: pooled with a GBP 0 cost; Income Tax may or may not apply (CRYPTO21250) — to verify.');
     if (res.transfers && res.transfers.withFee) chk.push(res.transfers.withFee + ' transfer(s) with a fee: network fees paid in tokens are not handled — to verify.');
@@ -206,8 +210,10 @@
     if (res.fx && res.fx.missing) chk.push(res.fx.missing + ' line(s) without an exchange rate: excluded from the totals — to verify.');
     { const K = (res.skipped || []).filter(x => x.kept), FEE = /^fee shown in the statement is taken as included/; /* v2.35: one method sentence, not one line per operation */
       if (K.some(x => FEE.test(x.why))) chk.push('Fees shown in the PDF statement are taken as included in the value — to verify.');
+      if (res.feeNote) chk.push('Fees shown in the PDF statement are deducted as allowable costs (CRYPTO22150); for an exchange of one token for another, the fee is counted once and split 50/50 between the disposal and the acquisition (CRYPTO22150) — to verify.');
       groupLines(K.filter(x => !FEE.test(x.why)), 1).forEach(g => chk.push(g.text + '.')); }
     groupLines(res.notes || [], 5).forEach(g => chk.push(g.text + '.'));
+    { const m = Y.income.filter(x => !x.airdrop && x.gbp == null).length; if (m) chk.push(m + ' reward(s) without a value in the statement: value missing — to verify (taxable at the GBP value when received, CRYPTO21200); their cost in the pool is unknown.'); }
     if (Y.aea == null) chk.push('Annual exempt amount for ' + y + ': not in the table read on gov.uk — to verify.');
     chk.push('Losses brought forward, other assets and the Capital Gains Tax rate are not included — to verify.');
     return chk; }
@@ -219,7 +225,7 @@
       ['', 'Annual exempt amount', Y.aea == null ? 'to verify' : n(Y.aea)], ['', 'Net gain above the annual exempt amount', Y.taxable == null ? 'to verify' : n(Y.taxable)], [],
       ['Date', 'Asset', 'Quantity', 'Proceeds', 'Allowable costs', 'Gain or loss', 'Matching', 'Status']];
     Y.disposals.forEach(x => L.push([dmy(x.date), x.asset, +x.qty.toPrecision(10), n(x.proceeds), n(x.cost), n(x.gain), x.parts.map(ruleText).join(' + '), x.status]));
-    if (Y.income.length) { L.push([], ['Income (staking, mining, rewards, airdrops)'], ['Date', 'Asset', 'Quantity', 'Value (GBP)', 'Type']); Y.income.forEach(x => L.push([dmy(x.day * DAY), x.asset, +x.qty.toPrecision(10), x.airdrop ? 'to verify (airdrop)' : n(x.gbp), x.type])); }
+    if (Y.income.length) { L.push([], ['Income (staking, mining, rewards, airdrops)'], ['Date', 'Asset', 'Quantity', 'Value (GBP)', 'Type']); Y.income.forEach(x => L.push([dmy(x.day * DAY), x.asset, +x.qty.toPrecision(10), x.airdrop ? 'to verify (airdrop)' : x.gbp == null ? 'value missing - to verify' : n(x.gbp), x.type])); }
     if (res.fx && res.fx.count) L.push([], ['Currency conversion', res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + '), ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310: reasonable and consistent method)']);
     L.push([], ['To verify']); checks(res, Y, y).forEach(c => L.push([c]));
     L.push([], [LEGAL]);
@@ -236,7 +242,7 @@
       (Y.toVerify.length ? Y.toVerify.length + ' disposal(s) to verify, not in the totals. ' : '') + 'Only the disposals in this file; losses of other years and other assets not included.'];
     if (res.fx && res.fx.count) info.push(res.fx.count + ' line(s) converted to GBP (' + res.fx.cur.join(', ') + ') with ' + FX_SRC + ', rate of the day or previous working day - to verify (HMRC CG78310).');
     if (Y.income.length) info.push('Income (staking, mining, rewards): ' + gbp(Y.incomeGbp) + ' (miscellaneous income, to verify; airdrops listed apart, to verify).');
-    checks(res, Y, y).forEach(c => info.push('To verify: ' + c));
+    checks(res, Y, y).forEach(c => info.push('To verify: ' + c.replace(/ \u2014 to verify\b/g, '')));
     const rows = Y.disposals.map(x => [dmy(x.date), x.asset, String(+x.qty.toPrecision(10)), gbp(x.proceeds), gbp(x.cost), gbp(x.gain), x.parts.map(ruleText).join(' + '), x.status === 'ok' ? '' : x.status].map(ascii));
     return { title: 'Kryptax U.K. - Capital gains summary (estimate)', info: info.map(ascii), head: ['Date', 'Asset', 'Qty', 'Proceeds', 'Costs', 'Gain/loss', 'Matching', 'Status'], rows, foot: ascii(LEGAL) };
   }
@@ -261,7 +267,7 @@
     const stamp = (p, ext) => { const d = new Date(); return p + '_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.' + ext; };
     const save = (blob, fn) => { const a = doc.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fn; doc.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
     function render() {
-      full = compute(cur.txs, { fileTz }); full.fx = cur.fx; full.skipped = cur.skipped; const Ys = full.years; if (!year || !Ys.includes(year)) year = Ys.length ? Ys[Ys.length - 1] : null;
+      full = compute(cur.txs, { fileTz }); full.fx = cur.fx; full.skipped = cur.skipped; full.feeNote = cur.feeNote; const Ys = full.years; if (!year || !Ys.includes(year)) year = Ys.length ? Ys[Ys.length - 1] : null;
       if (!year) { out.innerHTML = '<p class="warn">' + esc(name) + ': no disposal or income found. Nothing to report.</p>' + skippedHtml(); return; }
       const Y = yearSummary(full, year), c = (l, v, k) => `<div><span>${l}</span><b class="${k || ''}">${v}</b></div>`;
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="ukyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}</select></label></div>` : '';
@@ -277,7 +283,7 @@
         + `<span class="hint">No tax computed: the rate${Y.rate ? ' (' + Y.rate + ')' : ''} depends on your taxable income. Tax year 6 April to 5 April; days in U.K. time. Estimate, not tax advice.</span></div>`
         + `<div class="note"><b>To verify (${chk.length})</b><ul>${chk.map(x => '<li>' + x + '</li>').join('')}</ul></div>`
         + (Y.income.length ? `<div class="note"><b>Income (staking, mining, rewards): ${gbp(Y.incomeGbp)}</b><br><span class="hint">Miscellaneous income at the GBP value when received (not a trade) — to verify. Not on SA108; the tokens join the pool at that value. Trading and miscellaneous income allowance: up to £1,000 a year.</span></div>`
-          + `<div class="scroll"><table class="us8949"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value GBP</th><th>Type</th></tr>${Y.income.map(x => `<tr class="${x.airdrop || x.gbp == null ? 'tv' : ''}"><td>${dmy(x.day * DAY)}</td><td>${esc(x.asset)}</td><td>${+x.qty.toPrecision(10)}</td><td>${x.airdrop ? 'airdrop, to verify' : gbp(x.gbp)}</td><td>${esc(x.type)}</td></tr>`).join('')}</table></div>` : '')
+          + `<div class="scroll"><table class="us8949"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value GBP</th><th>Type</th></tr>${Y.income.map(x => `<tr class="${x.airdrop || x.gbp == null ? 'tv' : ''}"><td>${dmy(x.day * DAY)}</td><td>${esc(x.asset)}</td><td>${+x.qty.toPrecision(10)}</td><td>${x.airdrop ? 'airdrop, to verify' : x.gbp == null ? 'value missing - to verify' : gbp(x.gbp)}</td><td>${esc(x.type)}</td></tr>`).join('')}</table></div>` : '')
         + `<details class="usdet" open><summary>Disposals (${Y.disposals.length})</summary><div class="scroll"><table class="us8949"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Proceeds</th><th>Allowable costs</th><th>Gain/loss</th><th>Matching</th></tr>${tr}</table></div></details>`
         + skippedHtml()
         + `<p class="usexp"><button type="button" id="ukpdf" class="btn"${W.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="ukcsv" class="btn ghost">Download CSV (summary)</button></p>`;

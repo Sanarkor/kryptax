@@ -119,6 +119,7 @@
     if (window.matchMedia) { try { matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)').addEventListener('change', run); matchMedia('(min-width: 768px)').addEventListener('change', run); matchMedia('(pointer: coarse)').addEventListener('change', run); } catch (e) {} } }
   const LS = { tx: 'kryptax.tx', cache: 'kryptax.prices2', manual: 'kryptax.manual' };
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+  let lastAmb = []; // v2.36 : lignes de relevé non importées (listées dans le PDF)
   let lastIgn = []; // récompenses sans cours (valeur non incluse à la 212)
   const rewardOnly = a => { const L = txs.filter(t => t.asset === a); return L.length > 0 && L.every(t => ['INTEREST', 'STAKING', 'AIRDROP'].includes(t.type)); };
   let lastEst = new Set(); // actifs au cours estimé (≈) ou absent, mis à jour par renderResults
@@ -160,7 +161,7 @@
       d.addEventListener('click', e => { if (e.target === d) $('#privclose').click(); });
       d.addEventListener('close', () => o.focus());
     } }
-  const showErr = m => { const n = $('#err'); if (n) { n.textContent = m || ''; n.hidden = !m; } };
+  const showErr = (m, soft) => { const n = $('#err'); if (n) { n.textContent = m || ''; n.hidden = !m; n.dataset.soft = m && soft ? '1' : ''; } }; // soft (v2.36) : lignes signalées non importées, n'empêche pas le PDF (elles y sont listées)
   async function handleFiles(files) {
     showErr('');
     holdInfo = '';
@@ -202,14 +203,14 @@
     const r = KP.parsePdfLines(lines);
     if (!r.rows.length && !r.fiat.length && !r.rows2.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.' + (r.amb.length ? ' ' + r.amb.length + ' ligne(s) ambiguë(s) non importée(s) : ' + r.amb.map(a => a.why).join(' ; ') + '.' : ''));
     holders[file.name] = KP.holderFromLines(lines); saveHolders();
-    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: file.name, dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, uid);
+    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, feeInKindEurOnly: true, source: file.name, dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, uid);
     txs = txs.concat(res.txs);
     if (r.rows2.length) { // v2.33 : tableaux à date en tête (frais en colonne séparée : comptés comme pour un CSV ; heures lues en UTC comme le relevé connu)
       const r2 = KP.importRows(r.rows2.map(x => x.row), { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: false, source: file.name, dmode: 'DMY', tz: 'UTC', strict: true, cur: { '€': 'EUR', '$': 'USD', '£': 'GBP' }[r.rows2.cur] }, uid);
       txs = txs.concat(r2.txs); if (r2.bad.length) r.amb.push(...r2.bad.map((b, k) => ({ line: r.rows2[b].line, why: r2.why[k] })));
     }
     const nsw = E.detectSwaps(txs).length;
-    if (r.amb.length) setTimeout(() => showErr(file.name + ' : ' + r.amb.length + ' ligne(s) à vérifier — ' + r.amb.map(a => a.why).filter((x, i, A) => A.indexOf(x) === i).join(' ; ') + '.'), 0);
+    if (r.amb.length) { lastAmb = lastAmb.filter(s => s.f !== file.name).concat(r.amb.filter(a => !a.kept).map(a => ({ f: file.name, t: String(a.line || '').slice(0, 90) + ' : ' + a.why }))); setTimeout(() => showErr(file.name + ' : ' + r.amb.length + ' ligne(s) à vérifier — ' + r.amb.map(a => a.why).filter((x, i, A) => A.indexOf(x) === i).join(' ; ') + '.', true), 0); }
     if (r.balances) { pdfBal = { closing: r.balances.closing, to: r.balances.to }; localStorage.setItem('kryptax.balances', JSON.stringify(pdfBal)); }
     if (r.fiat.length) { fiatText = (fiatText ? fiatText + '\n' : '') + r.fiat.join('\n'); localStorage.setItem('kryptax.fiat', fiatText); }
     save(); renderTx(); autoRun();
@@ -444,7 +445,7 @@
       <p>${yrs.map(y => `<button class="small" data-st="${y}">Exporter l’état au 31/12/${y}</button>`).join(' ')} <label class="btn small">Importer un état (.json)<input type="file" id="opfile" accept=".json,application/json" hidden></label></p>
       <p class="hint">Le fichier reste sur votre appareil (aucun envoi).</p></details>`;
     el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
-      const st = E.stateAt(txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] })), (a, ts) => priceFn(a, ts), +b.dataset.st, opening, { rewardCost: !!manual.rewardCost });
+      const st = E.stateAt(txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] })), (a, ts) => priceFn(a, ts), +b.dataset.st, opening, { rewardCost: rwOn() });
       if (st.incomplete && !confirm('Des cessions de cette année sont incomplètes (cours manquants) : la ligne 221 sera fausse. Exporter quand même ?')) return;
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(st, null, 2)], { type: 'application/json' })); a.download = X.stateName(st.date, new Date()); a.click();
     });
@@ -704,10 +705,11 @@
   function rwUnk() { return txs.filter(t => E.REWARDS.includes(t.type) && !(Math.abs(t.eur || 0) > 0) && !(priceFn(t.asset, t.date) > 0)); }
   function rwOpt() { // récompenses : avertissement court + celles sans cours connu (écran)
     if (!txs.some(t => E.REWARDS.includes(t.type))) return ''; const u = rwUnk();
-    return (u.length ? `<p class="warn" id="rwunk">⚠️ Récompenses sans cours connu à la réception, comptées 0 € : ${u.map(t => esc(t.asset + ' ' + dt(t.date))).join(', ')} — à vérifier.</p>` : '') + `<p><label><input type="checkbox" id="rwcost"${manual.rewardCost ? ' checked' : ''}> Ajouter leur valeur à la réception au prix d’acquisition (ligne 220) — à vérifier</label></p><p id="rwnote">Récompenses (staking, airdrops, intérêts) : ${manual.rewardCost ? 'valeur à la réception ajoutée au prix d’acquisition (case cochée)' : 'coût d’acquisition 0 €'}. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.</p>`;
+    return (u.length ? `<p class="warn" id="rwunk">⚠️ Récompenses sans cours connu à la réception, comptées 0 € : ${u.map(t => esc(t.asset + ' ' + dt(t.date))).join(', ')} — à vérifier.</p>` : '') + `<p><label><input type="checkbox" id="rwcost"${rwOn() ? ' checked' : ''}> Ajouter leur valeur à la réception au prix d’acquisition (ligne 220) — cochée par défaut, décochez pour un coût de 0 € — à vérifier</label></p><p id="rwnote">Récompenses (staking, airdrops, intérêts) : ${rwOn() ? 'valeur à la réception ajoutée au prix d’acquisition (case cochée par défaut, décochable)' : 'coût d’acquisition 0 €'}. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.</p>`;
   }
-  function rwNote() { const u = rwUnk(); return (manual.rewardCost && txs.some(t => E.REWARDS.includes(t.type)) ? ' Récompenses (staking, airdrops, intérêts) : valeur à la réception ajoutée au prix d’acquisition (case cochée), à vérifier (art. 150 VH bis III-B CGI, BOI-RPPM-PVBMC-30-20 § 80).' : '') + (u.length ? ' Récompenses sans cours connu à la réception, comptées 0 € (à vérifier) : ' + u.map(t => t.asset + ' ' + dt(t.date)).join(', ') + '.' : ''); }
-  function withPrec(x) { const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = SHOW_PREC ? (P.L[i] || '') : ''; }); x.prec = (SHOW_PREC && P.n ? precText(P) : '') + (lastIgn.length ? (SHOW_PREC && P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : '') + rwNote(); x.prec = x.prec.trim(); return x; }
+  function rwOn() { return manual.rewardCost !== 0; }
+  function rwNote() { const u = rwUnk(); return (rwOn() && txs.some(t => E.REWARDS.includes(t.type)) ? ' Récompenses (staking, airdrops, intérêts) : valeur à la réception ajoutée au prix d’acquisition (par défaut ; case décochable dans Kryptax), à vérifier (art. 150 VH bis III-B CGI, BOI-RPPM-PVBMC-30-20 § 80).' : '') + (u.length ? ' Récompenses sans cours connu à la réception, comptées 0 € (à vérifier) : ' + u.map(t => t.asset + ' ' + dt(t.date)).join(', ') + '.' : ''); }
+  function withPrec(x) { { const F = KP.fileList(txs).map(f => f.name); x.unread = lastAmb.filter(a => F.includes(a.f)).map(a => a.t); } const P = precOf((lastY[fyear] || { cessions: [] }).cessions); x.cessions.forEach((c, i) => { c.prec = SHOW_PREC ? (P.L[i] || '') : ''; }); x.prec = (SHOW_PREC && P.n ? precText(P) : '') + (lastIgn.length ? (SHOW_PREC && P.n ? ' ' : '') + lastIgn.join(', ') + ' : cours introuvable, valeur non incluse (récompenses).' : '') + rwNote(); x.prec = x.prec.trim(); return x; }
   /* ---------- Blocage du PDF tant qu'une erreur est affichée ---------- */
   let blockers = [], pdfBusy = false;
   // Erreurs bloquantes, une phrase claire par cause ; rerun = le bouton « ↻ Relancer » aide
@@ -716,7 +718,7 @@
     if (runCtl || !window.__kxDone) b.push({ k: 'calc', msg: 'le calcul est en cours : attendez qu’il se termine.' });
     if (dirty) b.push({ k: 'imports', msg: 'vos imports ont changé : touchez « Valider mes imports » pour recalculer.' });
     if (KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') b.push({ k: 'holders', msg: 'vos relevés semblent appartenir à des personnes différentes : retirez le fichier concerné.' });
-    if ($('#err') && !$('#err').hidden) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
+    if ($('#err') && !$('#err').hidden && !$('#err').dataset.soft) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
     { const n = txs.filter(t => t.reconPending && t.tab).length; if (n) b.push({ k: 'recon', msg: `${n} valeur${n > 1 ? 's' : ''} reconstruite${n > 1 ? 's' : ''} à confirmer (plusieurs hypothèses ou confiance faible) : choisissez dans « 1. Importer ».` }); }
     { const n = E.openSends(txs).length; if (n) b.push({ k: 'xfer', msg: `${n} retrait${n > 1 ? 's' : ''} sans dépôt correspondant : choisissez leur traitement dans « 1. Importer ».` }); }
     if (t && t.incomplete) b.push({ k: 'cours', rerun: true, msg: 'des cours sont introuvables, le résultat est incomplet : relancez le calcul.' });
@@ -815,10 +817,10 @@
     const withOverride = txs.map(t => Object.assign({}, t, { override212: manual['212@' + t.id] }));
     // le moteur passe (asset, ts) ; on retrouve la cession concernée par son horodatage
     const byTs = {}; txs.forEach(t => { if (E.isCess(t)) byTs[t.date] = byTs[t.date] || t.id; });
-    return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening, { rewardCost: !!manual.rewardCost });
+    return E.compute(withOverride, (a, ts) => priceFn(a, ts, byTs[ts]), opening, { rewardCost: rwOn() });
   }
   $('#results').addEventListener('change', e => {
-    if (e.target.id === 'rwcost') { if (e.target.checked) manual.rewardCost = 1; else delete manual.rewardCost; save(); renderResults(); return; }
+    if (e.target.id === 'rwcost') { manual.rewardCost = e.target.checked ? 1 : 0; /* v2.36 : 0 = décochée explicitement ; absent = défaut (cochée) */ save(); renderResults(); return; }
     if (e.target.id === 'fyear') { cancelAuto(); fyear = +e.target.value; if (scopedYear != null && fyear > scopedYear && !runCtl) { $('#run').click(); return; } renderResults(); return; }
     if (e.target.id === 'cmpfile') { e.target.files[0].text().then(t => { parseCSV(t).forEach(r => { const y = parseInt(r[0]); if (y > 2000) { const p = E.parseNum(r[1]), pv = E.parseNum(r[2]); if (isFinite(p)) manual['cmpP@' + y] = p; if (isFinite(pv)) manual['cmpPV@' + y] = pv; } }); save(); renderResults(); }); return; }
     const k = e.target.dataset.cmp; if (k) { const v = E.parseNum(e.target.value); if (isFinite(v)) manual[k] = v; else delete manual[k]; save(); renderResults(); return; }
