@@ -92,4 +92,9 @@ eq(K.ranges([1, 2, 3, 5, 7, 8, 3]), '1-3, 5, 7-8', 'line numbers condensed into 
   const all = [P.title, P.foot].concat(P.info, P.head, ...P.rows).join('\n'); eq([/^[\x20-\x7e\n]*$/.test(all), /GBP 300\.00/.test(all)], [true, true], 'PDF text ASCII only'); }
 { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), m = H.match(/<section id="ukmode"[\s\S]*?<\/section><\/section>|<section id="ukmode"[\s\S]*?<div id="ukresult"/), L = H.match(/<span class="law uklaw" lang="en" hidden>([^<]*)<\/span>/);
   eq([!!m, m && /[àâçéèêëîïôûùüÿœ]/.test(m[0]), !!L, L && /CRYPTO22200/.test(L[1]), L && /[àâçéèêëîïôûùüÿœ]|CGI/.test(L[1])], [true, false, true, true, false], 'U.K. page in English, footer sources line'); }
+// v2.40: "Purchase of goods" is a disposal (SPEND), not a BUY; plain "Purchase" stays a BUY
+{ const p = K.fromCSVText('Date,Type,Asset,Quantity,Total (GBP),Fee\n01/06/2025 10:00,Buy,A,1,100,0\n10/06/2025 10:00,Purchase of goods,A,0.5,80,0\n20/08/2025 10:00,Purchase,A,1,90,0\n');
+  eq(p.txs.map(t => t.type), ['BUY', 'SPEND', 'BUY'], 'type: "Purchase of goods" = SPEND, "Purchase" = BUY');
+  const r = K.compute(p.txs, { fileTz: 'UTC' }), d = r.disposals;
+  eq([d.length, d[0] && d[0].proceeds, d[0] && d[0].gain], [1, 80, 30], 'spending 0.5 A for 80 = disposal, pool cost 50, gain 30'); }
 asyncT.catch(e => { console.log('FAIL  async: ' + e.message); process.exit(1); });
