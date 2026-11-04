@@ -1,4 +1,4 @@
-# Tests Kryptax : les 4 suites + le module U.S.A. (testus.js) (moteur, formats, export PDF, golden) sous plusieurs fuseaux horaires.
+# Tests Kryptax : moteur, formats, export PDF, golden, U.S.A., U.K. et import, sous plusieurs fuseaux horaires.
 # Aucune dépendance npm : Node seul + poppler-utils (pdftotext / pdftoppm pour testexport.js).
 name: tests
 on:
@@ -34,3 +34,7 @@ jobs:
         run: node testgolden.js > out-golden.txt; s=$?; cat out-golden.txt; ! grep -q "ÉCHEC" out-golden.txt && exit $s
       - name: node testus.js
         run: node testus.js > out-us.txt; s=$?; cat out-us.txt; ! grep -q "ÉCHEC" out-us.txt && exit $s
+      - name: node testuk.js
+        run: node testuk.js > out-uk.txt; s=$?; cat out-uk.txt; ! grep -q "FAIL\|ÉCHEC" out-uk.txt && exit $s
+      - name: node testimport.js
+        run: node testimport.js > out-import.txt; s=$?; cat out-import.txt; ! grep -q "KO  \|ÉCHEC" out-import.txt && exit $s
