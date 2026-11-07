@@ -12,7 +12,7 @@
   const precLabel = p => p ? (p.k === 'seconde' ? 'cours à la seconde' : p.k === 'minute' ? 'cours à la minute' : p.k === 'horaire' ? 'cours horaire' : p.k === 'journalier' ? 'cours journalier' : 'cours estimé') + (p.src && p.k !== 'estimé' ? ' (' + p.src + ')' : '') : '';
   function cessionPrec(fn, c) { // -> { k, src, n, nMin } pour une cession (detail212)
     let w = null, n = 0, nMin = 0, own = null;
-    for (const d of c.detail212 || []) { const key = d.asset + '|' + c.date, p = fn && fn.approx && fn.approx.has(key) ? { k: 'estimé', src: '' } : (fn && fn.prec && fn.prec.get(key)) || null; if (!p) continue; if (d.asset === c.asset) own = p; n++; if (p.k === 'minute' || p.k === 'seconde') nMin++; if (!w || PREC.indexOf(p.k) > PREC.indexOf(w.k)) w = p; }
+    for (const d of c.detail212 || []) { const key = d.asset + '|' + c.date, p = !d.implied && fn && fn.approx && fn.approx.has(key) ? { k: 'estimé', src: '' } : (fn && fn.prec && fn.prec.get(key)) || null; if (!p) continue; if (d.asset === c.asset) own = p; n++; if (p.k === 'minute' || p.k === 'seconde') nMin++; if (!w || PREC.indexOf(p.k) > PREC.indexOf(w.k)) w = p; }
     return w ? Object.assign({ n, nMin, own }, w) : { k: '', src: '', n, nMin, own };
   }
 
@@ -782,7 +782,7 @@
     manual = manual || {}; cache = cache || {};
     const rewardOnly = a => { const L = txs.filter(t => t.asset === a); return L.length > 0 && L.every(t => ['INTEREST', 'STAKING', 'AIRDROP'].includes(t.type)); };
     const est = new Set(), ign = new Set();
-    for (const c of cessions) for (const d of (c.detail212 || [])) if (fn && fn.approx && fn.approx.has(d.asset + '|' + c.date) && manual[d.asset] == null) (rewardOnly(d.asset) ? ign : est).add(d.asset);
+    for (const c of cessions) for (const d of (c.detail212 || [])) if (!d.implied && fn && fn.approx && fn.approx.has(d.asset + '|' + c.date) && manual[d.asset] == null) (rewardOnly(d.asset) ? ign : est).add(d.asset);
     return { est: [...est], ign: [...ign].filter(a => fn.unvalued && fn.unvalued.has(a)), retry: [...est].filter(a => cache[a + '|none'] == null) };
   }
   /* Glisser-déposer : ne garder que les fichiers (texte, liens… ignorés) */

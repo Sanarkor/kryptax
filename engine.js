@@ -225,7 +225,9 @@
             else if (a === t.asset && Math.abs(t.qty) > 0) p = p213 / Math.abs(t.qty);
             else p = priceFn(a, t.date);
             if (p == null || !isFinite(p)) { missing.push(a); continue; }
-            lines.push({ asset: a, qty: held[a], price: p, value: held[a] * p }); v212 += held[a] * p;
+            /* implied : cours de l'actif cédé tiré du prix de cette cession (213 / quantité), pas du lookup — jamais « estimé » */
+            const ln = { asset: a, qty: held[a], price: p, value: held[a] * p }; if (a === t.asset && !ss && !(a in FIAT)) ln.implied = true;
+            lines.push(ln); v212 += held[a] * p;
           }
         }
         const p215 = p213 - p214, p217 = p213 - p216, p218 = p213 - p214 - p216;

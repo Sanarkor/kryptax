@@ -653,8 +653,8 @@
         if (!c.missing.length) { h += `<div class="note warn">Cession du ${dt(c.date)} : calcul suspendu, une cession antérieure est incomplète (la ligne 221 en dépend).</div>`; continue; }
         h += `<div class="note warn">Cession du ${dt(c.date)} : cours introuvable pour ${c.missing.map(esc).join(', ')}. Renseignez le cours unitaire en € à ce moment : ${c.missing.map(a => `<label>${esc(a)} <input size="8" data-man="${esc(a)}@${c.tx.id}"></label>`).join(' ')} (0 si valeur négligeable) ou la valeur globale (ligne 212) : <input size="10" data-o212="${c.tx.id}"></div>`;
       }
-      const ap = (a, c) => livePrice && livePrice.approx && livePrice.approx.has(a + '|' + c.date) ? '≈' : '';
-      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c)}${eur(d.price)}` : esc(d.asset)).join(' + ') + (SHOW_PREC && c.detail212.length ? ` <span class="prec">(${esc(KP.precLabel(KP.cessionPrec(livePrice, c)))})</span>` : '')).join(' ;<br>')}</p></details>`;
+      const ap = (a, c, d) => !(d && d.implied) && livePrice && livePrice.approx && livePrice.approx.has(a + '|' + c.date) ? '≈' : '';
+      h += `<details><summary class="hint">Détail de la ligne 212 (≈ = cours tiré de vos relevés à ±30 jours, à vérifier)</summary><p class="hint">${y.cessions.map((c, i) => 'C' + (i + 1) + ' = ' + c.detail212.map(d => d.qty != null ? `${num(d.qty)} ${esc(d.asset)} × ${ap(d.asset, c, d)}${eur(d.price)}` : esc(d.asset)).join(' + ') + (SHOW_PREC && c.detail212.length ? ` <span class="prec">(${esc(KP.precLabel(KP.cessionPrec(livePrice, c)))})</span>` : '')).join(' ;<br>')}</p></details>`;
       h += `<p>Ligne 51 — total des prix de cession (218) : <b>${eur(y.total218)}</b>${y.exonere ? ' → <b>≤ 305 € : cessions exonérées</b>, pas d’autres lignes à remplir.' : ''}</p>`;
       h += `<p class="total">Ligne 52 — total des plus et moins-values : ${y.incomplete ? '<span class="warn">incomplet (cours à renseigner)</span>' : '<span class="' + (y.total224 >= 0 ? 'pos' : 'neg') + '">' + (y.total224 >= 0 ? '+' : '') + eur(y.total224) + '</span>'}</p>`;
       if (!y.incomplete && !y.exonere) h += `<div class="note">À reporter sur la <b>2042-C</b> : ${y.total224 >= 0 ? `case <b>3AN</b> = ${eur(Math.round(y.total224))}` : `case <b>3BN</b> = ${eur(Math.round(-y.total224))}`}.<br>Indicatif : impôt de 12,8 % → environ ${eur(Math.max(0, y.total224) * 0.128)}. Les prélèvements sociaux s’ajoutent à l’impôt (${y.year >= 2025 ? '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' : '30 % au total'}). Taux à vérifier sur impots.gouv.fr. Option barème progressif : case 3CN.</div>`;
@@ -670,7 +670,7 @@
     if (X) {
       const now = new Date().getFullYear(), yrs = X.yearOptions(Y, now); if (!X.selectable(fyear, now)) fyear = X.defaultYear(Y, now);
       const t = X.exportData(Y, {}, () => [], [], fyear).totals[0], yc = (Y[fyear] || { cessions: [] }).cessions;
-      const est = new Set(); yc.forEach(c => (c.detail212 || []).forEach(d => { if (livePrice && livePrice.approx && livePrice.approx.has(d.asset + '|' + c.date)) est.add(d.asset); }));
+      const est = new Set(); yc.forEach(c => (c.detail212 || []).forEach(d => { if (!d.implied && livePrice && livePrice.approx && livePrice.approx.has(d.asset + '|' + c.date)) est.add(d.asset); }));
       const AA = KP.alertAssets(txs, yc, livePrice, cache, manual); est.clear(); AA.est.forEach(x => est.add(x)); lastIgn = AA.ign; // récompense sans cours : ignorée à la 212, sans alerte ni relance
       const unk = (livePrice && livePrice.unknown || []).filter(x => manual[x] == null && yc.some(c => (c.detail212 || []).some(d => d.asset === x)));
       const errs = [];
