@@ -184,7 +184,8 @@
     let tzShift = 0, tzNote = '';
     if (fmt.localTime) { const off = fixedOffset(rows, fmt.hi, o.source); if (off == null) tzNote = 'fuseau des heures non indiqué (colonne « Time ») : heures lues en UTC, à vérifier'; else { tzShift = off; tzNote = 'heures du fichier en UTC' + (off < 0 ? '-' : '+') + (Math.abs(off) / 3600000) + ' (décalage fixe), converties en UTC'; } }
     const base = { platform: fmt.label.split(' (')[0], source: o.source, qtyStatus: 'ok', feeInKind: false };
-    const push = (t, date, rawType) => out.push(Object.assign({ id: uid(), seq: seq++, date, rawType }, base, t, { qty: Math.abs(t.qty), seq: seq }));
+    let curLine = 0; /* v2.41 : n° de ligne du fichier, seulement si o.withLines (adaptateur U.S./U.K.) ; le mode France ne change pas */
+    const push = (t, date, rawType) => out.push(Object.assign({ id: uid(), seq: seq++, date, rawType }, base, t, { qty: Math.abs(t.qty), seq: seq }, o.withLines ? { srcLine: curLine } : {}));
     const single = (date, raw, asset, q, opt) => {
       opt = opt || {}; const k = kindOf(raw), a = asset;
       if (FIAT.includes(a)) { skipped.push(raw); return true; }
@@ -209,6 +210,7 @@
         const date = (kr ? utc(g(r, 'time')) : fmt.localTime ? utc(g(r, 'time')) - tzShift : utc(g(r, 'utc time'))), op = kr ? (g(r, 'type') + (g(r, 'subtype') ? ' ' + g(r, 'subtype') : '')) : g(r, 'operation');
         const asset = kr ? kAsset(g(r, 'asset')) : up(g(r, 'coin')), d = num(kr ? g(r, 'amount') : g(r, 'change'), 'EN'), fee = kr ? Math.abs(num(g(r, 'fee'), 'EN')) || 0 : 0;
         if (!isFinite(date) || !asset || !isFinite(d)) { bad.push(i); return; }
+        curLine = fmt.hi + i + 2;
         const nop = norm(op), isTrade = kr ? /^(trade|spend|receive|adjustment)\b/.test(nop) && !/staking|earn/.test(nop) : TRADE_B.test(nop);
         if (isTrade) {
           let key = kr ? 'r' + g(r, 'refid') : 'b' + date;
@@ -217,7 +219,7 @@
           if (!kr && !groups.has(key) && !/fee/.test(nop)) for (let j = order.length - 1; j >= 0 && j >= order.length - 6; j--) { const G0 = groups.get(order[j]);
             if (norm(G0.op) !== nop || Math.abs(G0.date - date) > 2000 || !G0.legs.length) continue;
             const sg = G0.legs.map(l => Math.sign(l.d)); if (sg.every(x => x === sg[0]) && sg[0] !== Math.sign(d)) { key = order[j]; break; } }
-          if (!groups.has(key)) { groups.set(key, { date, op, legs: [], fees: [], pay: /card/.test(nop) }); order.push(key); }
+          if (!groups.has(key)) { groups.set(key, { date, op, legs: [], fees: [], pay: /card/.test(nop), line: curLine }); order.push(key); }
           const G = groups.get(key);
           if (/fee/.test(nop) && !kr) G.fees.push({ asset, d }); else G.legs.push({ asset, d });
           if (fee) G.fees.push({ asset, d: fee });
@@ -226,7 +228,7 @@
           if (!single(date, op, asset, d)) { if (FIAT.includes(asset)) skipped.push(op); else bad.push(i); }
         }
       });
-      for (const k of order) { const G = groups.get(k); fromLegs(G.legs, base, t => push(t, G.date, G.op), { fees: G.fees, pay: G.pay }); }
+      for (const k of order) { const G = groups.get(k); curLine = G.line; fromLegs(G.legs, base, t => push(t, G.date, G.op), { fees: G.fees, pay: G.pay }); }
     }
     else if (fmt.id === 'binance-trades' || fmt.id === 'binance-trades-old') {
       body.forEach((r, i) => {
@@ -297,6 +299,35 @@
     return { txs: out, bad, skipped, format: fmt.label, tzNote };
   }
 
-  const api = { fixedOffset, norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
+  /* v2.41 : adaptateur neutre Binance « Transaction History » pour les modes U.S. et U.K. (aucune règle fiscale ici).
+     Réutilise la lecture partagée (en-têtes, bandeau, colonnes vides, fuseau fixe, paires de jambes, mouvements internes) et rend des
+     événements avec le montant et la DEVISE SOURCE (jamais une valeur en euros présumée) : chaque mode convertit avec ses propres outils.
+     date = instant UTC si le fuseau du fichier est connu (tz: 'UTC'), sinon heure du fichier (tz: null, le fuseau choisi dans la page s'applique).
+     null si les lignes ne sont pas un historique Binance « Transaction History ». */
+  function binanceLedger(rows, name) {
+    const d = detect(rows); if (!d || d.id !== 'binance') return null;
+    const r = parse(rows, d, { source: name || '', withLines: true }, (() => { let n = 0; return () => 'b' + (++n); })());
+    const tzKnown = !d.localTime || /converties en UTC/.test(r.tzNote || ''), tz = tzKnown ? 'UTC' : null, ev = [], skipped = [];
+    const fiatOf = t => t.cur ? { cur: t.cur, amt: +t.valCur } : { cur: 'EUR', amt: +t.eur }; /* fromLegs : EUR -> champ eur ; autre devise -> cur/valCur */
+    const T = r.txs;
+    for (let i = 0; i < T.length; i++) { const t = T[i], line = t.srcLine, base = { line, date: t.date, tz, rawType: t.rawType || '', asset: t.asset, qty: t.qty };
+      if (t.type === 'BUY' || t.type === 'SELL' || t.type === 'PAY') { const f = fiatOf(t);
+        ev.push(Object.assign(base, { type: t.type === 'BUY' ? 'BUY' : t.type === 'PAY' ? 'SPEND' : 'SELL', cur: f.cur, amt: f.amt, feeAmt: t.fee > 0 ? +t.fee : 0, feeCur: t.fee > 0 ? 'EUR' : '', feeCurAmt: t.feeCur || 0, feeQty: t.feeQty || 0 })); }
+      else if (t.type === 'EXCH_OUT') { /* jambes d'un même groupe : sorties puis entrées, même date */
+        const outs = [t]; let j = i + 1; while (j < T.length && T[j].type === 'EXCH_OUT' && T[j].date === t.date) outs.push(T[j++]);
+        const ins = []; while (j < T.length && T[j].type === 'EXCH_IN' && T[j].date === t.date) ins.push(T[j++]);
+        if (outs.length === 1 && ins.length === 1) ev.push(Object.assign(base, { type: 'CONVERT', toAsset: ins[0].asset, toQty: ins[0].qty, cur: '', amt: NaN }));
+        else skipped.push({ line, why: 'exchange with ' + outs.length + ' token(s) out and ' + ins.length + ' token(s) in: not read, to verify' });
+        i = j - 1; }
+      else if (t.type === 'EXCH_IN') skipped.push({ line, why: 'token received in an exchange without the token given: not read, to verify' });
+      else if (t.type === 'STAKING' || t.type === 'INTEREST') ev.push(Object.assign(base, { type: 'INCOME', cur: '', amt: NaN }));
+      else if (t.type === 'AIRDROP') ev.push(Object.assign(base, { type: 'AIRDROP', cur: '', amt: NaN }));
+      else if (t.type === 'RECEIVE' || t.type === 'SEND') ev.push(Object.assign(base, { type: 'TRANSFER', dir: t.type === 'RECEIVE' ? 'in' : 'out', cur: '', amt: NaN }));
+      else if (t.type === 'FEE') skipped.push({ line, why: 'fee of ' + +(+t.qty).toPrecision(10) + ' ' + t.asset + ' paid in tokens: not handled, to verify', kept: true });
+      else skipped.push({ line, why: 'operation not read (' + t.type + '), to verify' }); }
+    r.bad.forEach(i => skipped.push({ line: d.hi + i + 2, why: 'unreadable line (date, coin or change), to verify' }));
+    return { events: ev, skipped, internal: r.skipped.length, tz, tzNote: r.tzNote || '', platform: 'Binance Transaction History' };
+  }
+  const api = { binanceLedger, fixedOffset, norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxFormats = api;
 })(this);
