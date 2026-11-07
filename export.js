@@ -162,6 +162,12 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     const p = {}; for (const x of new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now || new Date())) p[x.type] = x.value;
     return `kryptax-formulaire-2086-${y}-sur-${y + 1}-${p.day}-${p.month}-${p.year}-${p.hour}-${p.minute}.pdf`;
   }
-  const api = { pdfName, stampMin, stateName, fr, impot, impotTxt, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
+  /* v2.45 : récompenses sans cours, résumé par actif pour le PDF (nombre d'opérations + intervalle de dates, heure de Paris) au lieu de la liste complète */
+  function rwSummary(list) {
+    const d = ts => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(ts)), G = {};
+    for (const t of list || []) { const g = G[t.asset] = G[t.asset] || { n: 0, a: t.date, b: t.date }; g.n++; g.a = Math.min(g.a, t.date); g.b = Math.max(g.b, t.date); }
+    return Object.entries(G).map(([a, g]) => a + ' : ' + g.n + ' opération' + (g.n > 1 ? 's' : '') + ' (' + (d(g.a) === d(g.b) ? d(g.a) : 'du ' + d(g.a) + ' au ' + d(g.b)) + ')').join(' ; ');
+  }
+  const api = { rwSummary, pdfName, stampMin, stateName, fr, impot, impotTxt, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);

@@ -104,5 +104,7 @@ chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » 
 { const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
   chk(/matchMedia\('\(min-width: 1024px\)'\)/.test(A) && /hd\.appendChild\(kf\)/.test(A) && /home\.insertBefore\(kf, nx\)/.test(A) && /header \.kofifoot\.kofitop\{grid-column:3;grid-row:1/.test(C), 'PC : Pourquoi / Soutenir déplacés (pas copiés) en haut à droite de l’en-tête, retour en bas de page sur mobile'); }
 chk((A => !/window\.open\(pvUrl/.test(A) && /a\.download = pvName/.test(A))(require('fs').readFileSync(__dirname + '/app.js', 'utf8')), 'PDF (v2.44) : aperçu intégré, enregistrement nommé — ancien : nouvel onglet ouvert dans le clic, opener coupé, repli sur l’aperçu si bloqué');
+{ const X = require('./export.js'), L = Array.from({ length: 90 }, (_, i) => ({ asset: 'ALPINE', date: Date.UTC(2022, 3, 4, 9) + i * 864e5 })).concat([{ asset: 'USDT', date: Date.UTC(2024, 4, 2, 10) }]), S = X.rwSummary(L);
+  chk(S === 'ALPINE : 90 opérations (du 04/04/2022 au 02/07/2022) ; USDT : 1 opération (02/05/2024)' && S.length < 120, 'Récompenses sans cours : résumé par actif, pas de liste (90 opérations fictives)'); }
 chk(require('./export.js').pdfName(2024, new Date(Date.UTC(2026, 10, 7, 21, 14))) === 'kryptax-formulaire-2086-2024-sur-2025-07-11-2026-22-14.pdf', 'Nom du PDF : Kryptax, année, date et heure de Paris');
 process.exit(ok ? 0 : 1);
