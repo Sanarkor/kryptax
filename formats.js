@@ -328,6 +328,25 @@
     r.bad.forEach(i => skipped.push({ line: d.hi + i + 2, why: 'unreadable line (date, coin or change), to verify' }));
     return { events: ev, skipped, internal: r.skipped.length, tz, tzNote: r.tzNote || '', platform: 'Binance Transaction History' };
   }
-  const api = { binanceLedger, fixedOffset, norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
+  /* v2.42 : relevé PDF Binance « Transaction History » (texte lisible, une ligne par opération après regroupement pdf.js) -> lignes du tableur,
+     puis même lecture que le CSV/Excel. Chaque ligne commence par l'ID utilisateur (chiffres), puis « AAAA-MM-JJ hh:mm:ss », le compte (un mot),
+     l'opération (plusieurs mots), le jeton (majuscules/chiffres), la variation signée, puis une remarque facultative. En-têtes répétés à chaque
+     page ignorés ; bandeau (dont « Period(UTC+1) ») gardé au-dessus de l'en-tête pour le fuseau. null si ce n'est pas ce relevé. */
+  const BN_PDF_HEAD = /^User ID\s+Time\s+Account\s+Operation\s+Coin\s+Change(?:\s+Remark)?$/i;
+  const BN_PDF_ROW = /^(\d+)\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+([A-Za-z][\w-]*)\s+(.+?)\s+([A-Z0-9][A-Z0-9.]{0,19})\s+(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)(?:\s+(.*))?$/;
+  function binancePdfRows(lines) {
+    const L = (lines || []).map(x => String(x).replace(/\s+/g, ' ').trim()), hi = L.findIndex(x => BN_PDF_HEAD.test(x));
+    if (hi < 0 || !L.slice(0, hi).some(x => /binance|transaction history/i.test(x))) return null;
+    const rows = L.slice(0, hi).map(x => [x]), info = { lines: 0, heads: 0, other: [] };
+    rows.push(['User ID', 'Time', 'Account', 'Operation', 'Coin', 'Change', 'Remark']);
+    for (let i = hi + 1; i < L.length; i++) { const x = L[i]; if (!x) continue;
+      if (BN_PDF_HEAD.test(x)) { info.heads++; continue; }
+      const m = BN_PDF_ROW.exec(x); if (m) { rows.push([m[1], m[2].replace(/\s+/, ' '), m[3], m[4], m[5], m[6], m[7] || '']); info.lines++; continue; }
+      if (/^www\.binance\.com|^Page \d+\/\d+$/i.test(x)) continue;
+      if (/^\d+\s+\d{4}-\d{2}-\d{2}/.test(x)) info.other.push(x.slice(0, 0)); /* ligne d'opération illisible : comptée, jamais recopiée */ }
+    if (!info.lines) return null;
+    rows.info = { binancePdf: true, lines: info.lines, unread: info.other.length }; return rows;
+  }
+  const api = { binancePdfRows, binanceLedger, fixedOffset, norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxFormats = api;
 })(this);

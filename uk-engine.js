@@ -96,6 +96,7 @@
   /* PDF statement (v2.34): text lines read by the same PDF reader as the other modes; FR or EN words, dates and numbers. */
   const TYPEMAP = { BUY: 'BUY', SELL: 'SELL', STAKING: 'INCOME', INTEREST: 'INCOME', AIRDROP: 'AIRDROP', PAY: 'SPEND', RECEIVE: 'TRANSFER', SEND: 'TRANSFER', GIFT: 'GIFT' };
   function fromPdfLines(lines) {
+    { const B = KF.binancePdfRows && KF.binancePdfRows(lines); if (B) { const o = parseRows(B, ''); o.pdf = true; if (B.info.unread) o.skipped.push({ line: 'PDF', why: B.info.unread + ' Binance operation line(s) in the PDF could not be read, to verify' }); return o; } } /* v2.42: Binance PDF statement = same reading as its CSV */
     const r = KP.parsePdfLines(lines, { keepCur: true }), out = { txs: [], skipped: [], missingCols: [], currency: null, pdf: true };
     const add = (row, n, feeSeparate) => {
       const raw = String(row[1] || ''), g = E.guessType(raw, '', true), type = TYPEMAP[g] || kind(raw), date = E.parseDate(String(row[6] || ''), 'DMY', 'UTC'), asset = String(row[0] || '').toUpperCase(), qty = num(row[2]);

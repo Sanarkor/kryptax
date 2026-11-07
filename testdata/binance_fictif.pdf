@@ -1,0 +1,247 @@
+%PDF-1.3
+%“Œ‹ž ReportLab Generated PDF document (opensource)
+1 0 obj
+<<
+/F1 2 0 R
+>>
+endobj
+2 0 obj
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
+endobj
+3 0 obj
+<<
+/Contents 9 0 R /MediaBox [ 0 0 842 595 ] /Parent 8 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+4 0 obj
+<<
+/Contents 10 0 R /MediaBox [ 0 0 842 595 ] /Parent 8 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+5 0 obj
+<<
+/Contents 11 0 R /MediaBox [ 0 0 842 595 ] /Parent 8 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
+endobj
+6 0 obj
+<<
+/PageMode /UseNone /Pages 8 0 R /Type /Catalog
+>>
+endobj
+7 0 obj
+<<
+/Author (anonymous) /CreationDate (D:20000101000000+00'00') /Creator (anonymous) /Keywords () /ModDate (D:20000101000000+00'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (unspecified) /Title (untitled) /Trapped /False
+>>
+endobj
+8 0 obj
+<<
+/Count 3 /Kids [ 3 0 R 4 0 R 5 0 R ] /Type /Pages
+>>
+endobj
+9 0 obj
+<<
+/Length 2607
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 700 575 Tm (www.binance.com) Tj T* ET
+BT 1 0 0 1 760 565 Tm (Page 1/3) Tj T* ET
+BT /F1 14 Tf 16.8 TL ET
+BT 1 0 0 1 30 540 Tm (Transaction History) Tj T* ET
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 30 516 Tm (Name:) Tj T* ET
+BT 1 0 0 1 300 516 Tm (Address:) Tj T* ET
+BT 1 0 0 1 30 502 Tm (User ID: 1) Tj T* ET
+BT 1 0 0 1 300 502 Tm (Period\(UTC+1\): 2025-01-01 to 2025-12-31) Tj T* ET
+BT 1 0 0 1 30 488 Tm (Email: test@example.invalid) Tj T* ET
+BT 1 0 0 1 30 464 Tm (User ID) Tj T* ET
+BT 1 0 0 1 110 464 Tm (Time) Tj T* ET
+BT 1 0 0 1 240 464 Tm (Account) Tj T* ET
+BT 1 0 0 1 300 464 Tm (Operation) Tj T* ET
+BT 1 0 0 1 470 464 Tm (Coin) Tj T* ET
+BT 1 0 0 1 520 464 Tm (Change) Tj T* ET
+BT 1 0 0 1 570 464 Tm (Remark) Tj T* ET
+BT 1 0 0 1 30 448 Tm (1) Tj T* ET
+BT 1 0 0 1 110 448 Tm (2025-03-01 10:00:00) Tj T* ET
+BT 1 0 0 1 240 448 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 448 Tm (Deposit) Tj T* ET
+BT 1 0 0 1 470 448 Tm (EUR) Tj T* ET
+BT 1 0 0 1 520 448 Tm (500) Tj T* ET
+BT 1 0 0 1 30 432 Tm (1) Tj T* ET
+BT 1 0 0 1 110 432 Tm (2025-03-01 10:00:05) Tj T* ET
+BT 1 0 0 1 240 432 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 432 Tm (Transaction Buy) Tj T* ET
+BT 1 0 0 1 470 432 Tm (AAA) Tj T* ET
+BT 1 0 0 1 520 432 Tm (2) Tj T* ET
+BT 1 0 0 1 30 416 Tm (1) Tj T* ET
+BT 1 0 0 1 110 416 Tm (2025-03-01 10:00:05) Tj T* ET
+BT 1 0 0 1 240 416 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 416 Tm (Transaction Spend) Tj T* ET
+BT 1 0 0 1 470 416 Tm (EUR) Tj T* ET
+BT 1 0 0 1 520 416 Tm (-400) Tj T* ET
+BT 1 0 0 1 30 400 Tm (1) Tj T* ET
+BT 1 0 0 1 110 400 Tm (2025-03-01 10:00:05) Tj T* ET
+BT 1 0 0 1 240 400 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 400 Tm (Transaction Fee) Tj T* ET
+BT 1 0 0 1 470 400 Tm (AAA) Tj T* ET
+BT 1 0 0 1 520 400 Tm (-0.01) Tj T* ET
+BT 1 0 0 1 30 384 Tm (1) Tj T* ET
+BT 1 0 0 1 110 384 Tm (2025-03-02 09:00:00) Tj T* ET
+BT 1 0 0 1 240 384 Tm (Funding) Tj T* ET
+BT 1 0 0 1 300 384 Tm (Gift Card Redemption) Tj T* ET
+BT 1 0 0 1 470 384 Tm (BBB) Tj T* ET
+BT 1 0 0 1 520 384 Tm (1) Tj T* ET
+BT 1 0 0 1 570 384 Tm (Gift Card) Tj T* ET
+BT 1 0 0 1 30 368 Tm (1) Tj T* ET
+BT 1 0 0 1 110 368 Tm (2025-03-02 09:01:00) Tj T* ET
+BT 1 0 0 1 240 368 Tm (Funding) Tj T* ET
+BT 1 0 0 1 300 368 Tm (Transfer Between Spot and Funding) Tj T* ET
+BT 1 0 0 1 470 368 Tm (BBB) Tj T* ET
+BT 1 0 0 1 520 368 Tm (-1) Tj T* ET
+BT 1 0 0 1 30 352 Tm (1) Tj T* ET
+BT 1 0 0 1 110 352 Tm (2025-03-02 09:01:00) Tj T* ET
+BT 1 0 0 1 240 352 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 352 Tm (Transfer Between Spot and Funding) Tj T* ET
+BT 1 0 0 1 470 352 Tm (BBB) Tj T* ET
+BT 1 0 0 1 520 352 Tm (1) Tj T* ET
+ 
+endstream
+endobj
+10 0 obj
+<<
+/Length 2186
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 700 575 Tm (www.binance.com) Tj T* ET
+BT 1 0 0 1 760 565 Tm (Page 2/3) Tj T* ET
+BT 1 0 0 1 30 540 Tm (User ID) Tj T* ET
+BT 1 0 0 1 110 540 Tm (Time) Tj T* ET
+BT 1 0 0 1 240 540 Tm (Account) Tj T* ET
+BT 1 0 0 1 300 540 Tm (Operation) Tj T* ET
+BT 1 0 0 1 470 540 Tm (Coin) Tj T* ET
+BT 1 0 0 1 520 540 Tm (Change) Tj T* ET
+BT 1 0 0 1 570 540 Tm (Remark) Tj T* ET
+BT 1 0 0 1 30 524 Tm (1) Tj T* ET
+BT 1 0 0 1 110 524 Tm (2025-03-03 00:30:00) Tj T* ET
+BT 1 0 0 1 240 524 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 524 Tm (Staking Rewards) Tj T* ET
+BT 1 0 0 1 470 524 Tm (BBB) Tj T* ET
+BT 1 0 0 1 520 524 Tm (0.01) Tj T* ET
+BT 1 0 0 1 30 508 Tm (1) Tj T* ET
+BT 1 0 0 1 110 508 Tm (2025-03-05 12:00:00) Tj T* ET
+BT 1 0 0 1 240 508 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 508 Tm (Binance Convert) Tj T* ET
+BT 1 0 0 1 470 508 Tm (AAA) Tj T* ET
+BT 1 0 0 1 520 508 Tm (-0.5) Tj T* ET
+BT 1 0 0 1 30 492 Tm (1) Tj T* ET
+BT 1 0 0 1 110 492 Tm (2025-03-05 12:00:00) Tj T* ET
+BT 1 0 0 1 240 492 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 492 Tm (Binance Convert) Tj T* ET
+BT 1 0 0 1 470 492 Tm (CCC) Tj T* ET
+BT 1 0 0 1 520 492 Tm (10) Tj T* ET
+BT 1 0 0 1 30 476 Tm (1) Tj T* ET
+BT 1 0 0 1 110 476 Tm (2025-04-06 00:30:00) Tj T* ET
+BT 1 0 0 1 240 476 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 476 Tm (Sell Crypto to Fiat) Tj T* ET
+BT 1 0 0 1 470 476 Tm (EUR) Tj T* ET
+BT 1 0 0 1 520 476 Tm (300) Tj T* ET
+BT 1 0 0 1 30 460 Tm (1) Tj T* ET
+BT 1 0 0 1 110 460 Tm (2025-04-06 00:30:01) Tj T* ET
+BT 1 0 0 1 240 460 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 460 Tm (Sell Crypto to Fiat) Tj T* ET
+BT 1 0 0 1 470 460 Tm (AAA) Tj T* ET
+BT 1 0 0 1 520 460 Tm (-1) Tj T* ET
+BT 1 0 0 1 30 444 Tm (1) Tj T* ET
+BT 1 0 0 1 110 444 Tm (2025-04-07 12:00:00) Tj T* ET
+BT 1 0 0 1 240 444 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 444 Tm (Sell Crypto to Fiat) Tj T* ET
+BT 1 0 0 1 470 444 Tm (USD) Tj T* ET
+BT 1 0 0 1 520 444 Tm (120) Tj T* ET
+BT 1 0 0 1 30 428 Tm (1) Tj T* ET
+BT 1 0 0 1 110 428 Tm (2025-04-07 12:00:01) Tj T* ET
+BT 1 0 0 1 240 428 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 428 Tm (Sell Crypto to Fiat) Tj T* ET
+BT 1 0 0 1 470 428 Tm (CCC) Tj T* ET
+BT 1 0 0 1 520 428 Tm (-5) Tj T* ET
+ 
+endstream
+endobj
+11 0 obj
+<<
+/Length 924
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 8 Tf 9.6 TL ET
+BT 1 0 0 1 700 575 Tm (www.binance.com) Tj T* ET
+BT 1 0 0 1 760 565 Tm (Page 3/3) Tj T* ET
+BT 1 0 0 1 30 540 Tm (User ID) Tj T* ET
+BT 1 0 0 1 110 540 Tm (Time) Tj T* ET
+BT 1 0 0 1 240 540 Tm (Account) Tj T* ET
+BT 1 0 0 1 300 540 Tm (Operation) Tj T* ET
+BT 1 0 0 1 470 540 Tm (Coin) Tj T* ET
+BT 1 0 0 1 520 540 Tm (Change) Tj T* ET
+BT 1 0 0 1 570 540 Tm (Remark) Tj T* ET
+BT 1 0 0 1 30 524 Tm (1) Tj T* ET
+BT 1 0 0 1 110 524 Tm (2025-05-01 08:00:00) Tj T* ET
+BT 1 0 0 1 240 524 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 524 Tm (Withdraw) Tj T* ET
+BT 1 0 0 1 470 524 Tm (BBB) Tj T* ET
+BT 1 0 0 1 520 524 Tm (-0.5) Tj T* ET
+BT 1 0 0 1 30 508 Tm (1) Tj T* ET
+BT 1 0 0 1 110 508 Tm (2025-05-02 08:00:00) Tj T* ET
+BT 1 0 0 1 240 508 Tm (Spot) Tj T* ET
+BT 1 0 0 1 300 508 Tm (Fiat Withdraw) Tj T* ET
+BT 1 0 0 1 470 508 Tm (EUR) Tj T* ET
+BT 1 0 0 1 520 508 Tm (-300) Tj T* ET
+ 
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000061 00000 n 
+0000000092 00000 n 
+0000000199 00000 n 
+0000000392 00000 n 
+0000000586 00000 n 
+0000000780 00000 n 
+0000000848 00000 n 
+0000001109 00000 n 
+0000001180 00000 n 
+0000003838 00000 n 
+0000006076 00000 n 
+trailer
+<<
+/ID 
+[<1c178198fbdfa51b25995d89d4102043><1c178198fbdfa51b25995d89d4102043>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 7 0 R
+/Root 6 0 R
+/Size 12
+>>
+startxref
+7051
+%%EOF
