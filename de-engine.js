@@ -397,7 +397,7 @@
     const inp = doc.getElementById('defile'), out = doc.getElementById('deresult'), tzSel = doc.getElementById('detz'); if (!inp || !out) return;
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]), W = typeof window !== 'undefined' ? window : root;
     let cur = null, full = null, year = null, fileTz = BERLIN, name = '', pre = '', status = null;
-    { let l = 'en'; try { l = W.localStorage.getItem(LANG_KEY) === 'de' ? 'de' : 'en'; } catch (x) {} setLang(l); }
+    { let l = 'de'; try { l = W.localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'de'; } catch (x) {} setLang(l); } /* v2.47: German by default; English only when chosen (the key is written only by a click) */
     let browserTz = 'UTC'; try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     const drawTz = () => { if (!tzSel) return; const L = [[BERLIN, T('German time (Europe/Berlin)', 'Deutsche Zeit (Europe/Berlin)')], ['UTC', 'UTC']]; if (browserTz !== BERLIN && browserTz !== 'UTC') L.push([browserTz, T('This browser (', 'Dieser Browser (') + browserTz + ')']);
       tzSel.innerHTML = L.map(z => `<option value="${esc(z[0])}"${z[0] === fileTz ? ' selected' : ''}>${esc(z[1])}</option>`).join(''); };
