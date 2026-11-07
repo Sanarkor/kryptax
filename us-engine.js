@@ -28,7 +28,8 @@
     toAsset: ['received asset', 'to asset', 'asset received', 'buy asset'],
     toQty: ['received quantity', 'to quantity', 'quantity received', 'buy quantity'],
     wallet: ['wallet', 'platform', 'source', 'exchange', 'account', 'wallet / platform', 'from wallet'],
-    toWallet: ['to wallet', 'destination', 'destination wallet', 'to account']
+    toWallet: ['to wallet', 'destination', 'destination wallet', 'to account'],
+    txid: ['txid', 'transaction id', 'tx id', 'trade id'] // v2.50: i8949 2025 column (a): include the sale transaction ID number, if available
   };
   const norm = s => String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim();
   function mapHeader(head) {
@@ -78,13 +79,13 @@
     for (let i = 0; i < Math.min(25, rows.length); i++) {
       const h = (rows[i] || []).map(norm), ix = k => h.indexOf(k);
       if (['txid', 'ordertxid', 'pair', 'time', 'type', 'price', 'cost', 'fee', 'vol'].every(k => ix(k) > -1)) {
-        const out = [['Date', 'Type', 'Asset', 'Quantity', 'Total (USD)', 'Fee (USD)']], skipped = [];
+        const out = [['Date', 'Type', 'Asset', 'Quantity', 'Total (USD)', 'Fee (USD)', 'Transaction ID']], skipped = [];
         rows.slice(i + 1).forEach((r, j) => {
           const line = i + j + 2, g = k => r[ix(k)], a = krakenPair(g('pair')), mg = ix('margin') > -1 ? num(g('margin')) : 0;
           if (!r.some(x => String(x).trim() !== '')) return;
-          if (!a) { skipped.push({ line, why: 'pair not quoted in USD (' + String(g('pair')) + ')' }); out.push(['', '', '', '', '', '']); return; }
-          if (mg > 0) { skipped.push({ line, why: 'margin trade (not handled)' }); out.push(['', '', '', '', '', '']); return; }
-          out.push([String(g('time') || '').replace(/\.\d+$/, ''), g('type'), a, g('vol'), g('cost'), g('fee')]);
+          if (!a) { skipped.push({ line, why: 'pair not quoted in USD (' + String(g('pair')) + ')' }); out.push(['', '', '', '', '', '', '']); return; }
+          if (mg > 0) { skipped.push({ line, why: 'margin trade (not handled)' }); out.push(['', '', '', '', '', '', '']); return; }
+          out.push([String(g('time') || '').replace(/\.\d+$/, ''), g('type'), a, g('vol'), g('cost'), g('fee'), g('txid')]);
         });
         return { rows: out, skipped, platform: 'Kraken trades export', fileTz: 'UTC' };
       }
@@ -119,6 +120,8 @@
     const P = platformRows(rows); if (P) { const o = parseRows(P.rows); o.skipped = P.skipped.concat(o.skipped.filter(x => !P.skipped.some(y => y.line === x.line))); o.platform = P.platform; o.fileTz = P.fileTz; return o; }
     const hi = headerIndex(rows), head = rows[hi] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null) };
     if (out.missingCols.length) return out;
+    { const amt = ['total', 'price', 'fee'].filter(k => m[k] != null && !/usd|\$/.test(norm(head[m[k]]))); // v2.50: no silent currency assumption
+      if (amt.length) out.skipped.push({ line: 'file', why: 'column ' + amt.map(k => '"' + String(head[m[k]]).trim() + '"').join(', ') + ' has no currency in its name: amounts read as USD - to verify (convert any other currency to USD yourself, with the rate of each date)', kept: true }); }
     rows.slice(hi + 1).forEach((r, i) => {
       const g = k => m[k] == null ? '' : r[m[k]];
       const line = hi + i + 2, type = kind(g('type')), date = usDate(g('date'));
@@ -126,7 +129,7 @@
       if (!type || !isFinite(date) || !asset || !(qty > 0)) { if (r.some(x => String(x).trim() !== '')) out.skipped.push({ line, why: !type ? 'unknown type' : !isFinite(date) ? 'unreadable date' : 'missing asset or quantity' }); return; }
       const price = num(g('price')), total0 = num(g('total')), fee = num(g('fee'));
       const total = isFinite(total0) ? total0 : isFinite(price) ? price * qty : NaN;
-      out.txs.push({ line, date, type, rawType: String(g('type') || ''), asset, qty, usd: total, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')), wallet: String(g('wallet') || '').trim(), toWallet: String(g('toWallet') || '').trim() });
+      out.txs.push({ line, date, type, rawType: String(g('type') || ''), asset, qty, usd: total, fee: isFinite(fee) ? fee : 0, toAsset: String(g('toAsset') || '').trim().toUpperCase(), toQty: num(g('toQty')), wallet: String(g('wallet') || '').trim(), toWallet: String(g('toWallet') || '').trim(), txid: String(g('txid') || '').trim().slice(0, 64) });
     });
     out.txs.sort((a, b) => a.date - b.date || a.line - b.line);
     return out;
@@ -349,7 +352,7 @@
         const pieces = r.pieces.concat(r.missing > 1e-12 ? [{ qty: r.missing, cost: NaN, date: null, none: true }] : []);
         for (const p of pieces) {
           const q = p.qty, pr = isFinite(proceeds) ? proceeds * q / t.qty : NaN, cost = p.cost;
-          const row = { line: t.line, desc: (+q.toPrecision(10)) + ' ' + t.asset, asset: t.asset, wallet: t.wallet || '', qty: q, acquired: p.none ? null : p.date, sold: t.date,
+          const row = { line: t.line, desc: (+q.toPrecision(10)) + ' ' + t.asset + (t.txid ? ' (ID ' + t.txid + ')' : ''), asset: t.asset, wallet: t.wallet || '', qty: q, acquired: p.none ? null : p.date, sold: t.date,
             proceeds: r2(pr), cost: r2(cost), gain: isFinite(pr) && isFinite(cost) ? r2(pr - cost) : null, term: p.none ? null : (isLong(p.date, t.date) ? 'long' : 'short'),
             convert: t.type === 'CONVERT', status: 'ok' };
           if (p.fallback) row.status = 'to verify: not enough units in the chosen lot (FIFO used for the rest)';
@@ -412,18 +415,38 @@
   /* v2.2 Form 8949 layout (IRS Instructions for Form 8949, 2025; Schedule D (Form 1040) 2025). Digital assets use boxes G/H/I (Part I, short term)
      and J/K/L (Part II, long term), never A-F. G/J: Form 1099-DA with basis reported to the IRS; H/K: Form 1099-DA without basis or basis not
      reported; I/L: no Form 1099-DA. Totals go to Schedule D lines 1b/2/3 (Part I) and 8b/9/10 (Part II). Columns (f) and (g) are left blank. */
-  const CAT = { basis: ['G', 'J'], nobasis: ['H', 'K'], none: ['I', 'L'] }, SCHD = { G: '1b', H: '2', I: '3', J: '8b', K: '9', L: '10' };
+  const CAT = { basis: ['G', 'J'], nobasis: ['H', 'K'], none: ['I', 'L'] }, SCHD = { G: '1b', H: '2', I: '3', J: '8b', K: '9', L: '10', A: '1b', B: '2', C: '3', D: '8b', E: '9', F: '10' };
+  /* v2.50 boxes by FORM EDITION (tax year of the sale), checked 2026-11-07 on irs.gov:
+     - 2024 and earlier: Form 8949 (2024) has only boxes A/B/C (Part I) and D/E/F (Part II); there is no Form 1099-DA. A digital asset sale not
+       reported on a Form 1099-B goes in box C / F (https://www.irs.gov/pub/irs-prior/f8949--2024.pdf, https://www.irs.gov/pub/irs-prior/i8949--2024.pdf).
+       Kryptax maps "basis reported" -> A/D and "basis not reported" -> B/E only as Form 1099-B situations (to verify).
+     - 2025 (final form) and 2026 (DRAFT, not for filing, created 4/1/26): boxes G/H/I and J/K/L for digital assets, never C/F
+       (https://www.irs.gov/instructions/i8949, https://www.irs.gov/pub/irs-dft/f8949--dft.pdf). Schedule D lines are the same (1b/2/3, 8b/9/10).
+     "All years" mixing both editions: no single box, choose a tax year (to verify). */
+  const CAT24 = { basis: ['A', 'D'], nobasis: ['B', 'E'], none: ['C', 'F'] };
+  const yearOf = t => t == null ? NaN : new Date(t).getUTCFullYear();
+  function edition(res) { // '2024' (A-F) | '2025' (G-L) | 'mixed'
+    const y = res.totals && res.totals.year; if (y) return y <= 2024 ? '2024' : '2025';
+    const Y = res.rows.map(r => yearOf(r.sold)).filter(isFinite); if (!Y.length) return '2025';
+    const a = Y.some(v => v <= 2024), b = Y.some(v => v >= 2025); return a && b ? 'mixed' : a ? '2024' : '2025';
+  }
+  const ED_NOTE = { '2024': 'Form 8949 for 2024 and earlier: boxes A-F only (no Form 1099-DA before 2025); digital assets without a Form 1099-B: box C (short) / F (long).',
+    '2025': 'Form 8949 for 2025 (final) and 2026 (IRS draft, not final): digital assets use boxes G/H/I (short) and J/K/L (long), never C/F.',
+    mixed: 'This view mixes sales up to 2024 (Form 8949 boxes A-F) and from 2025 (boxes G-L): choose one tax year to get the box letters.' };
   function form8949(res, cat) {
-    const bx = CAT[cat] || null, ok = res.rows.filter(r => r.status === 'ok' && r.term);
+    const ed = edition(res), tbl = ed === '2024' ? CAT24 : CAT, bx = ed !== 'mixed' && tbl[cat] || null, ok = res.rows.filter(r => r.status === 'ok' && r.term);
+    const ask = ed === '2024' ? ['A, B or C', 'D, E or F'] : ed === 'mixed' ? ['A-C (to 2024) or G-I (from 2025)', 'D-F (to 2024) or J-L (from 2025)'] : ['G, H or I', 'J, K or L'];
     const part = (term, i) => {
       const box = bx ? bx[i] : null, lines = ok.filter(r => r.term === term), sum = k => r2(lines.reduce((t, r) => t + (r[k] || 0), 0));
-      return { part: i ? 'II' : 'I', title: i ? 'Part II - Long-term (held more than 1 year)' : 'Part I - Short-term (held 1 year or less)', box,
-        boxText: box || (i ? 'J, K or L - to verify' : 'G, H or I - to verify'), scheduleD: box ? 'Schedule D line ' + SCHD[box] : (i ? 'Schedule D line 8b, 9 or 10 - to verify' : 'Schedule D line 1b, 2 or 3 - to verify'),
+      return { part: i ? 'II' : 'I', title: i ? 'Part II - Long-term (held more than 1 year)' : 'Part I - Short-term (held 1 year or less)', box, ask: ask[i],
+        boxText: box || (ask[i] + ' - to verify'), scheduleD: box ? 'Schedule D line ' + SCHD[box] : (i ? 'Schedule D line 8b, 9 or 10 - to verify' : 'Schedule D line 1b, 2 or 3 - to verify'),
         lines, totals: { d: sum('proceeds'), e: sum('cost'), g: null, h: sum('gain') } };
     };
-    return { cat: bx ? cat : null, parts: [part('short', 0), part('long', 1)], toVerify: res.rows.filter(r => r.status !== 'ok' || !r.term) };
+    return { cat: bx ? cat : null, edition: ed, editionNote: ED_NOTE[ed], parts: [part('short', 0), part('long', 1)], toVerify: res.rows.filter(r => r.status !== 'ok' || !r.term) };
   }
   const CATNOTE = { basis: 'Form 1099-DA received, basis reported to the IRS', nobasis: 'Form 1099-DA received, basis not shown or not reported to the IRS', none: 'No Form 1099-DA received' };
+  const CATNOTE24 = { basis: 'Form 1099-B received, basis reported to the IRS (no Form 1099-DA before 2025) - to verify', nobasis: 'Form 1099-B received, basis not shown or not reported to the IRS (no Form 1099-DA before 2025) - to verify', none: 'No Form 1099-B received (no Form 1099-DA before 2025)' };
+  const catNote = F => (F.edition === '2024' ? CATNOTE24 : CATNOTE)[F.cat];
   /* v2.6 report layout shared by the CSV and the .xlsx export: one grid, money in the same columns everywhere
      ((d) col 3, (e) col 4, (f) col 5, (g) col 6, (h) col 7, note col 8, wallet col 9). Rows: {k: kind, c: cells}; money cells are numbers. */
   const METHOD_TXT = { FIFO: 'FIFO (first in, first out)', HIFO: 'HIFO (highest cost first)', MANUAL: 'Manual choice per sale (to verify)' };
@@ -439,7 +462,8 @@
     row('kv', ['Lot method', METHOD_TXT[T.method] || METHOD_TXT.FIFO]);
     row('kv', ['Network fees on transfers', FEE_MODES[(T.fees || {}).mode] || FEE_MODES.IGNORE, 'Tax treatment not settled - to verify']);
     if (T.fees && feeLine(T.fees)) row('kv', ['Network fees', feeLine(T.fees).replace(/ — /g, ' - ')]);
-    row('kv', ['Form 8949 situation', CATNOTE[F.cat] || 'not chosen - to verify']);
+    row('kv', ['Form 8949 situation', catNote(F) || 'not chosen - to verify']);
+    row('kv', ['Form 8949 edition', F.editionNote]);
     row('kv', ['Sales', T.sales + ' (' + T.rows + ' lines' + (T.toVerify ? ', ' + T.toVerify + ' to verify' : '') + ')']);
     if (F.cat && F.cat !== 'none') row('kv', ['With a Form 1099-DA', 'Columns (d) and (e) should match the form; corrections go in (f) and (g) - to verify']);
     for (const P of F.parts) {
@@ -559,9 +583,9 @@
   function guide(res, opts) {
     opts = opts || {}; const F = form8949(res, opts.cat), SD = scheduleD(res, opts.cat, opts.carry, opts.fstat), T = res.totals, I = T.income || {};
     const l21 = SD.lines.find(l => l.line === '21' && !l.nc);
-    return { chosen: !!F.cat, parts: F.parts.map(P => ({ part: P.part, term: P.part === 'I' ? 'short-term' : 'long-term', box: P.box, boxText: P.box || (P.part === 'I' ? 'G, H or I' : 'J, K or L'),
+    return { chosen: !!F.cat, parts: F.parts.map(P => ({ part: P.part, term: P.part === 'I' ? 'short-term' : 'long-term', box: P.box, boxText: P.box || P.ask,
         sdLine: P.box ? SCHD[P.box] : (P.part === 'I' ? '1b, 2 or 3' : '8b, 9 or 10'), n: P.lines.length, d: P.totals.d, e: P.totals.e, h: P.totals.h })),
-      n7: SD.n7, n15: SD.n15, n16: SD.n16, loss: SD.n16 < 0, fstat: opts.fstat || '', l21: l21 ? { h: l21.h, rest: l21.rest } : null,
+      edition: F.edition, editionNote: F.editionNote, n7: SD.n7, n15: SD.n15, n16: SD.n16, loss: SD.n16 < 0, fstat: opts.fstat || '', l21: l21 ? { h: l21.h, rest: l21.rest } : null,
       income: I.count ? { usd: I.usd, n: I.count, unknown: I.unknown } : null };
   }
   /* v2.12 single "to verify" list: every point to check, deduplicated, sorted by importance (1 = not in the totals ... 5 = records), each one short with its line. */
@@ -596,7 +620,7 @@
     let h = '', g = null; for (const c of C) { if (CHK_GRP[c.rank] !== g) { h += (g ? '</ul>' : '') + '<p class="uschk-h">' + e(CHK_GRP[c.rank]) + '</p><ul>'; g = CHK_GRP[c.rank]; } h += li(c); }
     return `<div class="warn uschecks"><b>To verify (${C.length})</b>${h}</ul></div>`;
   }
-  const api = { csvSafe, stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
+  const api = { csvSafe, catNote, edition, CAT24, stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -740,6 +764,8 @@
       const G = guide(res, { cat, fstat, carry: clNow() }), li = [];
       if (!G.chosen && res.totals.sales) li.push('<li class="neg">Form 8949 box not chosen: choose it in <a href="#usopts">Options</a> at the top.</li>');
       for (const P of G.parts) if (P.n) li.push(`<li>Form 8949 Part ${P.part} (${P.term}), box <b>${esc(P.boxText)}</b>: proceeds <b>${usd(P.d)}</b> · cost <b>${usd(P.e)}</b> · gain/loss <b>${usd(P.h)}</b> → Schedule D line <b>${esc(P.sdLine)}</b></li>`);
+      if (res.totals.sales && G.edition !== '2025') li.push(`<li class="neg">${esc(G.editionNote)}${G.edition === '2024' ? ' The “Form 1099-DA” choice in Options is read as the same situation on a Form 1099-B (to verify).' : ''}</li>`);
+      if (res.totals.sales && year >= 2026) li.push('<li>Tax year ' + year + ': the IRS 2026 Form 8949 / Schedule D are still drafts (not for filing) — box letters and lines to verify on the final forms.</li>');
       if (res.totals.sales) li.push(`<li>Schedule D line 7: <b>${usd(G.n7)}</b> · line 15: <b>${usd(G.n15)}</b> · line 16: <b>${usd(G.n16)}</b></li>`);
       if (G.loss) li.push(G.l21 ? `<li>Schedule D line 21: <b>${usd(G.l21.h)}</b>${G.l21.rest > 0 ? ' (' + usd(G.l21.rest) + ' to carry over)' : ''}</li>` : '<li class="neg">Schedule D line 21: choose the filing status in <a href="#usopts">Options</a> at the top.</li>');
       if (G.income) li.push(`<li>Staking / airdrop / interest income: <b>${usd(G.income.usd)}</b> → report as ordinary income (no tax computed; where to report: to verify)</li>`);

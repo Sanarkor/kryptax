@@ -28,7 +28,7 @@
       'Lot method: ' + (METHOD[T.method] || METHOD.FIFO),
       'Network fees on transfers: ' + (eng().FEE_MODES[(T.fees || {}).mode] || eng().FEE_MODES.IGNORE) + ' - tax treatment not settled, to verify',
       'Wallets: ' + (T.wallets && T.wallets.length ? T.wallets.join(', ') : 'one (no wallet column)'),
-      'Form 8949 situation: ' + (eng().CATNOTE[F.cat] || 'not chosen - to verify'),
+      'Form 8949 situation: ' + ((eng().catNote ? eng().catNote(F) : eng().CATNOTE[F.cat]) || 'not chosen - to verify'),
       'Tax year: ' + (T.year || 'all years') + (T.tz ? ' (times in file: ' + T.tz.file + '; tax dates: ' + T.tz.tax + ', to verify)' : ' (sale dates in UTC, to verify)'),
       'Sales: ' + T.sales + ' (' + T.rows + ' lines' + (T.toVerify ? ', ' + T.toVerify + ' to verify, not in the totals' : '') + ')',
       'Short term: proceeds ' + usd(T.short.proceeds) + ', cost ' + usd(T.short.cost) + ', gain/loss ' + usd(T.short.gain),
@@ -52,7 +52,7 @@
     if (G.loss) { if (G.l21) copy.push({ label: 'Schedule D line 21' + (G.l21.rest > 0 ? ' (' + usd(G.l21.rest) + ' to carry over)' : ''), d: '', e: '', h: usd(G.l21.h) }); else txt('Schedule D line 21: choose the filing status in Options at the top.'); }
     if (G.income) txt('Staking / airdrop / interest income: ' + usd(G.income.usd) + ' -> report as ordinary income (no tax computed; where to report: to verify)');
     if (!copy.length) txt('No sale or income in this year: nothing to copy.');
-    return { title: 'Kryptax - U.S. summary (estimate)', copyTitle: 'What to copy and where' + (T.year ? ' (' + T.year + ')' : ''), copy, copyNote: 'Only the sales in this file - to verify.', checks, info: info.map(ascii), boxNote: ascii(BOXNOTE), foot: FOOT, head, rows, parts, tv };
+    return { title: 'Kryptax - U.S. summary (estimate)', copyTitle: 'What to copy and where' + (T.year ? ' (' + T.year + ')' : ''), copy, copyNote: 'Only the sales in this file - to verify.', checks, info: info.map(ascii), boxNote: ascii(F.edition === '2025' ? BOXNOTE + (T.year >= 2026 ? ' Tax year ' + T.year + ': IRS Form 8949 / Schedule D still in draft (not for filing) - to verify on the final forms.' : '') : F.editionNote + ' Columns (f) and (g) left blank. Source: IRS Form 8949 and instructions for the tax year (irs.gov).'), foot: FOOT, head, rows, parts, tv };
   }
 
   /* v2.14 amounts to copy (Form 8949 Part totals, Schedule D lines 7, 15, 16, 21) in dark amber #A16207; text stays black */
