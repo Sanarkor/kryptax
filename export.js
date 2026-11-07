@@ -70,13 +70,25 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     return out;
   }
   const globalText = t => `${t.year} : total des cessions (213) ${t.l213.toFixed(2)} € ; frais (214) ${t.l214.toFixed(2)} € ; prix nets (218) ${t.l218.toFixed(2)} € ; plus-value nette globale (224) ${t.l224 >= 0 ? '+' : ''}${t.l224.toFixed(2)} €${t.incomplete ? ' (incomplet)' : ''}. ` +
-    (t.exonere ? `Total des prix de cession nets (218) ≤ 305 € : exonéré, rien à reporter.` : `Total des prix de cession nets (218) > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €. Les prélèvements sociaux s\'ajoutent à l\'impôt (${t.year >= 2025 ? '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' : '30 % au total'}). Taux à vérifier sur impots.gouv.fr.`);
+    (t.exonere ? `Total des prix de cession nets (218) ≤ 305 € : exonéré, rien à reporter.` : `Total des prix de cession nets (218) > 305 € : imposable. À reporter case ${t.box} de la 2042-C : ${t.report} €. Les prélèvements sociaux s\'ajoutent à l\'impôt (${frRate(t.year).detail}). Taux à vérifier sur impots.gouv.fr.`);
   const SHORT = ['211 Date de la cession (heure de Paris)', '212 Valeur globale du portefeuille (€)', '213 Prix de cession (€)', '214 Frais de cession (€)', '215 Prix net des frais (213-214) (€)', '216 Soulte (€)', '217 Prix net des soultes (213-216) (€)', '218 Prix net frais et soultes (€)', '220 Prix total d\'acquisition (€)', '221 Fractions de capital initial (€)', '222 Soultes antérieures (€)', '223 Prix total d\'acquisition net (220-221-222) (€)', '224 Plus ou moins-value (€)'];
   // Montant à la française : séparateur de milliers (espace), 2 décimales, virgule
   const fr = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ').replace('.', ',');
   /* Impôt estimé : même calcul que la ligne « Prélèvement estimé selon le calcul » de l'écran (app.js) */
-  const impot = t => t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30);
-  const impotTxt = t => { const v = impot(t); return fr(v) + ' €' + (v ? ` (${t.year >= 2025 ? '31,4' : '30'} % de ${t.report} €)` : t.exonere ? ' (cessions ≤ 305 €)' : ' (pas de plus-value)'); };
+  /* Taux du PFU par année de cession : SOURCE UNIQUE pour l'écran (app.js) et le PDF. Indicatif, hors CEHR/CDHR et option barème.
+     Vérifié le 07/11/2026 :
+     - 2024 et avant : 12,8 % (art. 200 A CGI) + 17,2 % de prélèvements sociaux (CSG 9,2 %) = 30 % (BOI-RPPM-PVBMC-30-30-20240423).
+     - 2025 et après : 12,8 % + 18,6 % (CSG 10,6 % sur les revenus du patrimoine, art. L136-6 / L136-8 CSS), loi n° 2025-1403 du 30/12/2025
+       (LFSS 2026) art. 12-II-1° « à compter de l'imposition des revenus de l'année 2025 » ; brochure IR 2026 (Nouveautés) ;
+       https://www.impots.gouv.fr/particulier/questions/comment-declarer-les-plus-ou-moins-values-sur-cessions-dactifs-numeriques (31,4 %).
+     Pour une nouvelle loi : ajouter une ligne { from: année, ... } ; les tests (test.js) figent 2024/2025/2026. */
+  const FR_RATES = [
+    { from: 0, ir: 0.128, ps: 0.172, total: 0.30, label: '30', detail: '30 % au total' },
+    { from: 2025, ir: 0.128, ps: 0.186, total: 0.314, label: '31,4', detail: '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' }
+  ];
+  const frRate = y => FR_RATES.filter(r => (+y || 0) >= r.from).pop();
+  const impot = t => t.exonere || t.l224 <= 0 ? 0 : t.report * frRate(t.year).total;
+  const impotTxt = t => { const v = impot(t); return fr(v) + ' €' + (v ? ` (${frRate(t.year).label} % de ${t.report} €)` : t.exonere ? ' (cessions ≤ 305 €)' : ' (pas de plus-value)'); };
   const frs = v => v == null || !isFinite(v) ? 'À RENSEIGNER' : (v > 0 ? '+' : '') + fr(v);
   const qfmt = q => String(q).replace('.', ',');
     /* Logo 100 % vectoriel, sans icône : mot « Kryptax » noir, fin contour gris métallique (trait gris foncé puis liseré gris clair), aligné sur la marge gauche. */
@@ -120,7 +132,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
       lines.push(['Total des prix de cession nets (218)', fr(t.l218) + ' €' + (t.exonere ? ' : ≤ 305 €, cessions exonérées' : ' : > 305 €, imposable')]);
       lines.push(['Case 2042-C', t.exonere ? 'aucune (seuil de 305 € non dépassé)' : `${t.box} = ${t.report} €`]);
       lines.push(['Impôt estimé (à vérifier)', impotTxt(t)]);
-      if (!t.exonere) lines.push(['Prélèvements sociaux', `Les prélèvements sociaux s'ajoutent à l'impôt (${t.year >= 2025 ? '31,4 % au total : 18,6 % de prélèvements sociaux + 12,8 %' : '30 % au total'}). Taux à vérifier sur impots.gouv.fr.`]);
+      if (!t.exonere) lines.push(['Prélèvements sociaux', `Les prélèvements sociaux s'ajoutent à l'impôt (${frRate(t.year).detail}). Taux à vérifier sur impots.gouv.fr.`]);
     }
     if (!n) lines.unshift(['Cessions', `Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`]);
     if (x.prec) lines.push(['Précision des cours', x.prec]);
@@ -144,6 +156,14 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
       if (yn + sl.length * 3 + 2 > H - 8) { doc.addPage(); yn = 14; } doc.text(sl, M, yn + 2); doc.setFont('helvetica', 'normal'); yn += sl.length * 3 + 1.5;
       doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }
     if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
+    // 5) Annexe compacte (en dernier : n'écarte ni l'avertissement ni les libellés officiels) : origine des cours de la ligne 212 (une ligne par actif), si des cessions existent
+    if (n && x.sources && x.sources.length) {
+      const S = [['Annexe : origine des cours (ligne 212)', 'Valeur du portefeuille à chaque cession : pour chaque actif, nombre de valorisations par méthode. Date demandée = date et heure de la cession (heure de Paris). Sources publiques interrogées au moment du calcul ; aucune donnée inventée si l’origine n’a pas été enregistrée. Document d’aide, pas un justificatif officiel : conservez vos relevés de plateforme.']].concat(x.sources.map(l => { const i = l.indexOf(' : '); return [l.slice(0, i), l.slice(i + 3)]; }));
+      let y2 = yn + note.length * 2.4 + 6; if (y2 + 8 + S.length * 4.6 > H - 10) { doc.addPage(); y2 = 14; }
+      doc.autoTable({ startY: y2, body: S.map(A), theme: 'plain', tableWidth: 170, margin: { left: M },
+        styles: { fontSize: 8.5, cellPadding: .7, textColor: [40, 40, 50] }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { halign: 'left' } },
+        didParseCell: h => { if (h.row.index === 0) { h.cell.styles.fontSize = 9; h.cell.styles.textColor = [20, 20, 30]; if (h.column.index === 0) h.cell.styles.cellWidth = 40; } } });
+    }
     const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); doc.text(ascii(LAW), M, H - 5); }
     doc.setTextColor(0, 0, 0);
     return doc;
@@ -168,6 +188,6 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     for (const t of list || []) { const g = G[t.asset] = G[t.asset] || { n: 0, a: t.date, b: t.date }; g.n++; g.a = Math.min(g.a, t.date); g.b = Math.max(g.b, t.date); }
     return Object.entries(G).map(([a, g]) => a + ' : ' + g.n + ' opération' + (g.n > 1 ? 's' : '') + ' (' + (d(g.a) === d(g.b) ? d(g.a) : 'du ' + d(g.a) + ' au ' + d(g.b)) + ')').join(' ; ');
   }
-  const api = { rwSummary, pdfName, stampMin, stateName, fr, impot, impotTxt, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
+  const api = { FR_RATES, frRate, rwSummary, pdfName, stampMin, stateName, fr, impot, impotTxt, FORM, PAST, FUTURE, selectable, yearOptions, defaultYear, title, globalText, exportData, special, specialKind, specialText, makePdf };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxExport = api;
 })(this);

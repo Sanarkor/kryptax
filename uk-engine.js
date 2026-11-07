@@ -239,8 +239,10 @@
     if (Y.aea == null) chk.push('Annual exempt amount for ' + y + ': not in the table read on gov.uk — to verify.');
     chk.push('Losses brought forward, other assets and the Capital Gains Tax rate are not included — to verify.');
     return chk; }
+  /* Cellule CSV : un texte importé commençant par = + @ (ou - non numérique) est préfixé d'une apostrophe (pas de formule tableur). Montants inchangés. */
+  const csvSafe = (s => /^(?:[=+@\t\r]|-(?![\d.]|$))/.test(s) ? "'" + s : s);
   function toCSV(res, y) {
-    const Y = yearSummary(res, y), q = v => { const s = String(v == null ? '' : v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }, n = v => v == null ? 'to verify' : v.toFixed(2);
+    const Y = yearSummary(res, y), q = v => { const s = csvSafe(String(v == null ? '' : v)); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }, n = v => v == null ? 'to verify' : v.toFixed(2);
     const L = [['Kryptax U.K. - Capital gains summary (estimate, to verify)'], ['Tax year', y + ' (6 April to 5 April)'], [],
       ['SA108 box', 'Description', 'Amount (GBP)'], ['13.1', 'Number of disposals', Y.count], ['13.2', 'Disposal proceeds', n(Y.proceeds)], ['13.3', 'Allowable costs (including purchase price)', n(Y.costs)],
       ['13.4', 'Gains in the year, before losses', n(Y.gains)], ['13.5', 'Losses in the year', n(Y.losses)], ['', 'Net gain or loss', n(Y.net)],
@@ -277,12 +279,12 @@
     const n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.text(D.foot, 40, doc.internal.pageSize.getHeight() - 20); }
     return doc;
   }
-  const api = { ranges, groupLines, checks, curOf, fromPdfLines, convertFx, rateOn, FX_SRC, COLS, mapHeader, kind, parseRows, fromCSVText, fromWorkbook, ukDate, taxYear, AEA, compute, yearSummary, toCSV, pdfData, pdf, gbp, dmy, shiftTz, LEGAL };
+  const api = { csvSafe, ranges, groupLines, checks, curOf, fromPdfLines, convertFx, rateOn, FX_SRC, COLS, mapHeader, kind, parseRows, fromCSVText, fromWorkbook, ukDate, taxYear, AEA, compute, yearSummary, toCSV, pdfData, pdf, gbp, dmy, shiftTz, LEGAL };
   /* ---------- page (browser only) ---------- */
   function mount(doc) {
     const box = doc.getElementById('ukmode'); if (!box || box.dataset.ready) return; box.dataset.ready = '1';
     const inp = doc.getElementById('ukfile'), out = doc.getElementById('ukresult'), tzSel = doc.getElementById('uktz'); if (!inp || !out) return;
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]), W = typeof window !== 'undefined' ? window : root;
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]), W = typeof window !== 'undefined' ? window : root;
     let cur = null, full = null, year = null, fileTz = LONDON, name = '';
     let browserTz = 'UTC'; try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
     if (tzSel) { const L = [[LONDON, 'U.K. time (Europe/London)'], ['UTC', 'UTC']]; if (browserTz !== LONDON && browserTz !== 'UTC') L.push([browserTz, 'This browser (' + browserTz + ')']);

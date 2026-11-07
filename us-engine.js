@@ -468,8 +468,10 @@
     blank(); row('note', ['Estimate - not tax advice - to be verified - state taxes not included. Sources: IRS Instructions for Form 8949 and for Schedule D (Form 1040).']);
     return { rows: out, width: W, money: [3, 4, 6, 7] };
   }
+  /* Cellule CSV : un texte importé commençant par = + @ (ou - non numérique) est préfixé d'une apostrophe (pas de formule tableur). Montants inchangés. */
+  const csvSafe = (s => /^(?:[=+@\t\r]|-(?![\d.]|$))/.test(s) ? "'" + s : s);
   function toCSV(res, opts) {
-    const R = usReport(res, opts), q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+    const R = usReport(res, opts), q = v => { const s = csvSafe(String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const cell = (v, i) => typeof v === 'number' ? v.toFixed(2) : v == null ? '' : String(v);
     return R.rows.map(r => r.c.map((v, i) => q(cell(v, i))).join(',')).join('\n') + '\n';
   }
@@ -548,7 +550,7 @@
     return { lines, flag: o.flag, note: DANOTE };
   }
   function incomeCSV(res) {
-    const q = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v), hasW = res.income.some(r => r.wallet);
+    const q = v => { const s = csvSafe(String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }, hasW = res.income.some(r => r.wallet);
     const head = ['Date received', 'Asset', 'Quantity', 'Value USD (ordinary income - to verify)', 'Type', 'Status'].concat(hasW ? ['Wallet'] : []);
     const L = res.income.map(r => [mdy(r.date), r.asset, +r.qty.toPrecision(12), r.usd == null ? '' : r.usd.toFixed(2), r.type, r.status].concat(hasW ? [r.wallet] : []));
     return [head].concat(L).map(r => r.map(q).join(',')).join('\n') + '\n';
@@ -589,17 +591,17 @@
   /* v2.17 "To verify (N)" on screen: same points and order as checks(), grouped by importance under short headings, "Line N" in bold at the start. */
   const CHK_GRP = { 1: 'Not in your totals', 2: 'Choose / confirm', 3: 'Possible issues', 4: 'Entered by you / methods', 5: 'Entered by you / methods' };
   function checksBlock(C) {
-    const e = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const e = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     const li = c => { const m = /^(Line \d+): ([\s\S]*)$/.exec(c.msg); return '<li>' + (m ? '<b>' + e(m[1]) + '</b>: ' + e(m[2]) : e(c.msg)) + '</li>'; };
     let h = '', g = null; for (const c of C) { if (CHK_GRP[c.rank] !== g) { h += (g ? '</ul>' : '') + '<p class="uschk-h">' + e(CHK_GRP[c.rank]) + '</p><ul>'; g = CHK_GRP[c.rank]; } h += li(c); }
     return `<div class="warn uschecks"><b>To verify (${C.length})</b>${h}</ul></div>`;
   }
-  const api = { stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
+  const api = { csvSafe, stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
     const box = doc.getElementById('usmode'); if (!box || box.dataset.ready) return; box.dataset.ready = '1';
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     const inp = doc.getElementById('usfile'), out = doc.getElementById('usresult'); if (!inp || !out) return;
     const W0 = typeof window !== 'undefined' ? window : root;
     let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', fstat = '', carry = {};
