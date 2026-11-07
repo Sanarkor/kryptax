@@ -282,3 +282,30 @@ Ranked by impact on the numbers. Sources are only those already listed in this f
 ## v2.31 — U.S.A. on short PC screens (v=20261101zu)
 
 - 1024 px and wider, window height 800 px or less: in U.S.A. mode only, the left column is a little wider (minmax(380px, 36%)) so the import button fits on one line, and the vertical spacing of the Options, the import card and the beta line is tightened. The initial screen fits with no scroll at 1280x720 and 1024x768 (it had about 66 px of scroll). FRANCE, U.K., phones and taller PC screens are unchanged.
+
+## v2.50 — IRS audit by tax year, hand-computed reference cases (v=20261107zzo)
+
+Checked on 2026-11-07 on irs.gov (official pages only). Kryptax stays a beta estimate: a worksheet in the Form 8949 / Schedule D layout, not a filled official form, not filed with the IRS, no certification.
+
+| Tax year | Form 8949 / Schedule D | Status | Digital-asset boxes |
+| --- | --- | --- | --- |
+| 2024 and earlier | https://www.irs.gov/pub/irs-prior/f8949--2024.pdf, https://www.irs.gov/pub/irs-prior/i8949--2024.pdf | final | A/B/C and D/E/F only (no Form 1099-DA); without a Form 1099-B: **C / F** |
+| 2025 | https://www.irs.gov/instructions/i8949, https://www.irs.gov/pub/irs-pdf/f8949.pdf, https://www.irs.gov/pub/irs-pdf/f1040sd.pdf | final | G/H/I and J/K/L, never C/F |
+| 2026 | https://www.irs.gov/pub/irs-dft/f8949--dft.pdf, https://www.irs.gov/pub/irs-dft/f1040sd--dft.pdf (created 4/1/26) | **draft, not for filing** | G/H/I and J/K/L; Schedule D lines 1b/2/3, 8b/9/10, 21 ($3,000 / $1,500) unchanged |
+
+**Corrected (proven gap):** before v2.50 the box letters G-L were given for every year, also for 2024 sales, although the 2024 form has no such boxes. Now the box follows the edition of the tax year chosen: 2024 and earlier -> A-F (the "Form 1099-DA" option is read as the same situation on a Form 1099-B, to verify); 2025-2026 -> G-L (2026 flagged as draft). "All years" mixing both editions gives no box letter ("choose one tax year"). Screen, CSV/Excel and PDF use the same rule.
+
+**Also added:** column (a) includes the sale transaction ID when the file has one (i8949 2025, Column (a): "include the sale transaction ID number, if available"; Kraken `txid`, generic `Transaction ID` / `TxID` / `Trade ID`). A generic file whose amount column has no currency in its name (e.g. "Total") is now flagged "amounts read as USD - to verify"; a column named in another currency (e.g. "Total (EUR)") is still never read as USD, and no exchange rate is ever fetched or assumed.
+
+**Rules re-read, unchanged in the code (all confirmed by the hand-computed cases in `testusref.js`):**
+- Basis = cost including transaction fees (i8949 2025, "Basis and Recordkeeping"); (d) = net proceeds without a Form 1099-DA (i8949, Column (d)).
+- Exchange of digital assets: disposal; transaction costs allocated to the disposed asset (Treas. Reg. 1.1001-7(b)(2)(ii)(A), eCFR current text); new lot at fair market value (i8949 Example 5). Cascading costs withheld from the asset received (1.1001-7(b)(2)(ii)(B)): not modelled, Binance case flagged "to verify".
+- Holding period: day after acquisition, disposal day included, more than 1 year = long (i8949 "Short-Term or Long-Term").
+- Income: value when received = income and basis (Rev. Rul. 2023-14; i8949 Example 6). Missing value: out of the totals, never $0.
+- Lot identification relief: Notice 2025-7 extended by Notice 2026-20 through December 31, 2026 (https://www.irs.gov/pub/irs-drop/n-26-20.pdf); wallet-by-wallet from 2025 (Rev. Proc. 2024-28).
+- Form 1099-DA: first issued for 2025 sales; basis (box 1g) for covered digital assets acquired after 2025 (i8949 2025, Form 1099-B or Form 1099-DA; Instructions for Form 1099-DA (2026), https://www.irs.gov/pub/irs-pdf/i1099da.pdf). Wash-sale reporting on Form 1099-DA concerns tokenized securities (box 1i); Kryptax still only flags patterns.
+- Stablecoins (USDC, USDT...) are tokens: a sale or exchange is a disposal with its own basis; never taken as USD.
+
+**Reference cases (`testusref.js`, fictitious, computed on paper):** buy with fee, sale exactly on the anniversary (short) and the day after (long), year-end anniversary, transfer between own wallets (date and basis kept), convert with fee, staking income as basis, airdrop without value, unknown basis and missing purchase (to verify, never $0), stablecoin bought and sold, HIFO, duplicate line across two files, Schedule D 7/15/16/21 with both loss limits, boxes by edition in screen data, CSV and PDF data.
+
+**Still open (to verify, not coded):** 1099-DA column (f)/(g) adjustments (codes B, E...) and gross vs net proceeds when a 1099-DA is received; cascading transaction costs; allocation of unused basis to wallets at January 1, 2025 (Rev. Proc. 2024-28 safe harbor); income character and where to report it; collectibles (NFT) rate and code C; leap-day acquisitions; state taxes; final 2026 forms.
