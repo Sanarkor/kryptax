@@ -1,0 +1,4 @@
+Date,Wallet,Pair,Type,Sell,Buy,Price,Inverse Price,Date Updated,Status
+2026-02-15 11:00:00,Spot,ETH/BTC,Market,0.1 ETH,0.005 BTC,0.05,20,2026-02-15 11:00:01,Successful
+2026-02-16 11:00:00,Spot,BTC/EUR,Market,0.001 BTC,55 EUR,55000,0.0000181,2026-02-16 11:00:01,Successful
+2026-02-17 11:00:00,Spot,BTC/EUR,Market,0.001 BTC,55 EUR,55000,0.0000181,2026-02-17 11:00:01,Failed

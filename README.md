@@ -4,13 +4,13 @@ Kryptax propose deux modes, choisis par un onglet en haut de la page :
 - **FRANCE** : aide à remplir le **formulaire 2086** (plus-values de cession d'actifs numériques) : art. 150 VH bis du CGI, imposition forfaitaire de **12,8 %** (art. 200 C du CGI), BOI-RPPM-PVBMC-30.
 - **U.S.A.** (interface en anglais) : estimation des gains et pertes en USD au format **Form 8949** (Part I court terme / Part II long terme, cases G à L) et brouillon de **Schedule D (Form 1040)**, à vérifier. Méthodes FIFO, HIFO ou choix manuel du lot, suivi par portefeuille, comparaison avec un Form 1099-DA, pertes reportées. Export PDF, CSV et Excel (.xlsx). Règles et sources IRS : [docs/US-RULES.md](docs/US-RULES.md).
 
-Gratuit, open-source et anonyme : gardez le contrôle total de vos données.
+Gratuit, code source disponible et anonyme : gardez le contrôle total de vos données.
 
 En ligne : https://sanarkor.github.io/kryptax/
 
-> ⚠️ **Kryptax est un outil gratuit et open-source d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas (ni en mode FRANCE ni en mode U.S.A.) un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
+> ⚠️ **Kryptax est un outil gratuit, à code source disponible, d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas (ni en mode FRANCE ni en mode U.S.A.) un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
 
-Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
+Licence : [PolyForm Noncommercial 1.0.0](LICENSE) — logiciel fourni « tel quel », sans garantie.
 
 ## Fonctionnement 100 % dans le navigateur
 - Page statique hébergée sur GitHub Pages : **aucun compte, aucune clé API, aucun serveur Kryptax**.
@@ -40,6 +40,7 @@ Licence : [MIT](LICENSE) — logiciel fourni « tel quel », sans garantie.
 - Export **uniquement en PDF** : une synthèse, un tableau des cessions avec les colonnes 211 à 224 et une ligne GLOBAL, et le report sur la 2042-C.
 - Après le calcul : « Voir mon formulaire », puis directement un **aperçu plein écran** et le bouton « Enregistrer le PDF ».
 - Nom du fichier : `kryptax-formulaire-2086-<année>-sur-<année de déclaration>-<JJ>-<MM>-<AAAA>-<HH>-<MM>.pdf` (heure de Paris).
+- État au 31/12 (.json) : `kryptax-etat-<date de l’état>_<AAAA>-<MM>-<JJ>_<HH>-<mm>.json` (date et heure locales de l’export, à la minute).
 
 ## Mode U.S.A.
 - **Import** : CSV, Excel .xlsx ou PDF (au mieux). Colonnes : Date, Type (Buy, Sell, Convert, Send / Receive), Asset, Quantity, Total ou Price, Fee (USD) ; colonne Wallet facultative. Export « Trades » d'une plateforme reconnu. Fuseau horaire du fichier réglable ; les dates suffixées UTC, GMT, Z ou +00:00 sont lues en UTC.
@@ -53,6 +54,15 @@ Rien n'est envoyé, mais le navigateur **conserve en localStorage, sans limite d
 - les soldes et états d'ouverture (`kryptax.balances`, `kryptax.opening`), les opérations en monnaie classique (`kryptax.fiat`) ;
 - **le nom du titulaire** lu dans les relevés (`kryptax.holders`) ;
 - le cache des cours (`kryptax.prices2`, `kryptax.binsyms`).
+- le thème clair ou sombre choisi avec le bouton lune/soleil (`kx-theme`, seulement si vous cliquez ; sinon la préférence du système s'applique).
+
+Sur un écran d'au moins 1024 px, la page passe en deux colonnes (import et réglages à gauche, résultat à droite) avec un bandeau de chiffres clés déjà calculés ; en dessous de 1024 px, l'affichage ne change pas.
+
+Deux graphiques en barres s'affichent sous le résultat (empilés sur smartphone) : plus-value nette par année et par crypto vendue, uniquement à partir des montants déjà calculés (ligne 224 de chaque cession ; en U.S.A. les lignes « to verify » sont exclues, comme dans les totaux). Ils n'apparaissent ni dans le PDF, ni dans le CSV ou l'Excel, ni à l'impression.
+
+Sur PC (≥ 1024 px), la mise en page est plus compacte et plus large (entête, pied et avertissement resserrés ; à l'état initial, l'import occupe les deux colonnes) pour éviter le défilement vertical aux hauteurs courantes. En thème clair, l'avertissement est d'un rouge plus vif et les boutons « Pourquoi Kryptax ? » / « Soutenir Kryptax » d'un bleu plus vif.
+
+v2.22 : mise en page PC compacte v2.20 rétablie, avec logo et signature 2,25 fois plus grands et sous-titre 1,5 fois plus grand (écrans de plus de 560 px de haut). v2.23 : sur PC, la carte « 2. Résultat et export » est visible dès l'arrivée avec un message d'attente, « Quel fichier choisir ? » reste dans la colonne gauche ; mode U.S.A. : « Time zone of your file » est la 1re ligne des Options (set before import). v2.24 : même carte d'attente en mode U.S.A. sur PC (message en anglais) ; v2.25 : « 1. Import » sous les Options à gauche dès l'arrivée ; v2.26 : sur PC, « Pourquoi Kryptax ? » et « Soutenir Kryptax » en haut à droite de l'en-tête (pays et thème en dessous), en bas de page sur mobile. Conservé : sur PC avec souris, « Voir le PDF » ouvre le PDF dans un nouvel onglet (repli sur l'aperçu intégré si le navigateur bloque l'onglet) ; sur smartphone, l'aperçu intégré reste.
 
 Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur partagé, pensez à l'utiliser.
 
@@ -92,4 +102,4 @@ node test.js && node testformats.js && node testexport.js && node testgolden.js 
 Ouvrez une issue ou une pull request sur https://github.com/Sanarkor/kryptax. N'ajoutez **jamais de données réelles** (relevés, noms, montants) : uniquement des jeux fictifs. Lancez les tests avant de proposer une modification.
 
 ## Licence
-Code sous licence MIT (voir [LICENSE](LICENSE)). Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).
+Code source disponible sous licence PolyForm Noncommercial 1.0.0 (voir [LICENSE](LICENSE)) : utilisation, copie et modification gratuites pour un usage non commercial ; tout usage commercial est exclu sans accord écrit de l'auteur. Droits d'auteur conservés par Damien K. Metzler (Copyright 2026). Les bibliothèques incluses gardent leur propre licence (pdf.js et SheetJS : Apache 2.0 ; jsPDF : MIT).

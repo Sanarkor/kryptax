@@ -1,0 +1,10 @@
+Date,Type,Asset,Quantity,Total (USD),Fee (USD),Wallet
+01/05/2024,Buy,BTC,1,20000,0,Exchange A
+02/01/2024,Buy,BTC,1,40000,0,Exchange B
+03/01/2025,Send,BTC,0.5,,,Exchange A
+03/02/2025,Receive,BTC,0.499,,,Hardware wallet
+04/01/2025,Sell,BTC,0.499,30000,0,Hardware wallet
+04/02/2025,Sell,BTC,0.5,30000,0,Exchange B
+05/01/2025,Withdraw,ETH,2,,,Exchange A
+06/01/2025,Deposit,SOL,10,,,Exchange B
+06/15/2025,Sell,SOL,10,1500,0,Exchange B

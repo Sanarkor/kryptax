@@ -348,10 +348,26 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([U.forYear(b, 2025).wash.length, U.forYear(b, 2024).wash.length], [1, 0], 'wash flags filtered by tax year of the sale');
   const X = require('./us-export.js'), c = U.toCSV(b);
   eq([/^TO VERIFY \(\d+\)/m.test(c), /Possible wash sale pattern, line 3: ETH sold at a loss \(-\$1,000\.00\)/.test(c), X.summaryData(b, {}).checks.some(l => /Possible wash sale pattern, line 3.*26 U\.S\.C\. section 1091.*Not applied in the totals - to verify\./.test(l)), /wash/i.test(U.toCSV(a))], [true, true, true, false], 'exports: wash sale in the single TO VERIFY list (CSV/XLSX and PDF), only when flagged'); }
-// v2.11 export file names with local date and time
-{ const a = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 7)), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2026, 10, 1, 9, 5, 8));
-  const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$/;
-  eq([a, ok.test(a), ok.test(U.stampName('kryptax-us-summary', 'pdf')), /[\\/:*?"<>| ]/.test(a), a !== b, /^kryptax-income_.*\.csv$/.test(U.stampName('kryptax-income', 'csv'))], ['kryptax-us-summary_2026-11-01_09-05-07.pdf', true, true, false, true, true], 'export names: prefix kept, local date + time with seconds, no forbidden characters, different instants -> different names'); }
+// v2.15 export file names to the minute; same minute -> short suffix _2, _3 (session), only in that case
+{ const t = new Date(2031, 10, 1, 9, 5, 7), a = U.stampName('kryptax-us-summary', 'pdf', t), b = U.stampName('kryptax-us-summary', 'pdf', new Date(2031, 10, 1, 9, 5, 50)), c = U.stampName('kryptax-us-summary', 'pdf', t);
+  const x = U.stampName('kryptax-us-summary', 'csv', t), y = U.stampName('kryptax-us-summary', 'xlsx', t), z = U.stampName('kryptax-us-summary', 'pdf', new Date(2031, 10, 1, 9, 6, 0));
+  const ok = /^kryptax-us-summary_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(_\d+)?\.pdf$/;
+  eq([a, b, c, x, y, z, ok.test(U.stampName('kryptax-us-summary', 'pdf')), /[\\/:*?"<>| ]/.test(a), /^kryptax-income_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(_\d+)?\.csv$/.test(U.stampName('kryptax-income', 'csv'))],
+    ['kryptax-us-summary_2031-11-01_09-05.pdf', 'kryptax-us-summary_2031-11-01_09-05_2.pdf', 'kryptax-us-summary_2031-11-01_09-05_3.pdf', 'kryptax-us-summary_2031-11-01_09-05.csv', 'kryptax-us-summary_2031-11-01_09-05.xlsx', 'kryptax-us-summary_2031-11-01_09-06.pdf', true, false, true],
+    'export names: prefix_YYYY-MM-DD_HH-MM.ext, suffix _2/_3 only when the same name was already given, never twice the same name'); }
+// v2.15 option choices kept in localStorage: only the 4 setting keys, invalid values ignored, reset clears, same totals
+{ const mk = () => { const m = new Map(); return { m, getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+  const s1 = mk(); U.saveSettings(s1, { method: 'HIFO', fees: 'DISPOSE', cat: 'none', fstat: 'mfs', tz: 'America/Chicago', picks: { 3: { lot: 1, qty: 1 } }, txs: [1], amount: 123, file: 'x.csv' });
+  const st = JSON.parse(s1.m.get(U.SET_KEY));
+  const s2 = mk(); s2.setItem(U.SET_KEY, JSON.stringify({ method: 'LIFO', fees: 5, cat: 'zzz', fstat: 'mfs', tz: 'Mars/Base' })); const s3 = mk(); s3.setItem(U.SET_KEY, '{oops');
+  const bad = { getItem: () => { throw new Error('private'); }, setItem: () => { throw new Error('private'); }, removeItem: () => { throw new Error('private'); } };
+  const s4 = mk(); U.saveSettings(s4, { method: 'HIFO' }); U.clearSettings(s4);
+  const S = U.loadSettings(s1), fromSave = U.compute(lt, { method: S.method, fees: S.fees }).totals, fromClick = U.compute(lt, { method: 'HIFO', fees: 'DISPOSE' }).totals;
+  eq([[...s1.m.keys()], Object.keys(st).sort(), JSON.stringify(U.loadSettings(s2)), JSON.stringify(U.loadSettings(s3)), JSON.stringify(U.loadSettings(bad)), U.saveSettings(bad, { method: 'HIFO' }), s4.m.size, JSON.stringify(fromSave) === JSON.stringify(fromClick)],
+    [[U.SET_KEY], ['cat', 'fees', 'fstat', 'method', 'tz'], '{"fstat":"mfs"}', '{}', '{}', false, 0, true],
+    'saved settings: one key, only the 4 choices (no file data or amounts), invalid/corrupt/unavailable storage -> defaults without error, reset clears, same totals from save or click'); }
+{ const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8');
+  eq([/id="ussetreset">Reset saved settings<\/a>/.test(src), /if \(LS\) clearSettings\(LS\)/.test(src), /keepSet\(\); if \(cur\) render\(\)/.test(src)], [true, true, true], 'U.S. page: "Reset saved settings" link, saved on each option change'); }
 { const src = require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8'), n = id => (src.match(new RegExp('<select id="' + id + '"', 'g')) || []).length;
   eq([n('usmethod'), n('uscat'), n('usfees'), n('usfstat'), /function optsHtml\(\)[\s\S]*id="usfstat"[\s\S]*insertBefore\(opts, imp\)/.test(src), /fstat = ''; cat = ''; drawOpts\(\)/.test(src), /if \(cur\) render\(\)/.test(src)],
     [1, 1, 1, 1, true, true, true], 'options block at the top: the 4 selects exist once, placed before the import, Reset restores defaults, change re-computes'); }
@@ -384,5 +400,65 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const c = X.COPY, a1 = raw(); X.COPY = [0, 0, 0]; const a0 = raw(); X.COPY = c;
   const amb = '0.631 0.384 0.027 rg', n = b => b.toString('latin1').split(amb).length - 1;
   eq([txt(a1) === txt(a0), JSON.stringify(c), n(a0), n(a1) >= 6, /-\$1,000\.00/.test(txt(a1))], [true, '[161,98,7]', 0, true, true], 'PDF: only the colour of the amounts to copy changes (dark amber #A16207), text and amounts identical'); }
-console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
 
+// v2.16 PDF: "What to copy and where" block at the top of page 1, same amounts as the screen guide() and the CSV; totals/head aligned right like the amounts
+{ const X = require('./us-export.js'), { jsPDF } = require('./jspdf.umd.min.js'), at = require('./jspdf.plugin.autotable.min.js'); if (at.applyPlugin) at.applyPlugin(jsPDF);
+  const p = U.fromCSVText(require('fs').readFileSync(__dirname + '/testdata/us/us_fictif.csv')), r = U.compute(p.txs), o = { cat: 'none', fstat: 'other' }, G = U.guide(r, o), D = X.summaryData(r, o), csv = U.toCSV(r, o);
+  const f = v => (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','), am = D.copy.filter(c => !c.text).map(c => [c.d, c.e, c.h]).flat().filter(Boolean);
+  const want = G.parts.filter(P => P.n).map(P => [f(P.d), f(P.e), f(P.h)]).flat().concat([f(G.n7), f(G.n15), f(G.n16)]);
+  const plain = s => s.replace(/[$,]/g, ''), txt = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, r, o).output('arraybuffer')) }).toString();
+  const nb = X.summaryData(r, {}), src = require('fs').readFileSync(__dirname + '/us-export.js', 'utf8');
+  eq([JSON.stringify(am) === JSON.stringify(want), am.every(a => csv.includes(a) || csv.includes(plain(a))), txt.indexOf('What to copy and where') < txt.indexOf('To verify (') && txt.indexOf('To verify (') < txt.indexOf('Part I - Short-term'),
+    D.copy.some(c => /Staking .*where to report: to verify/.test(c.label)), nb.copy[0].label, D.copy.every(c => /^[\x20-\x7e]*$/.test(c.label)),
+    /c\.section !== 'body' && \[3, 4, 7\]\.includes\(c\.column\.index\)\) c\.cell\.styles\.halign = 'right'/.test(src), /c\.section === 'head' && c\.column\.index >= 2 && c\.column\.index <= 5\) c\.cell\.styles\.halign = 'right'/.test(src)],
+    [true, true, true, true, 'Form 8949 box not chosen: choose it in Options at the top.', true, true, true],
+    'PDF: What to copy and where on page 1 (= screen guide = CSV amounts), then To verify; box not chosen said; ASCII; head and totals right-aligned under their columns'); }
+// v2.17 screen "To verify (N)": same points, same text, same order, grouped by importance, N = number of points
+{ const r = U.compute(U.fromCSVText(require('fs').readFileSync(__dirname + '/testdata/us/us_fictif.csv')).txs, { method: 'HIFO' }), C = U.checks(r, {}), H = U.checksBlock(C);
+  const items = (H.match(/<li>[\s\S]*?<\/li>/g) || []).map(x => x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'));
+  const heads = (H.match(/<p class="uschk-h">([^<]*)<\/p>/g) || []).map(x => x.replace(/<[^>]+>/g, ''));
+  const N = +(/To verify \((\d+)\)/.exec(H) || [])[1], ranks = C.map(c => c.rank);
+  eq([JSON.stringify(items) === JSON.stringify(C.map(c => c.msg)), new Set(items).size === items.length, N === C.length && C.length >= 3, ranks.every((x, i) => !i || ranks[i - 1] <= x), new Set(heads).size === heads.length, /<b>Line \d+<\/b>: /.test(H)],
+    [true, true, true, true, true, true], 'To verify on screen: every point kept with the same text and order, no duplicate, N = points, groups in order of importance, "Line N" in bold'); }
+{ const B = U.barData(r, r), sA = x => Math.round(x.reduce((a, i) => a + i.v, 0) * 100) / 100, ys = U.years(r).filter(y => r.rows.some(x => new Date(x.sold).getUTCFullYear() === y));
+  const per = ys.map(y => { const R = U.forYear(r, y), b = U.barData(r, R); return sA(b.assets) === R.totals.gain ? 1 : 0; });
+  eq([sA(B.assets) === r.totals.gain, sA(B.years) === r.totals.gain, per.every(x => x === 1), B.years.length === ys.length, r.rows.some(x => x.status !== 'ok') ? B.assets.every(i => isFinite(i.v)) : true],
+    [true, true, true, true, true], 'Charts: sum of the asset bars = net gain shown (each year and all years), sum of the year bars = total, "to verify" lines left out'); }
+{ const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), E = fs.readFileSync(__dirname + '/us-engine.js', 'utf8'), imp = (H.match(/<section id="usimp"[\s\S]*?<\/section>/) || [''])[0];
+  eq([/<label class="ustzopt">Time zone of your file <select id="ustz"><\/select><\/label>/.test(H), /g\.insertBefore\(tzLab, g\.firstChild\)/.test(E), /saveSettings\(LS, \{ method, fees, cat, fstat, tz: fileTz \}\)/.test(E)],
+    [true, true, true], 'Time zone of the file: first line of Options (set before import), same select and saved settings'); void imp; }
+{ const C = fs.readFileSync(__dirname + '/style.css', 'utf8');
+  eq([/\.usmode>#usresult:empty\{display:flex/.test(C), /\.usmode>#usresult:empty::before\{content:"Your results will appear here after the calculation\."\}/.test(C), /#usleft>#usside:empty\{display:none\}/.test(C), /usmode:has\(#usresult:empty\)>#usleft\{grid-column:1\/-1/.test(C), /usmode:has\(#usresult:empty\)\{grid-template-columns/.test(C) || /usmode:has\(#usresult:empty\)>#usleft\{[^}]*display:grid/.test(C)], [true, true, true, false, false], 'Wide screens, before import: Options then 1. Import stacked on the left as in the result layout, empty result card with an English waiting message only'); }
+{ const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), A = fs.readFileSync(__dirname + '/app.js', 'utf8'), m = H.match(/<span class="law uslaw" lang="en" hidden>([^<]*)<\/span>/), x = m ? m[1] : '';
+  eq([!!m, /^Sources: IRS /.test(x), /[àâçéèêëîïôûùüÿœ]|CGI|seuil|art\./i.test(x), /\$\('footer \.uslaw'\); if \(ul\) ul\.hidden = !us0;/.test(A)], [true, true, false, true], 'U.S.A. footer sources line: English only, shown only in U.S.A.'); }
+// v2.37: several files merged like the French mode; a line already in an earlier file counted once; lines renamed F<n>:<line>
+{ const a = { txs: [{ line: 2, date: 2, type: 'BUY', asset: 'A', qty: 1, usd: 10 }, { line: 3, date: 5, type: 'SELL', asset: 'A', qty: 1, usd: 12 }], skipped: [{ line: 4, why: 'x' }], missingCols: [] }, b = { txs: [{ line: 2, date: 2, type: 'BUY', asset: 'A', qty: 1, usd: 10 }, { line: 3, date: 3, type: 'BUY', asset: 'B', qty: 2, usd: 5 }], skipped: [], missingCols: [] };
+  const m = U.mergeFiles([{ name: 'a', p: a }, { name: 'b', p: b }]), one = U.mergeFiles([{ name: 'a', p: a }]);
+  eq([m.txs.map(t => t.line).join(' '), m.dupes, m.skipped[0].line, one.txs === a.txs, one.dupes], ['F1:2 F2:3 F1:3', 1, 'F1:4', true, 0], 'merge: duplicate line counted once, sorted by date, single file unchanged'); }
+// v2.36a: every text line of the U.S. and U.K. PDFs goes through ascii() (dashes, quotes, ellipsis, non-breaking spaces mapped, nothing else non-ASCII)
+{ const fs = require('fs'); for (const f of ['us-export.js', 'uk-engine.js']) { const S = fs.readFileSync(__dirname + '/' + f, 'utf8'), m = /const ascii = (s => [^\n]*?'\?'\));/.exec(S), A = m && eval(m[1]);
+    const out = A ? A('Kryptax \u2014 \u201ctest\u201d \u2018a\u2019 \u2026 1\u00a0000\u202f\u20ac \u2212 \u2264 \u00d7') : '';
+    eq([/doc\.text = \(s, \.\.\.a\) => t0\(Array\.isArray\(s\) \? s\.map\(ascii\) : ascii\(s\), \.\.\.a\)/.test(S), /^[\x20-\x7e]*$/.test(out), !/\\u2014 U\.S\./.test(S)], [true, true, true], f + ': PDF text ASCII only (' + out + ')'); } }
+// v2.41: Binance "Transaction History" (ENTIRELY FICTITIOUS data): Time column, fixed UTC offset, banner and empty columns (Excel), pairs, internal moves
+const BN_H = 'User ID,Time,Account,Operation,Coin,Change,Remark';
+const BN_L = ['1,2025-03-01 10:00:00,Spot,Deposit,EUR,500,', '1,2025-03-01 10:00:05,Spot,Transaction Buy,AAA,2,', '1,2025-03-01 10:00:05,Spot,Transaction Spend,EUR,-400,', '1,2025-03-01 10:00:05,Spot,Transaction Fee,AAA,-0.01,',
+  '1,2025-03-02 09:00:00,Funding,Gift Card Redemption,BBB,1,Gift Card', '1,2025-03-02 09:01:00,Funding,Transfer Between Spot and Funding,BBB,-1,', '1,2025-03-02 09:01:00,Spot,Transfer Between Spot and Funding,BBB,1,',
+  '1,2025-03-03 00:30:00,Spot,Staking Rewards,BBB,0.01,', '1,2025-03-05 12:00:00,Spot,Binance Convert,AAA,-0.5,', '1,2025-03-05 12:00:00,Spot,Binance Convert,CCC,10,',
+  '1,2025-04-06 00:30:00,Spot,Sell Crypto to Fiat,EUR,300,', '1,2025-04-06 00:30:01,Spot,Sell Crypto to Fiat,AAA,-1,', '1,2025-04-07 12:00:00,Spot,Sell Crypto to Fiat,USD,120,', '1,2025-04-07 12:00:01,Spot,Sell Crypto to Fiat,CCC,-5,',
+  '1,2025-05-01 08:00:00,Spot,Withdraw,BBB,-0.5,', '1,2025-05-02 08:00:00,Spot,Fiat Withdraw,EUR,-300,'];
+const BN_CSV = BN_H + '\n' + BN_L.join('\n'), BN_NAME = 'Binance-Transaction-History-202601011200(UTC+1)-part1-of1.csv';
+const BN_XLSX = (off) => [[], ['', '', 'Transaction History'], ['', '', 'User ID', '1', 'Period(' + off + ')', 'x'], [], ['', '', ...BN_H.split(',').flatMap(h => [h, ''])]].concat(BN_L.map(l => ['', '', ...l.split(',').flatMap(v => [v, ''])]));
+{ const p = U.fromCSVText(BN_CSV, BN_NAME), T = p.txs;
+  eq([T.map(t => t.type).join(' '), p.platformNote], ['BUY IN INCOME CONVERT SELL SELL OUT', 'binance'], 'Binance (U.S.): Time column read, gift card = IN, withdraw = OUT, internal moves ignored');
+  const sEur = T.find(t => t.type === 'SELL' && t.asset === 'AAA'), sUsd = T.find(t => t.type === 'SELL' && t.asset === 'CCC'), buy = T[0];
+  eq([isNaN(sEur.usd), sUsd.usd, isNaN(buy.usd), buy.qty, p.skipped.some(s => /300\.00 EUR not converted to USD/.test(s.why) && s.kept)], [true, 120, true, 1.99, true], 'Binance (U.S.): USD used as USD; EUR amount never taken as USD (value missing, quoted)');
+  eq([new Date(sUsd.date).toISOString(), sUsd.tz], ['2025-04-07T11:00:00.000Z', 'UTC'], 'Binance (U.S.): fixed UTC+1 offset -> UTC instant');
+  const r = U.compute(T, { fileTz: 'Asia/Tokyo', taxTz: 'America/New_York' }), rw = r.rows.find(x => x.asset === 'CCC' && x.proceeds === 120);
+  eq([!!rw, rw && /to verify/.test(rw.status)], [true, true], 'Binance (U.S.): USD sale kept; CCC basis from a token exchange unknown -> to verify, not invented');
+  const sh = U.compute(T, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows.map(x => x.date), sh2 = U.compute(T, { fileTz: 'Asia/Tokyo', taxTz: 'America/New_York' }).rows.map(x => x.date);
+  eq(JSON.stringify(sh) === JSON.stringify(sh2), true, 'Binance (U.S.): dates with a known offset do not depend on the page time zone');
+  const x = U.parseRows(BN_XLSX('UTC+1'), 'export.xlsx'), m = U.mergeFiles([{ name: 'a.csv', p }, { name: 'b.xlsx', p: x }]);
+  eq([x.txs.length, m.txs.length, m.dupes], [T.length, T.length, T.length], 'Binance (U.S.) Excel: banner and empty columns; CSV + Excel counted once'); }
+{ const L = fs.readFileSync(__dirname + '/testdata/binance_fictif.pdf.txt', 'utf8').split('\n'), p = U.fromPdfLines(L), q = U.fromCSVText(BN_CSV, BN_NAME), k = t => [t.type, t.asset, t.date, t.qty, t.usd, t.tz].join('|');
+  eq([p.txs.length, JSON.stringify(p.txs.map(k)) === JSON.stringify(q.txs.map(k))], [q.txs.length, true], 'Binance PDF (U.S.): same reading as the CSV'); }
+console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
