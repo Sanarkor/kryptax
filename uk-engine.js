@@ -36,6 +36,7 @@
   function otherCurrency(head) { for (const x of head.map(norm)) if (/^(price|total|value|fee|fees|subtotal|proceeds)\b/.test(x)) { const c = curOf(x); if (c && c !== 'GBP') return c; } return null; }
   function kind(t) {
     t = norm(t);
+    if (/^purchase of goods/.test(t)) return 'SPEND'; // before BUY: spending tokens on goods is a disposal, not an acquisition
     if (/^(buy|purchase|bought)/.test(t)) return 'BUY';
     if (/^(sell|sold|sale)/.test(t)) return 'SELL';
     if (/airdrop/.test(t)) return 'AIRDROP';
