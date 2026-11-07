@@ -74,7 +74,7 @@
       ['#kofinote > h3', 'Spenden'], ['#kofinote > p', 'Eine Schaltfläche „Kryptax unterstützen“ führt zu Ko-fi (externe Website, öffnet sich in einem neuen Tab). Eine Spende ist ein kleines Dankeschön von Herzen: sie ist kostenlos und freiwillig, begründet keinen Anspruch auf eine Leistung oder einen Vorteil und kann, da sie aus freiem Willen erfolgt, weder erstattet noch storniert werden. Kryptax sendet keine Daten an Ko-fi: nur Ihr Browser öffnet die Seite, wenn Sie klicken.'],
       ['#privacy .pv-in > :nth-child(13)', 'Herausgeber und Hosting'], ['#privacy .pv-in > :nth-child(14)', 'Herausgeber: Damien M. alias „Sanarkor“. Hosting: GitHub Pages (GitHub, Inc.).'],
       ['#privclose', 'Schließen']]);
-    const deLang = () => { try { return localStorage.getItem('kx-de-lang') === 'de'; } catch (e) { return false; } };
+    const deLang = () => { try { return localStorage.getItem('kx-de-lang') !== 'en'; } catch (e) { return true; } }; // v2.47 : allemand par défaut, anglais seulement si choisi
     let curReg = null;
     const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US';
       [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
