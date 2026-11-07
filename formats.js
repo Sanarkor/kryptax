@@ -117,6 +117,8 @@
   /* ---------- Formats de plateformes (en-têtes publiés) ---------- */
   const FORMATS = [
     { id: 'binance', label: 'Binance (historique des transactions)', need: ['utc time', 'account', 'operation', 'coin', 'change'] },
+    /* v2.40 : export récent « Transaction History » : colonne « Time » (heure du fuseau indiqué « (UTC+1) » dans le bandeau ou le nom du fichier) */
+    { id: 'binance', label: 'Binance (historique des transactions)', need: ['time', 'account', 'operation', 'coin', 'change'], localTime: true },
     { id: 'binance-trades', label: 'Binance (historique des trades)', need: ['date(utc)', 'pair', 'side', 'price', 'executed', 'amount', 'fee'] },
     { id: 'binance-trades-old', label: 'Binance (historique des trades)', need: ['date(utc)', 'market', 'type', 'price', 'amount', 'total', 'fee', 'fee coin'] },
     { id: 'binance-convert', label: 'Binance (Convert)', need: ['date', 'pair', 'sell', 'buy', 'price', 'status'] },
@@ -128,7 +130,7 @@
   function detect(rows) {
     for (let i = 0; i < Math.min(rows.length, 25); i++) {
       const h = (rows[i] || []).map(x => norm(x));
-      for (const f of FORMATS) if (f.need.every(n => h.includes(n))) return { id: f.id, label: f.label, hi: i, col: n => h.indexOf(n) };
+      for (const f of FORMATS) if (f.need.every(n => h.includes(n))) return { id: f.id, label: f.label, hi: i, col: n => h.indexOf(n), localTime: !!f.localTime };
     }
     return null;
   }
@@ -145,7 +147,7 @@
     return null;
   }
   /* Mouvements internes (aucun changement de propriétaire) : ignorés */
-  const INTERNAL = /transfer between|transfer funds|main and funding|spot account and|subscription|redemption|savings purchase|allocation|deallocation|autoallocate|migration|spottostaking|stakingfromspot|stakingtospot|spotfromstaking|spottofutures|spotfromfutures|exchange deposit|exchange withdrawal|pro withdrawal|pro deposit|transfer\(stake\)|transfer\(unstake\)|transfer \(stake\)|transfer \(unstake\)|isolated margin|cross margin|futures|^margin/;
+  const INTERNAL = /transfer between|transfer funds|main and funding|spot account and|subscription|redemption|savings purchase|staking purchase|allocation|deallocation|autoallocate|migration|spottostaking|stakingfromspot|stakingtospot|spotfromstaking|spottofutures|spotfromfutures|exchange deposit|exchange withdrawal|pro withdrawal|pro deposit|transfer\(stake\)|transfer\(unstake\)|transfer \(stake\)|transfer \(unstake\)|isolated margin|cross margin|futures|^margin/;
 
   /* Groupe de jambes (même horodatage / même refid) -> achat, vente ou échange. legs : { asset, d (signé), fee? } */
   function fromLegs(legs, base, push, opt) {
@@ -165,16 +167,28 @@
     return ok;
   }
 
+  /* v2.40 : décalage fixe « (UTC+1) », « (UTC-05:00) »… lu dans le bandeau au-dessus de l'en-tête, sinon dans le nom du fichier.
+     Décalage FIXE (ms) : « UTC+1 » ne veut pas dire heure de Paris (pas de passage à l'heure d'été). null si absent ou ambigu. */
+  function fixedOffset(rows, hi, name) {
+    const RE = /\(\s*UTC\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?\s*\)/gi, found = new Set();
+    const scan = s => { for (const m of String(s == null ? '' : s).matchAll(RE)) { const h = +m[2], mi = +(m[3] || 0); if (h <= 14 && mi < 60) found.add((m[1] === '-' ? -1 : 1) * (h * 60 + mi) * 60000); } };
+    const fromRows = new Set(); (rows || []).slice(0, Math.max(0, hi)).forEach(r => (r || []).forEach(scan)); found.forEach(x => fromRows.add(x));
+    if (fromRows.size === 1) return [...fromRows][0]; if (fromRows.size > 1) return null;
+    scan(name); return found.size === 1 ? [...found][0] : null;
+  }
   function parse(rows, fmt, o, uid) {
     o = o || {}; uid = uid || (() => Math.random().toString(36).slice(2));
     const head = rows[fmt.hi].map(x => norm(x)), body = rows.slice(fmt.hi + 1), c = n => head.indexOf(n), g = (r, n) => { const i = c(n); return i < 0 ? '' : r[i]; };
     const out = [], bad = [], skipped = []; let seq = 0;
+    /* v2.40 : Binance « Time » = heure locale du fichier ; converti en UTC avec le décalage fixe lu, sinon lu en UTC et signalé */
+    let tzShift = 0, tzNote = '';
+    if (fmt.localTime) { const off = fixedOffset(rows, fmt.hi, o.source); if (off == null) tzNote = 'fuseau des heures non indiqué (colonne « Time ») : heures lues en UTC, à vérifier'; else { tzShift = off; tzNote = 'heures du fichier en UTC' + (off < 0 ? '-' : '+') + (Math.abs(off) / 3600000) + ' (décalage fixe), converties en UTC'; } }
     const base = { platform: fmt.label.split(' (')[0], source: o.source, qtyStatus: 'ok', feeInKind: false };
     const push = (t, date, rawType) => out.push(Object.assign({ id: uid(), seq: seq++, date, rawType }, base, t, { qty: Math.abs(t.qty), seq: seq }));
     const single = (date, raw, asset, q, opt) => {
       opt = opt || {}; const k = kindOf(raw), a = asset;
       if (FIAT.includes(a)) { skipped.push(raw); return true; }
-      if (INTERNAL.test(norm(raw))) { skipped.push(raw); return true; }
+      if (INTERNAL.test(norm(raw)) && k !== 'GIFT') { skipped.push(raw); return true; } // v2.40 : « Gift Card Redemption » = réception (pas un mouvement interne)
       if (k === 'GIFT') push({ type: q >= 0 ? 'RECEIVE' : 'SEND', asset: a, qty: q, eur: opt.eur || 0 }, date, raw);
       else if (k && q > 0) push({ type: k, asset: a, qty: q, eur: opt.eur || 0 }, date, raw);
       else if (/fee|frais/.test(norm(raw)) && q < 0) push({ type: 'FEE', asset: a, qty: q, eur: 0 }, date, raw);
@@ -186,18 +200,23 @@
       else return false;
       return true;
     };
-    const TRADE_B = /^(buy|sell|fee|transaction (related|buy|spend|revenue|sold|fee)|small assets exchange bnb|binance convert|large otc trading|auto-invest transaction|binance card spending|card spending|convert|p2p trading|fiat (deposit|withdraw)?)$/;
+    const TRADE_B = /^(buy|sell|fee|transaction (related|buy|spend|revenue|sold|fee)|small assets exchange bnb|binance convert|sell crypto to fiat|large otc trading|auto-invest transaction|binance card spending|card spending|convert|p2p trading|fiat (deposit|withdraw)?)$/;
 
     if (fmt.id === 'binance' || fmt.id === 'kraken-ledgers') {
       const groups = new Map(), order = [];
       body.forEach((r, i) => {
         const kr = fmt.id === 'kraken-ledgers';
-        const date = utc(kr ? g(r, 'time') : g(r, 'utc time')), op = kr ? (g(r, 'type') + (g(r, 'subtype') ? ' ' + g(r, 'subtype') : '')) : g(r, 'operation');
+        const date = (kr ? utc(g(r, 'time')) : fmt.localTime ? utc(g(r, 'time')) - tzShift : utc(g(r, 'utc time'))), op = kr ? (g(r, 'type') + (g(r, 'subtype') ? ' ' + g(r, 'subtype') : '')) : g(r, 'operation');
         const asset = kr ? kAsset(g(r, 'asset')) : up(g(r, 'coin')), d = num(kr ? g(r, 'amount') : g(r, 'change'), 'EN'), fee = kr ? Math.abs(num(g(r, 'fee'), 'EN')) || 0 : 0;
         if (!isFinite(date) || !asset || !isFinite(d)) { bad.push(i); return; }
         const nop = norm(op), isTrade = kr ? /^(trade|spend|receive|adjustment)\b/.test(nop) && !/staking|earn/.test(nop) : TRADE_B.test(nop);
         if (isTrade) {
-          const key = kr ? 'r' + g(r, 'refid') : 'b' + date;
+          let key = kr ? 'r' + g(r, 'refid') : 'b' + date;
+          /* v2.40 : jambes d'une même opération Binance à 1-2 s d'écart (ex. « Sell Crypto to Fiat » : EUR à hh:mm:48, BTC à hh:mm:49) :
+             rattachées au groupe de même opération encore à sens unique dont l'heure est à 2 s près, si la jambe est de sens opposé */
+          if (!kr && !groups.has(key) && !/fee/.test(nop)) for (let j = order.length - 1; j >= 0 && j >= order.length - 6; j--) { const G0 = groups.get(order[j]);
+            if (norm(G0.op) !== nop || Math.abs(G0.date - date) > 2000 || !G0.legs.length) continue;
+            const sg = G0.legs.map(l => Math.sign(l.d)); if (sg.every(x => x === sg[0]) && sg[0] !== Math.sign(d)) { key = order[j]; break; } }
           if (!groups.has(key)) { groups.set(key, { date, op, legs: [], fees: [], pay: /card/.test(nop) }); order.push(key); }
           const G = groups.get(key);
           if (/fee/.test(nop) && !kr) G.fees.push({ asset, d }); else G.legs.push({ asset, d });
@@ -275,9 +294,9 @@
         else if (!single(date, ty + (nt === 'transfer' ? (io === 'incoming' ? ' incoming' : ' outgoing') : ''), a, io === 'outgoing' ? -q : q, { eur: fiat === 'EUR' ? v : 0 })) bad.push(i);
       });
     }
-    return { txs: out, bad, skipped, format: fmt.label };
+    return { txs: out, bad, skipped, format: fmt.label, tzNote };
   }
 
-  const api = { norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
+  const api = { fixedOffset, norm, utc, kAsset, qtyCoin, splitPair, guessMap, headCur, headerRow, parseCSV, decodeCSV, detect, parse, kindOf, FORMATS };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxFormats = api;
 })(this);

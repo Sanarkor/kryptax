@@ -59,9 +59,9 @@
       [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
       if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? 'Country: Deutschland' : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
       document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
-      { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
+      { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } { const dl = $('footer .delaw'); if (dl) dl.hidden = !d; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
-      if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'Crypto taxes in Germany: coming soon'; }
+      if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'Anlage SO summary for German crypto taxes (estimate)'; }
       if (save) try { localStorage.setItem(K, d ? 'DE' : g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
     let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK' || s === 'DE') v0 = s; } catch (e) {}
     if (!v0) { let L = [], Z = ''; try { L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; } catch (e) {} try { Z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {} v0 = autoRegion(L, Z); }
@@ -110,7 +110,8 @@
     const domW = r0.getBoundingClientRect().width / zoom, sf = canvasFont(s, t, domW - t.length * lsS, 40);
     const a0 = inkX(t.charAt(0), sf, 40), aN = inkX(t.charAt(t.length - 1), sf, 40), g = inkX.c.getContext('2d'); g.font = sf; const lastAdv = g.measureText(t.charAt(t.length - 1)).width;
     const inkW = domW - a0[0] - (lastAdv - aN[1]) - lsS; /* encre du texte complet à 40 px */
-    const k = (R - L) / inkW; s.style.fontSize = (40 * k).toFixed(3) + 'px'; s.style.left = (L - a0[0] * k + (PC ? 38 : 0)).toFixed(2) + 'px'; } /* PC : signature entière décalée d'environ 1 cm (38 px) vers la droite ; mobile inchangé */
+    const BIG = window.matchMedia && matchMedia('(min-width: 1024px) and (min-height: 561px)').matches && !matchMedia('(pointer: coarse)').matches; /* v2.40 PC : logo +15 % (CSS), signature +25 % au total */
+    const k = (R - L) / inkW * (BIG ? 1.25 / 1.15 : 1); s.style.fontSize = (40 * k).toFixed(3) + 'px'; s.style.left = (L - a0[0] * k + (PC ? 38 : 0)).toFixed(2) + 'px'; } /* PC : signature entière décalée d'environ 1 cm (38 px) vers la droite ; mobile inchangé */
   { let q = 0; const run = () => { if (q) return; q = requestAnimationFrame(() => { q = 0; fitSig(); }); };
     fitSig(); requestAnimationFrame(() => requestAnimationFrame(run)); /* après le premier rendu */
     setTimeout(run, 300); setTimeout(run, 1000); /* secours */
@@ -228,6 +229,7 @@
       if (!res.txs.length) return showErr(name + ' : ' + fmt.label + ' reconnu, mais aucune opération crypto lisible.');
       holders[name] = KP.holderFromRows(rows); saveHolders(); txs = txs.concat(res.txs); E.detectSwaps(txs);
       save(); renderTx(); autoRun();
+      if (res.tzNote) { holdInfo = name + ' : ' + res.tzNote + '.'; renderFiles(); } // v2.40 : fuseau fixe lu dans le fichier (ou absent : à vérifier)
       if (res.bad.length) showErr(res.bad.length + ' ligne' + (res.bad.length > 1 ? 's' : '') + ' de ' + name + ' non lue' + (res.bad.length > 1 ? 's' : '') + ' (type d’opération inconnu ou valeur manquante) : vérifiez ce fichier.');
       return;
     }

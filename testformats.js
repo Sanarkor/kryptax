@@ -132,4 +132,29 @@ chk(!fs.readdirSync(__dirname + '/testdata/formats').some(f => new RegExp(['rev'
   const z2 = KP.importRows(rows.slice(3, 4), m, { strict: true, head: rows[0], source: 'y.csv' }, u).txs[0]; z2.eur = 5; KP.resolveRecon([z2], [z2], () => 0);
   chk(z2.qtyStatus === 'à confirmer' && z2.reconPending && z2.reconPending.choices.length > 1 && z2.qty === 104190 && z2.reconPending.choices[0] === 104190, 'sans cours : « à confirmer » (bloque le PDF)');
 }
+// v2.40 : Binance « Transaction History » récent (colonne « Time », fuseau fixe dans le bandeau ou le nom), données ENTIÈREMENT FICTIVES
+{ const H = 'User ID,Time,Account,Operation,Coin,Change,Remark';
+  const L = ['1,2025-03-01 10:00:00,Spot,Deposit,EUR,500,', '1,2025-03-01 10:00:05,Spot,Transaction Buy,AAA,2,', '1,2025-03-01 10:00:05,Spot,Transaction Spend,EUR,-400,', '1,2025-03-01 10:00:05,Spot,Transaction Fee,AAA,-0.01,',
+    '1,2025-03-02 09:00:00,Funding,Gift Card Redemption,BBB,1,Gift Card', '1,2025-03-02 09:01:00,Funding,Transfer Between Spot and Funding,BBB,-1,', '1,2025-03-02 09:01:00,Spot,Transfer Between Spot and Funding,BBB,1,',
+    '1,2025-03-02 09:02:00,Spot,Staking Purchase,BBB,-1,', '1,2025-03-03 00:30:00,Spot,Staking Rewards,BBB,0.01,', '1,2025-07-01 09:00:00,Spot,Staking Redemption,BBB,1,',
+    '1,2025-07-10 11:20:48,Spot,Sell Crypto to Fiat,EUR,300,', '1,2025-07-10 11:20:49,Spot,Sell Crypto to Fiat,AAA,-1,', '1,2025-07-10 12:00:00,Spot,Fiat Withdraw,EUR,-300,'];
+  const ban = 'Transaction History\nUser ID,1,Period(UTC+1),2025-01-01 to 2025-12-31\n\n';
+  const rd2 = (t, name) => { const R = F.parseCSV(t), d = F.detect(R); return d && Object.assign(F.parse(R, d, { source: name }, uid), { det: d }); };
+  const a = rd2(H + '\n' + L.join('\n'), 'Binance-Transaction-History-202601011200(UTC+1)-part1-of1.csv');
+  const ty = a && a.txs.map(x => x.type + ':' + x.asset).sort().join(' '), buy = a && a.txs.find(x => x.type === 'BUY');
+  chk(a && a.det.id === 'binance' && a.bad.length === 0, 'Binance « Time » reconnu (0 ligne rejetée)');
+  chk(a && ty === 'BUY:AAA RECEIVE:BBB SELL:AAA STAKING:BBB' && buy.eur === 400 && buy.feeQty === 0.01, 'Binance « Time » : achat 400 € + frais en jeton, carte cadeau reçue, staking, vente « Sell Crypto to Fiat » à 1 s d’écart appariée ; transferts internes ignorés : ' + ty);
+  const sell = a && a.txs.find(x => x.type === 'SELL');
+  chk(sell && sell.eur === 300 && sell.qty === 1 && new Date(sell.date).toISOString() === '2025-07-10T10:20:48.000Z' && /UTC\+1 \(décalage fixe\)/.test(a.tzNote), 'fuseau fixe UTC+1 du nom de fichier (pas l’heure d’été de Paris) : 11:20:48 -> 10:20:48 UTC');
+  const st = a && a.txs.find(x => x.type === 'STAKING'); chk(st && new Date(st.date).toISOString() === '2025-03-02T23:30:00.000Z', 'UTC+1 fixe : la récompense de 00:30 locale tombe la veille en UTC');
+  // Excel : bandeau (fuseau dans le bandeau), colonnes vides intercalées, nom de fichier sans fuseau
+  const X2 = [[], ['', '', 'Transaction History'], ['', '', 'User ID', '1', 'Period(UTC-05:00)', 'x'], [], ['', '', ...H.split(',').flatMap(h => [h, ''])]].concat(L.map(l => ['', '', ...l.split(',').flatMap(v => [v, ''])]));
+  const dx = F.detect(X2), b = dx && F.parse(X2, dx, { source: 'export.xlsx' }, uid), sb = b && b.txs.find(x => x.type === 'SELL');
+  chk(dx && b.txs.length === a.txs.length && b.bad.length === 0 && sb && new Date(sb.date).toISOString() === '2025-07-10T16:20:48.000Z', 'Excel Binance : bandeau, colonnes vides, fuseau UTC-05:00 du bandeau');
+  const c = rd2(H + '\n' + L.join('\n'), 'sans-fuseau.csv'); chk(c && /non indiqué/.test(c.tzNote), 'fuseau absent : heures lues en UTC et signalées « à vérifier »');
+  const d2 = rd2(ban + H + '\n' + L.join('\n'), 'autre(UTC+3).csv'); chk(d2 && d2.txs.find(x => x.type === 'SELL').date === sell.date, 'le fuseau du bandeau prime sur le nom du fichier');
+  // CSV + Excel du même compte : doublons écartés par la fusion multi-fichiers
+  const b1 = rd2(H + '\n' + L.join('\n'), 'x(UTC+1).csv'), b2 = F.parse(X2.map((r, i) => i === 2 ? ['', '', 'User ID', '1', 'Period(UTC+1)', 'x'] : r), dx, { source: 'x.xlsx' }, uid);
+  b1.txs.forEach(t => t.source = 'x(UTC+1).csv'); b2.txs.forEach(t => t.source = 'x.xlsx');
+  const m = P.mergeImport(b1.txs, b2.txs); chk(m.added === 0 && m.dup === b2.txs.length, 'même historique en CSV puis Excel : ' + m.dup + ' doublons écartés, 0 ajouté'); }
 process.exit(ok ? 0 : 1);
