@@ -537,6 +537,20 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(+E.stateAt(T, P, 2025, null, { rewardCost: true }).l220, 1200, 'stateAt transmet la case'); }
   { const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'); // v2.36 : case l.220 cochée par défaut ; seul un « 0 » enregistré (décochage explicite) la décoche
     eq(AP.includes('function rwOn() { return manual.rewardCost !== 0; }') && AP.includes('manual.rewardCost = e.target.checked ? 1 : 0;') && !AP.includes('!!manual.rewardCost') ? 1 : 0, 1, 'Case ligne 220 : cochée par défaut, décochage explicite conservé'); }
+  { // v2.42 : cours implicite de la cession (213/qté) jamais « ≈ » même si la synthèse a valorisé l'actif cédé au même instant ; 3 retraits « Ignorer » (fictif)
+    const KP = require('./pipeline.js'), T0 = Date.UTC(2024, 0, 10, 9), TS = Date.UTC(2024, 11, 5, 10, 20, 48);
+    const X = [{ id: 'a', date: T0, type: 'BUY', asset: 'BTC', qty: 0.1, eur: 4000 }, { id: 'b', date: T0 + 1e3, type: 'BUY', asset: 'SOL', qty: 2, eur: 200 },
+      { id: 'c', date: T0 + 2e3, type: 'BUY', asset: 'GMT', qty: 100, eur: 20 },
+      ...['BTC', 'SOL', 'GMT'].map((a, i) => ({ id: 's' + i, date: T0 + 864e5 * (30 + i), type: 'SEND', asset: a, qty: a === 'BTC' ? 0.01 : 1, sendChoice: 'ignore' })),
+      { id: 'v', date: TS, type: 'SELL', asset: 'BTC', qty: 0.05, eur: 4500 }];
+    const run = cache => { const lp = KP.priceLookup(X, cache, {}, { zeroIfUnknown: true }), out = E.compute(X, (a, ts) => lp(a, ts));
+      E.summary(X, out, (a, ts) => lp(a, ts), 2024, null, (a, ts) => lp.approx.has(a + '|' + ts)); return { c: out.cessions[0], A: KP.alertAssets(X, out.cessions, lp, cache, {}), lp }; };
+    const mk = (a, p) => ({ [a + '|m' + Math.floor(TS / 60e3)]: p, [a + '|m' + Math.floor(TS / 60e3) + 's']: 'seconde|Test' });
+    let R = run(Object.assign(mk('SOL', 200), mk('GMT', 0.2)));
+    eq(R.c.detail212.find(d => d.asset === 'BTC').price, 90000, 'Cours BTC = prix de cession / quantité'); eq(R.lp.approx.has('BTC|' + TS) ? 1 : 0, 1, 'La synthèse a bien valorisé BTC ≈ au même instant (cas réel)');
+    eq(R.A.est.length, 0, 'Retraits ignorés : aucun « ≈ » bloquant pour l’actif cédé'); eq(R.c.detail212.find(d => d.asset === 'BTC').qty, 0.1, 'Ignorer : BTC retiré reste en portefeuille');
+    R = run(mk('GMT', 0.2)); eq(R.A.est.join() === 'SOL' ? 1 : 0, 1, 'Sans vraie source pour SOL : reste bloquant');
+  }
   process.exit(ok ? 0 : 1);
 })();
 {const h=require('fs').readFileSync(__dirname+'/index.html','utf8');if(!/<p class="sub2">Gratuit, code source disponible et anonyme : gardez le contrôle total de vos données\.<\/p>/.test(h))throw new Error('sub2 manquant');if(/gardez le contrôle total/.test(require('fs').readFileSync(__dirname+'/export.js','utf8')))throw new Error('sub2 dans PDF');console.log('sub2 ok');}
