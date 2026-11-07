@@ -40,10 +40,10 @@
     const MOON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
     const SUN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></g></svg>';
     if (regs) { const b = document.createElement('button'); b.type = 'button'; b.id = 'themebtn'; b.className = 'small ghost themebtn';
-      const draw = () => { const cur = root.dataset.theme || sys(); b.innerHTML = cur === 'light' ? MOON : SUN; b.setAttribute('aria-label', cur === 'light' ? 'Dark mode' : 'Light mode'); b.title = b.getAttribute('aria-label'); b.setAttribute('aria-pressed', cur === 'light' ? 'true' : 'false'); };
+      const draw = () => { const cur = root.dataset.theme || sys(); b.innerHTML = cur === 'light' ? MOON : SUN; const deP = document.documentElement.lang === 'de'; b.setAttribute('aria-label', cur === 'light' ? (deP ? 'Dunkler Modus' : 'Dark mode') : (deP ? 'Heller Modus' : 'Light mode')); b.title = b.getAttribute('aria-label'); b.setAttribute('aria-pressed', cur === 'light' ? 'true' : 'false'); };
       b.addEventListener('click', () => { const nx = (root.dataset.theme || sys()) === 'light' ? 'dark' : 'light'; root.dataset.theme = nx; try { localStorage.setItem(KT, nx); } catch (e) {} draw(); });
       try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', draw); } catch (e) {}
-      regs.appendChild(b); draw(); } }
+      regs.appendChild(b); b.__draw = draw; draw(); } }
   // v2.26 PC (>= 1024 px) : « Pourquoi / Soutenir » en haut à droite de l'en-tête, au-dessus des pays ; mobile : retour en bas de page (même élément, pas de doublon)
   { const kf = document.querySelector('.kofifoot'), hd = document.querySelector('header'); if (kf && hd && window.matchMedia) { const home = kf.parentNode, nx = kf.nextSibling, mq = matchMedia('(min-width: 1024px)');
     const place = () => { if (mq.matches) { if (kf.parentNode !== hd) hd.appendChild(kf); kf.classList.add('kofitop'); } else if (kf.parentNode !== home) { home.insertBefore(kf, nx); kf.classList.remove('kofitop'); } };
@@ -75,11 +75,11 @@
       ['#privacy .pv-in > :nth-child(13)', 'Herausgeber und Hosting'], ['#privacy .pv-in > :nth-child(14)', 'Herausgeber: Damien M. alias „Sanarkor“. Hosting: GitHub Pages (GitHub, Inc.).'],
       ['#privclose', 'Schließen']]);
     const deLang = () => { try { return localStorage.getItem('kx-de-lang') !== 'en'; } catch (e) { return true; } }; // v2.47 : allemand par défaut, anglais seulement si choisi
-    let curReg = null;
+    let curReg = null, TITLE0 = null;
     const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US';
       [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
       if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? (deLang() ? 'Land: Deutschland' : 'Country: Deutschland') : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
-      const gl = !!d && deLang(); curReg = v; document.documentElement.lang = gl ? 'de' : u ? 'en' : 'fr'; tr(u, gl);
+      const gl = !!d && deLang(); curReg = v; if (TITLE0 == null) TITLE0 = document.title; document.title = d ? (gl ? 'Kryptax – Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Kryptax – Anlage SO summary for German crypto taxes (estimate)') : TITLE0; document.documentElement.lang = gl ? 'de' : u ? 'en' : 'fr'; tr(u, gl); { const tb = $('#themebtn'); if (tb && tb.__draw) tb.__draw(); }
       { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } { const dl = $('footer .delaw'); if (dl) dl.hidden = !d; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
       if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = gl ? 'Zusammenfassung Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Anlage SO summary for German crypto taxes (estimate)'; }

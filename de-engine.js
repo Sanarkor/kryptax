@@ -109,7 +109,7 @@
       Object.values(G).forEach(L => { const s = L.filter(t => t.type === 'SELL'), b = L.filter(t => t.type === 'BUY'); if (s.length === 1 && b.length === 1) { b[0].feeAmt = 0; s[0].pairFee = b[0].pairFee = true; out.pairs = (out.pairs || 0) + 1; } });
       if (out.txs.some(t => t.oldFmt && t.feeAmt > 0)) out.feeNote = true; out.txs.forEach(t => { delete t.rawDate; delete t.oldFmt; }); }
     r.rows2.forEach((x, i) => add(x.row, 'PDF ' + (r.rows.length + i + 1), true));
-    r.amb.forEach(a => out.skipped.push({ line: 'PDF', why: a.why.replace(/quantité × prix ≠ valeur : importée avec la valeur indiquée, à vérifier/, 'quantity x price differs from the value; the value shown is used, to verify'), kept: !!a.kept }));
+    r.amb.forEach(a => out.skipped.push({ line: 'PDF', why: a.why.replace(/quantité × prix ≠ valeur : importée avec la valeur indiquée, à vérifier/, 'quantity x price differs from the value; the value shown is used, to verify').replace(/^devises mélangées dans la ligne$/, 'mixed currencies in the line, to verify').replace(/^montants en (\w+) dans un relevé en (\w+) : ligne non importée, à vérifier$/, 'amounts in $1 in a statement in $2: line not imported, to verify'), kept: !!a.kept })); /* v2.48: reasons of the shared PDF reader written in English (then German on the German page) */
     out.txs.sort((a, b) => a.date - b.date); return out;
   }
   /* Conversion to EUR: ECB reference rates (Frankfurter), rate of the day or of the previous working day (up to 7 days back); method to verify. No rate: line listed and excluded. */
@@ -276,6 +276,7 @@
   const WHY_DE = [
     [/^unknown type$/, () => 'unbekannter Typ'], [/^unreadable date$/, () => 'Datum nicht lesbar'], [/^missing asset or quantity$/, () => 'Asset oder Menge fehlt'], [/^unreadable line$/, () => 'Zeile nicht lesbar'],
     [/^mixed currencies in the line, to verify$/, () => 'gemischte Währungen in der Zeile, zu prüfen'],
+    [/^amounts in (\w+) in a statement in (\w+): line not imported, to verify$/, m => 'Beträge in ' + m[1] + ' in einem Auszug in ' + m[2] + ': Zeile nicht importiert, zu prüfen'],
     [/^exchange without the received asset, to verify$/, () => 'Tausch ohne erhaltenes Asset, zu prüfen'],
     [/^exchange without received asset or quantity: not computed$/, () => 'Tausch ohne erhaltenes Asset oder Menge: nicht berechnet'],
     [/^quantity x price differs from the value; the value shown is used, to verify$/, () => 'Menge x Preis weicht vom Wert ab; der angezeigte Wert wird verwendet, zu prüfen'],
