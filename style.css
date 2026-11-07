@@ -368,6 +368,7 @@ footer .disclaim{max-width:none;margin-top:4px}
 header h1{font-size:3rem}header .sub{font-size:1.15em;margin-top:0}
 main>section:first-of-type{padding-top:12px;padding-bottom:12px}
 .usmode{margin-top:4px}.usmode>.usbeta{margin:6px 0}
+.betatag{display:inline-block;padding:0 7px;border-radius:9px;font-size:.78em;letter-spacing:.03em;text-transform:uppercase;background:var(--warn);color:#111;vertical-align:1px}.betanote{color:var(--warn)}
 footer .law{margin-top:0}
 }
 @media (min-width:1024px) and (max-height:560px){header{padding-top:4px}header h1{font-size:2.5rem}header .sub{font-size:1.05em}header .sub2{font-size:.9em}footer{font-size:.74em;padding-top:2px}}

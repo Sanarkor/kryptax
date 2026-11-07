@@ -1,4 +1,4 @@
-# Tests Kryptax : moteur, formats, export PDF, golden, U.S.A., U.K. et import, sous plusieurs fuseaux horaires.
+# Tests Kryptax : moteur, formats, export PDF, golden, U.S.A., U.K., import, sécurité et lecture PDF (pdf.js embarqué), sous plusieurs fuseaux horaires.
 # Aucune dépendance npm : Node seul + poppler-utils (pdftotext / pdftoppm pour testexport.js).
 name: tests
 on:
@@ -38,3 +38,7 @@ jobs:
         run: node testuk.js > out-uk.txt; s=$?; cat out-uk.txt; ! grep -q "FAIL\|ÉCHEC" out-uk.txt && exit $s
       - name: node testimport.js
         run: node testimport.js > out-import.txt; s=$?; cat out-import.txt; ! grep -q "KO  \|ÉCHEC" out-import.txt && exit $s
+      - name: node testsecu.js
+        run: node testsecu.js > out-secu.txt; s=$?; cat out-secu.txt; ! grep -q "ÉCHEC" out-secu.txt && exit $s
+      - name: node testpdf.mjs
+        run: node testpdf.mjs > out-pdf.txt; s=$?; cat out-pdf.txt; ! grep -q "ÉCHEC" out-pdf.txt && exit $s

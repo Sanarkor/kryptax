@@ -550,27 +550,47 @@
 
   /* Prépare : conversion devises, quantités tronquées, cours nécessaires. cache[key]= prix | 'NA' */
   /* Recherche de cours : cache horaire (±2 h) puis cours observé dans les relevés (≤30 j, sinon le plus proche), marqué ≈. */
+  /* Justificatif compact de l'origine des cours de la ligne 212 : UNE ligne par actif (comptes par méthode), pour l'annexe du PDF.
+     Lit seulement les métadonnées enregistrées (fn.how, ln.implied) ; rien n'est inventé : sans métadonnée -> « origine non enregistrée ». */
+  const howLabel = (h, fiat) => {
+    if (fiat) return 'devise / stablecoin à parité fixe';
+    if (!h) return 'origine non enregistrée';
+    if (h.k === 'saisi') return 'cours saisi par vous';
+    if (h.k === 'inconnu') return 'aucun cours trouvé, compté 0 €';
+    if (h.k === 'estimé') return h.src === 'opération' ? 'estimé : prix d’une de vos opérations à moins de 30 jours' : h.src === 'opération lointaine' ? 'estimé : prix d’une de vos opérations éloignée de plus de 30 jours' : 'estimé : cours déjà téléchargé le plus proche dans le temps';
+    const src = h.src ? ' ' + h.src : '', off = h.dh ? `, à ${Math.abs(h.dh)} h de l’heure demandée` : '';
+    return (h.k === 'seconde' ? 'cours à la seconde' : h.k === 'minute' ? 'cours à la minute' : h.k === 'horaire' ? 'cours horaire' : h.k === 'journalier' ? 'cours journalier' : 'cours') + (src || off ? ' (' + (h.src || 'source non enregistrée') + off + ')' : '');
+  };
+  function priceSources(fn, cessions, opt) {
+    opt = opt || {}; const max = opt.max || 40, G = {}, how = fn && fn.how;
+    for (const c of cessions || []) for (const d of c.detail212 || []) {
+      const lab = d.asset === '(saisie manuelle)' ? 'valeur globale (212) saisie par vous' : d.implied ? 'prix de la cession elle-même (relevé)' : howLabel(how && how.get(d.asset + '|' + c.date), d.asset === 'EUR');
+      const a = d.asset === '(saisie manuelle)' ? 'Portefeuille' : d.asset, g = G[a] = G[a] || { n: 0, m: {} }; g.n++; g.m[lab] = (g.m[lab] || 0) + 1;
+    }
+    const L = Object.entries(G).sort((x, y) => y[1].n - x[1].n || x[0].localeCompare(y[0])).map(([a, g]) => a + ' : ' + Object.entries(g.m).sort((x, y) => y[1] - x[1]).map(([l, k]) => l + (Object.keys(g.m).length > 1 || k > 1 ? ' ×' + k : '')).join(' ; '));
+    return L.length > max ? L.slice(0, max).concat(['… et ' + (L.length - max) + ' autre(s) actif(s)']) : L;
+  }
   function priceLookup(txs, cache, manual, opts) {
-    const obs = observed(txs), approx = new Set(), unvalued = new Set(), prec = new Map();
+    const obs = observed(txs), approx = new Set(), unvalued = new Set(), prec = new Map(), how = new Map(); // how : origine de chaque cours (justificatif), sans effet sur la valeur
     const fn = (a, ts, txId) => {
-      if (manual && txId != null && manual[a + '@' + txId] != null) return manual[a + '@' + txId];
-      if (manual && manual[a] != null) return manual[a];
+      if (manual && txId != null && manual[a + '@' + txId] != null) { how.set(a + '|' + ts, { k: 'saisi' }); return manual[a + '@' + txId]; }
+      if (manual && manual[a] != null) { how.set(a + '|' + ts, { k: 'saisi' }); return manual[a]; }
       const h = Math.floor(ts / HOUR), mk = minKey(a, ts);
-      if (typeof cache[mk] === 'number') { const [k, s] = String(cache[mk + 's'] || 'minute|').split('|'); prec.set(a + '|' + ts, { k, src: s }); return cache[mk]; }
-      for (const d of [0, -1, 1, -2, 2]) { const v = cache[a + '|h' + (h + d)]; if (typeof v === 'number') { prec.set(a + '|' + ts, { k: hasTime(ts) ? 'horaire' : 'journalier', src: cache[a + '|src'] || '' }); return v; } }
-      let o = obs(a, ts);
-      if (o == null) { // cours du même actif le plus proche dans le cache (autre heure)
+      if (typeof cache[mk] === 'number') { const [k, s] = String(cache[mk + 's'] || 'minute|').split('|'); prec.set(a + '|' + ts, { k, src: s }); how.set(a + '|' + ts, { k, src: s }); return cache[mk]; }
+      for (const d of [0, -1, 1, -2, 2]) { const v = cache[a + '|h' + (h + d)]; if (typeof v === 'number') { prec.set(a + '|' + ts, { k: hasTime(ts) ? 'horaire' : 'journalier', src: cache[a + '|src'] || '' }); how.set(a + '|' + ts, { k: hasTime(ts) ? 'horaire' : 'journalier', src: cache[a + '|src'] || '', dh: d }); return v; } }
+      let o = obs(a, ts), ok = 'opération';
+      if (o == null) { ok = 'cache'; // cours du même actif le plus proche dans le cache (autre heure)
         let best = null, bd = Infinity; const pre = a + '|h';
         for (const k in cache) if (k.startsWith(pre) && typeof cache[k] === 'number') { const dd = Math.abs(+k.slice(pre.length) - h); if (dd < bd) { bd = dd; best = cache[k]; } }
         const pm = a + '|m'; for (const k in cache) if (k.startsWith(pm) && typeof cache[k] === 'number') { const dd = Math.abs(+k.slice(pm.length) * MIN / HOUR - h); if (dd < bd) { bd = dd; best = cache[k]; } } // cours à la minute aussi
         o = best;
       }
-      if (o == null) o = obs(a, ts, true);
-      if (o != null) { approx.add(a + '|' + ts); return o; }
-      if (opts && opts.zeroIfUnknown) { unvalued.add(a); approx.add(a + '|' + ts); return 0; } // jamais de calcul bloqué : actif non valorisé, signalé
+      if (o == null) { o = obs(a, ts, true); ok = 'opération lointaine'; }
+      if (o != null) { approx.add(a + '|' + ts); how.set(a + '|' + ts, { k: 'estimé', src: ok }); return o; }
+      if (opts && opts.zeroIfUnknown) { unvalued.add(a); approx.add(a + '|' + ts); how.set(a + '|' + ts, { k: 'inconnu' }); return 0; } // jamais de calcul bloqué : actif non valorisé, signalé
       return null;
     };
-    fn.approx = approx; fn.unvalued = unvalued; fn.prec = prec; return fn;
+    fn.approx = approx; fn.unvalued = unvalued; fn.prec = prec; fn.how = how; return fn;
   }
   /* progress(étape, fait, total) ; opt.signal pour annuler ; opt.onSave() appelé régulièrement (cache persistant). */
   async function prepare(txs, src, cache, log, opt) {
@@ -792,6 +812,6 @@
     if (dt.items && dt.items.length) return Array.from(dt.items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
     return Array.from(dt.files || []);
   }
-  const api = { sections, hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, twinFix, resolveRecon, reconList, qtyChoices, makeSources, prepare, observed };
+  const api = { priceSources, howLabel, sections, hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, twinFix, resolveRecon, reconList, qtyChoices, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);
