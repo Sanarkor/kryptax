@@ -147,7 +147,7 @@ eq(/\b(2086|2042|3AN|3BN|CGI|impots|BOI|L136)\b|prélèvements|France/i.test(src
   eq(b.totals.sales + '|' + b.totals.long.gain + '|' + b.totals.income.usd, '1|3000|300', 'year 2025: 1 long-term sale, gain $3,000, income $300');
   eq(a.totals.gain + b.totals.gain, r.totals.gain, 'years add up to all years');
   eq(U.forYear(r, 2023).totals.sales, 0, 'year without sale: 0'); eq(U.forYear(r, 0), r, 'all years = unchanged'); }
-eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(fs.readFileSync(__dirname + '/app.js', 'utf8')), true, 'U.S.A. title: Form 8949 & Schedule D');
+eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes \(estimate\)'\]/.test(fs.readFileSync(__dirname + '/app.js', 'utf8')), true, 'U.S.A. title: Form 8949 & Schedule D');
 { const h = fs.readFileSync(__dirname + '/index.html', 'utf8'), us = (h.match(/<section id="usmode"[\s\S]*?<\/section><\/section>|<section id="usmode"[\s\S]*?<div id="usresult"/) || [''])[0];
   eq(/U\.S\.A\. mode/.test(us) || /Estimate only — not tax advice/.test(us), false, 'no "U.S.A. mode" title, no duplicate warning');
   eq(/<span class="headbtns"><button type="button" id="ushelpbtn" class="small ghost"[^>]*>Instructions<\/button><button type="button" id="usreset" class="small ghost"[^>]*>↺ Reset<\/button>/.test(us) && /id="ushelppanel" class="help" hidden/.test(us), true, 'Instructions + Reset buttons like France');

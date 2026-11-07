@@ -10,7 +10,7 @@
   /* Boutons FRANCE / U.S.A. (en-tête) : U.S.A. = page en construction en anglais, sans aucune référence fiscale française ; FRANCE reste inchangé.
      EN : [sélecteur, texte anglais | null = masqué en U.S.A.]. Le texte français d'origine est gardé et restauré au retour en FRANCE. */
   const EN = [
-    ['header .sub', 'Form 8949 & Schedule D for U.S. crypto taxes'], ['header .sub2', 'Free, source-available and anonymous: keep full control of your data.'],
+    ['header .sub', 'Form 8949 & Schedule D for U.S. crypto taxes (estimate)'], ['header .sub2', 'Free, source-available and anonymous: keep full control of your data.'],
     ['.regions', null, 'aria-label', 'Country'],
     ['footer .law', null], ['footer .disclaim', 'Kryptax is a free, source-available tool. It is not tax, financial or legal advice. You remain solely responsible for checking your data.'],
     ['#whyopen .fl', 'Why Kryptax?'], ['#whyopen .fs', 'Why?'],
@@ -79,7 +79,8 @@
     const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US';
       [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
       if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? (deLang() ? 'Land: Deutschland' : 'Country: Deutschland') : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
-      const gl = !!d && deLang(); curReg = v; if (TITLE0 == null) TITLE0 = document.title; document.title = d ? (gl ? 'Kryptax – Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Kryptax – Anlage SO summary for German crypto taxes (estimate)') : us0 ? 'Kryptax – Form 8949 & Schedule D for U.S. crypto taxes (estimate)' : TITLE0; // v2.51 : onglet U.S.A. en anglais, retour France/DE inchangé document.documentElement.lang = gl ? 'de' : u ? 'en' : 'fr'; tr(u, gl); { const tb = $('#themebtn'); if (tb && tb.__draw) tb.__draw(); }
+      const gl = !!d && deLang(); curReg = v; if (TITLE0 == null) TITLE0 = document.title; document.title = d ? (gl ? 'Kryptax – Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Kryptax – Anlage SO summary for German crypto taxes (estimate)') : us0 ? 'Kryptax – Form 8949 & Schedule D for U.S. crypto taxes (estimate)' : TITLE0; // v2.51 : onglet U.S.A. en anglais, retour France/DE inchangé
+      document.documentElement.lang = gl ? 'de' : u ? 'en' : 'fr'; tr(u, gl); { const tb = $('#themebtn'); if (tb && tb.__draw) tb.__draw(); }
       { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } { const dl = $('footer .delaw'); if (dl) dl.hidden = !d; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
       if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = gl ? 'Zusammenfassung Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Anlage SO summary for German crypto taxes (estimate)'; }
