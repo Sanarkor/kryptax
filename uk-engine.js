@@ -55,7 +55,27 @@
     for (let i = 0; i < Math.min(25, rows.length); i++) { const m = mapHeader(rows[i] || []); if (['date', 'type', 'asset', 'qty'].every(k => m[k] != null)) return i; }
     return 0;
   }
-  function parseRows(rows) {
+  /* v2.41: Binance "Transaction History" (Operation / Coin / Change), read by the shared reader (formats.js binanceLedger), then mapped here.
+     Amounts keep their SOURCE currency: a line in EUR waits for convertFx like any other non-GBP line. Exchanges between tokens and rewards have no
+     amount in the file: their GBP value stays missing (to verify), they are never valued by guess. Times: UTC instant when the file gives its offset. */
+  function fromBinance(B) {
+    const out = { txs: [], skipped: B.skipped.slice(), missingCols: [], currency: null, platform: B.platform, tzNote: B.tzNote, binance: true };
+    const noVal = [];
+    for (const e of B.events) {
+      const t = { line: e.line, date: e.date, type: e.type, rawType: e.rawType, asset: e.asset, qty: e.qty, amt: NaN, feeAmt: 0, cur: 'GBP', toAsset: e.toAsset || '', toQty: e.toQty || NaN };
+      if (e.tz) t.tz = e.tz;
+      if (e.type === 'BUY' || e.type === 'SELL' || e.type === 'SPEND') { t.amt = e.amt; t.cur = e.cur; t.feeAmt = e.feeAmt || e.feeCurAmt || 0;
+        if (e.type === 'BUY' && e.feeQty > 0) { t.qty = Math.max(0, e.qty - e.feeQty); out.skipped.push({ line: e.line, why: 'fee paid in the token bought: quantity received net of the fee, fee not added to the cost', kept: true }); } }
+      else if (e.type !== 'TRANSFER') noVal.push(e.line);
+      if (t.qty > 0) push(out, t);
+    }
+    if (noVal.length) noVal.forEach(l => out.skipped.push({ line: l, why: 'no GBP value in the Binance file (exchange between tokens or reward): value missing, not in the totals', kept: true }));
+    if (!B.tz) out.skipped.push({ line: 'file', why: 'time zone not given in the Binance file: times read in the zone chosen on this page', kept: true });
+    out.txs.sort((a, b) => a.date - b.date || a.line - b.line);
+    return out;
+  }
+  function parseRows(rows, name) {
+    { const B = KF.binanceLedger && KF.binanceLedger(rows, name); if (B) return fromBinance(B); }
     const hi = headerIndex(rows), head = rows[hi] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null), currency: otherCurrency(head) };
     if (out.missingCols.length) return out;
     rows.slice(hi + 1).forEach((r, i) => {
@@ -111,10 +131,10 @@
     }
     p.txs = p.txs.filter(t => !t.drop); return p;
   }
-  function fromCSVText(input) { return parseRows(Array.from(KF.parseCSV(input))); }
-  function fromWorkbook(X, data) {
+  function fromCSVText(input, name) { return parseRows(Array.from(KF.parseCSV(input)), name); }
+  function fromWorkbook(X, data, name) {
     const wb = X.read(data, { cellDates: true }); let best = null;
-    for (const n of wb.SheetNames) { const rows = X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }); if (!rows.length) continue; const p = parseRows(rows); if (!p.missingCols.length) return p; if (!best) best = p; }
+    for (const n of wb.SheetNames) { const rows = X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }); if (!rows.length) continue; const p = parseRows(rows, name); if (!p.missingCols.length) return p; if (!best) best = p; }
     return best || { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'] };
   }
   /* Time zones: file times are wall-clock times in the file's zone; days and tax years are U.K. calendar days (Europe/London). Intl only, no network. */
@@ -134,13 +154,13 @@
   const EPS = 1e-12;
   function compute(txs, opts) {
     opts = opts || {}; const fileTz = opts.fileTz || LONDON;
-    const dayOf = t => Math.floor(shiftTz(t, fileTz, LONDON) / DAY);
+    const dayOf = t => Math.floor(shiftTz(t.date, t.tz || fileTz, LONDON) / DAY); /* v2.41: t.tz = 'UTC' for a line whose instant is known (Binance offset) */
     const A = {}, notes = [], income = [], transfers = { count: 0, withFee: 0 };
     const slot = (asset, day) => { const a = A[asset] || (A[asset] = {}); return a[day] || (a[day] = { aq: 0, ac: 0, aUnknown: false, aLines: [], dq: 0, dp: 0, df: 0, dUnknown: false, dLines: [], gift: false, airdrop: false }); };
     const acq = (asset, day, qty, cost, line) => { const s = slot(asset, day); s.aq += qty; if (cost == null || !isFinite(cost)) s.aUnknown = true; else s.ac += cost; s.aLines.push(line); return s; };
     const disp = (asset, day, qty, proceeds, fee, line) => { const s = slot(asset, day); s.dq += qty; if (proceeds == null || !isFinite(proceeds)) s.dUnknown = true; else s.dp += proceeds; s.df += fee || 0; s.dLines.push(line); return s; };
     for (const t of txs) {
-      const d = dayOf(t.date), v = isFinite(t.gbp) ? t.gbp : null;
+      const d = dayOf(t), v = isFinite(t.gbp) ? t.gbp : null;
       if (t.type === 'BUY') acq(t.asset, d, t.qty, v == null ? null : v + t.fee, t.line);
       else if (t.type === 'SELL' || t.type === 'SPEND') disp(t.asset, d, t.qty, v, t.fee, t.line);
       else if (t.type === 'GIFT') disp(t.asset, d, t.qty, v, t.fee, t.line).gift = true;
@@ -287,7 +307,7 @@
         + (Y.income.length ? `<div class="note"><b>Income (staking, mining, rewards): ${gbp(Y.incomeGbp)}</b><br><span class="hint">Miscellaneous income at the GBP value when received (not a trade) — to verify. Not on SA108; the tokens join the pool at that value. Trading and miscellaneous income allowance: up to £1,000 a year.</span></div>`
           + `<div class="scroll"><table class="us8949"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value GBP</th><th>Type</th></tr>${Y.income.map(x => `<tr class="${x.airdrop || x.gbp == null ? 'tv' : ''}"><td>${dmy(x.day * DAY)}</td><td>${esc(x.asset)}</td><td>${+x.qty.toPrecision(10)}</td><td>${x.airdrop ? 'airdrop, to verify' : x.gbp == null ? 'value missing - to verify' : gbp(x.gbp)}</td><td>${esc(x.type)}</td></tr>`).join('')}</table></div>` : '')
         + `<details class="usdet" open><summary>Disposals (${Y.disposals.length})</summary><div class="scroll"><table class="us8949"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Proceeds</th><th>Allowable costs</th><th>Gain/loss</th><th>Matching</th></tr>${tr}</table></div></details>`
-        + skippedHtml()
+        + skippedHtml() + (cur.platform ? `<p class="hint" id="ukplatform">Format recognised: ${esc(cur.platform)}${cur.tzNote ? ' (' + esc(/converties en UTC/.test(cur.tzNote) ? 'times converted from the fixed UTC offset given in the file' : /non indiqu/.test(cur.tzNote) ? 'time zone not given in the file' : 'times in UTC') + ')' : ''}. Amounts in their own currency, converted to GBP; exchanges between tokens and rewards have no GBP value in the file — to verify.</p>` : '')
         + `<p class="usexp"><button type="button" id="ukpdf" class="btn"${W.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="ukcsv" class="btn ghost">Download CSV (summary)</button></p>`;
     }
     const skippedHtml = () => { const S = cur ? cur.skipped.filter(x => !x.kept) : []; return S.length ? `<p class="hint">${S.length} line${S.length > 1 ? 's' : ''} skipped: ${esc(groupLines(S, 5).map(g => g.text).join('; '))}.</p>` : ''; };
@@ -323,13 +343,13 @@
       vbtn.disabled = true; name = files.map(x => x.name).join(', '); cur = m; year = null; render(); if (note) out.insertAdjacentHTML('afterbegin', note); });
     async function readOne(f) {
       const data = new Uint8Array(await f.arrayBuffer()); let p;
-      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; } p = fromWorkbook(W.XLSX, data); }
+      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; } p = fromWorkbook(W.XLSX, data, f.name); }
         else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) { return { err: '<p class="warn">PDF reading is not available. Please reload the page.</p>' }; }
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; out.innerHTML = '<p class="hint">Reading the PDF…</p>';
           const d = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           for (let i = 1; i <= d.numPages; i++) { const c = await (await d.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
           p = fromPdfLines(lines); if (!p.txs.length) { return { err: '<p class="warn">' + esc(f.name) + ': no crypto transaction found in this PDF. Nothing was computed.</p>' }; } }
-        else p = fromCSVText(data); }
+        else p = fromCSVText(data, f.name); }
       catch (x) { return { err: '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>' }; }
       if (p.missingCols.length) { return { err: '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total or Price.</p>' }; }
       if (p.txs.some(t => t.needFx)) { out.innerHTML = '<p class="hint">Converting to GBP (ECB reference rates)…</p>';

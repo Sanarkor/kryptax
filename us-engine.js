@@ -91,7 +91,31 @@
     }
     return null;
   }
-  function parseRows(rows) {
+  /* v2.41: Binance "Transaction History" (Operation / Coin / Change), read by the shared reader (formats.js binanceLedger), then mapped here.
+     Only amounts in USD are used as USD. An amount in another currency (EUR, GBP...) is NOT converted in this mode: the USD value stays missing
+     (to verify) and the original amount is quoted. USDT and other stablecoins are tokens, never taken as USD. Exchanges between tokens and rewards
+     have no amount in the file: USD value missing, to verify. Times: UTC instant when the file gives its offset (tz: 'UTC'). */
+  function fromBinance(B) {
+    const out = { txs: [], skipped: B.skipped.slice(), missingCols: [], platform: B.platform, platformNote: 'binance', tzNote: B.tzNote };
+    for (const e of B.events) {
+      const t = { line: e.line, date: e.date, type: e.type, rawType: e.rawType, asset: e.asset, qty: e.qty, usd: NaN, fee: 0, toAsset: e.toAsset || '', toQty: e.toQty || NaN, wallet: '', toWallet: '' };
+      if (e.tz) t.tz = e.tz;
+      if (e.type === 'SPEND') t.type = 'SELL';
+      if (e.type === 'AIRDROP') t.type = 'INCOME';
+      if (e.type === 'TRANSFER') t.type = e.dir === 'in' ? 'IN' : 'OUT';
+      if (e.type === 'BUY' || e.type === 'SELL' || e.type === 'SPEND') {
+        if (e.cur === 'USD') { t.usd = e.amt; t.fee = e.feeAmt || e.feeCurAmt || 0; }
+        else out.skipped.push({ line: e.line, why: 'amount of ' + (+e.amt).toFixed(2) + ' ' + e.cur + ' not converted to USD in this mode: USD value missing, to verify', kept: true });
+        if (e.type === 'BUY' && e.feeQty > 0) { t.qty = Math.max(0, e.qty - e.feeQty); out.skipped.push({ line: e.line, why: 'fee paid in the token bought: quantity received net of the fee, fee not added to the basis - to verify', kept: true }); } }
+      else if (e.type !== 'TRANSFER') out.skipped.push({ line: e.line, why: 'no USD value in the Binance file (exchange between tokens or reward): value missing, to verify', kept: true });
+      if (t.qty > 0) out.txs.push(t);
+    }
+    if (!B.tz) out.skipped.push({ line: 'file', why: 'time zone not given in the Binance file: times read in the zone chosen in Options', kept: true });
+    out.txs.sort((a, b) => a.date - b.date || String(a.line).localeCompare(String(b.line), 'en', { numeric: true }));
+    return out;
+  }
+  function parseRows(rows, name) {
+    { const B = KF.binanceLedger && KF.binanceLedger(rows, name); if (B) return fromBinance(B); }
     const P = platformRows(rows); if (P) { const o = parseRows(P.rows); o.skipped = P.skipped.concat(o.skipped.filter(x => !P.skipped.some(y => y.line === x.line))); o.platform = P.platform; o.fileTz = P.fileTz; return o; }
     const hi = headerIndex(rows), head = rows[hi] || [], m = mapHeader(head), out = { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'].filter(k => m[k] == null) };
     if (out.missingCols.length) return out;
@@ -108,12 +132,12 @@
     return out;
   }
   /* Excel (.xlsx/.xls) through the SheetJS already shipped (xlsx.mini.min.js): first sheet that has a recognised header. */
-  function fromWorkbook(X, data) {
+  function fromWorkbook(X, data, name) {
     const wb = X.read(data, { cellDates: true });
     let best = null;
     for (const n of wb.SheetNames) {
       const rows = X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }); if (!rows.length) continue;
-      const p = parseRows(rows); if (!p.missingCols.length) return p; if (!best) best = p;
+      const p = parseRows(rows, name); if (!p.missingCols.length) return p; if (!best) best = p;
     }
     return best || { txs: [], skipped: [], missingCols: ['date', 'type', 'asset', 'qty'] };
   }
@@ -223,7 +247,7 @@
   }
   function compute(txs, opts) {
     opts = opts || {};
-    if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: shiftTz(t.date, opts.fileTz || 'UTC', opts.taxTz || 'UTC') }));
+    if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: shiftTz(t.date, t.tz || opts.fileTz || 'UTC', opts.taxTz || 'UTC') })); /* v2.41: t.tz = 'UTC' when the instant is known (Binance offset) */
     const manualCost = opts.manualCost || {}, method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
     const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
     const nextIdx = L => { if (method !== 'HIFO') return 0; let b = 0; for (let i = 1; i < L.length; i++) if (unit(L[i]) > unit(L[b]) + 1e-9) b = i; return b; };
@@ -552,7 +576,7 @@
     if (T.method && T.method !== 'FIFO') add(5, null, 'HIFO or manual choice: specific identification needs records at the time of sale — to verify.');
     return L.map((c, i) => Object.assign(c, { i })).sort((a, b) => a.rank - b.rank || (a.line == null ? -1 : b.line == null ? 1 : a.line - b.line) || a.i - b.i).map(({ rank, line, msg }) => ({ rank, line, msg }));
   }
-  function fromCSVText(input) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows); }
+  function fromCSVText(input, name) { const rows = Array.from(KF.parseCSV(input)); return parseRows(rows, name); }
   /* v2.15 option choices kept in this browser (localStorage only): lot method, Form 8949 box, fee option, filing status, time zone of the file dates.
      Manual lot picks per sale, the year and the amounts entered are not saved (they depend on the file).
      Never file data, transactions or amounts. Invalid or unreadable values are ignored (defaults used). */
@@ -652,8 +676,8 @@
           pdfNote = '<p class="warn">PDF import is best effort: ' + p.txs.length + ' line' + (p.txs.length > 1 ? 's' : '') + ' read. Please check every line against your statement (to verify).</p>';
         } else if (/\.(xlsx|xls)$/.test(name)) {
           if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; }
-          p = fromWorkbook(W.XLSX, data);
-        } else p = fromCSVText(data);
+          p = fromWorkbook(W.XLSX, data, f.name);
+        } else p = fromCSVText(data, f.name);
       } catch (e) { return { err: '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>' }; }
       if (p.missingCols.length) { return { err: '<p class="warn">' + esc(f.name) + ': columns not found: ' + esc(p.missingCols.join(', ')) + '. Expected at least Date, Type, Asset, Quantity, plus Total (USD) or Price (USD).</p>' }; }
       return { p, note: pdfNote };
@@ -762,8 +786,10 @@
         + daBlock(T, year)
         + carryBlock(res)
         + sdBlock(res)
-        + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. Only USD-quoted, non-margin trades are read — to verify.</p>` : '')
-        + (p.skipped.length ? `<p class="hint">${p.skipped.length} line${p.skipped.length > 1 ? 's' : ''} skipped: ${esc(p.skipped.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
+        + (p.platform ? `<p class="hint" id="usplatform">Format recognised: ${esc(p.platform)}${p.fileTz ? ' (times in ' + esc(p.fileTz) + ')' : ''}. ${p.platformNote === 'binance' ? (p.tzNote ? ' ' + esc(/converties en UTC/.test(p.tzNote) ? 'Times converted from the fixed UTC offset given in the file.' : /non indiqu/.test(p.tzNote) ? 'Time zone not given in the file.' : 'Times in UTC.') : '') + ' Only amounts in USD are used; other currencies, exchanges between tokens and rewards have no USD value here' : ' Only USD-quoted, non-margin trades are read'} — to verify.</p>` : '')
+        + (() => { const S = p.skipped.filter(s => !s.kept), K = p.skipped.filter(s => s.kept), G = new Map(); K.forEach(s => { if (!G.has(s.why)) G.set(s.why, []); G.get(s.why).push(s.line); }); /* v2.41: lines kept with a missing value are not "skipped" */
+          return (S.length ? `<p class="hint">${S.length} line${S.length > 1 ? 's' : ''} skipped: ${esc(S.slice(0, 5).map(s => 'line ' + s.line + ' (' + s.why + ')').join(', '))}.</p>` : '')
+            + (G.size ? `<div class="note" id="uskept"><b>Imported, to verify</b><ul>${[...G].map(([why, L]) => '<li>' + esc((L.length > 1 ? L.length + ' lines (' + L.slice(0, 6).join(', ') + (L.length > 6 ? '…' : '') + ')' : 'Line ' + L[0]) + ': ' + why) + '</li>').join('')}</ul></div>` : ''); })()
         + (method === 'MANUAL' ? manualHtml(res) : '')
         + `<details class="usdet" open><summary>Detailed table (Form 8949 lines)</summary><div class="scroll"><table class="us8949"><tr><th>(a) Description</th>${hasW ? '<th>Wallet</th>' : ''}<th>(b) Acquired</th><th>(c) Sold</th><th>(d) Proceeds</th><th>(e) Cost</th><th>(h) Gain/loss</th><th>Term</th></tr>${trs}</table></div></details>`
         + `<p><button type="button" id="uscsv" class="small">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsx" class="small">Download Excel (.xlsx)</button>' : ''}${W0.KryptaxUSExport && W0.jspdf ? ' <button type="button" id="uspdf" class="small">Download PDF</button>' : ''}</p>`;

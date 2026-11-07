@@ -43,6 +43,35 @@ eq(K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 1, '$10']])).txs[0].cur, 'USD',
 eq(K.fromCSVText(csv([['2025-05-01', 'Buy', 'A', 1, '$10', '\u20ac1']])).skipped[0].why, 'mixed currencies in the line, to verify', 'mixed currencies in a line: skipped');
 eq(K.dmy(K.ukDate('05/04/2025')), '05/04/2025', 'U.K. dates are day/month/year');
 // v2.34: conversion to GBP, mocked rates (no network). Rate of the day, else previous working day (weekend), else excluded.
+// v2.41: Binance "Transaction History" (ENTIRELY FICTITIOUS data): Time column, fixed UTC offset, banner and empty columns (Excel), pairs, internal moves
+const BN_H = 'User ID,Time,Account,Operation,Coin,Change,Remark';
+const BN_L = ['1,2025-03-01 10:00:00,Spot,Deposit,EUR,500,', '1,2025-03-01 10:00:05,Spot,Transaction Buy,AAA,2,', '1,2025-03-01 10:00:05,Spot,Transaction Spend,EUR,-400,', '1,2025-03-01 10:00:05,Spot,Transaction Fee,AAA,-0.01,',
+  '1,2025-03-02 09:00:00,Funding,Gift Card Redemption,BBB,1,Gift Card', '1,2025-03-02 09:01:00,Funding,Transfer Between Spot and Funding,BBB,-1,', '1,2025-03-02 09:01:00,Spot,Transfer Between Spot and Funding,BBB,1,',
+  '1,2025-03-03 00:30:00,Spot,Staking Rewards,BBB,0.01,', '1,2025-03-05 12:00:00,Spot,Binance Convert,AAA,-0.5,', '1,2025-03-05 12:00:00,Spot,Binance Convert,CCC,10,',
+  '1,2025-04-06 00:30:00,Spot,Sell Crypto to Fiat,EUR,300,', '1,2025-04-06 00:30:01,Spot,Sell Crypto to Fiat,AAA,-1,', '1,2025-04-07 12:00:00,Spot,Sell Crypto to Fiat,USD,120,', '1,2025-04-07 12:00:01,Spot,Sell Crypto to Fiat,CCC,-5,',
+  '1,2025-05-01 08:00:00,Spot,Withdraw,BBB,-0.5,', '1,2025-05-02 08:00:00,Spot,Fiat Withdraw,EUR,-300,'];
+const BN_CSV = BN_H + '\n' + BN_L.join('\n'), BN_NAME = 'Binance-Transaction-History-202601011200(UTC+1)-part1-of1.csv';
+const BN_XLSX = (off) => [[], ['', '', 'Transaction History'], ['', '', 'User ID', '1', 'Period(' + off + ')', 'x'], [], ['', '', ...BN_H.split(',').flatMap(h => [h, ''])]].concat(BN_L.map(l => ['', '', ...l.split(',').flatMap(v => [v, ''])]));
+{ const p = K.fromCSVText(BN_CSV, BN_NAME), T = p.txs, ty = T.map(t => t.type).join(' ');
+  eq([p.platform, ty, p.skipped.filter(s => !s.kept).length], ['Binance Transaction History', 'BUY TRANSFER INCOME CONVERT SELL SELL TRANSFER', 0], 'Binance (U.K.): Time column read, internal moves ignored, pairs read');
+  const buy = T[0], sEur = T.find(t => t.type === 'SELL' && t.asset === 'AAA'), sUsd = T.find(t => t.type === 'SELL' && t.asset === 'CCC'), cv = T.find(t => t.type === 'CONVERT');
+  eq([buy.qty, buy.cur, buy.amt, buy.needFx, sEur.cur, sEur.amt, sEur.needFx, isNaN(sEur.gbp), sUsd.cur, sUsd.amt, cv.toAsset, cv.toQty, isNaN(cv.gbp), !!cv.needFx], [1.99, 'EUR', 400, true, 'EUR', 300, true, true, 'USD', 120, 'CCC', 10, true, false], 'Binance (U.K.): source amount and currency kept (EUR, USD), never taken as GBP; token exchange without value');
+  eq([new Date(sEur.date).toISOString(), sEur.tz], ['2025-04-05T23:30:00.000Z', 'UTC'], 'Binance (U.K.): fixed UTC+1 offset from the file name -> UTC instant');
+  const r = K.compute(T.map(t => Object.assign({}, t, t.needFx ? { gbp: t.amt * 0.8, fee: 0 } : {})), { fileTz: 'Asia/Tokyo' }), d = r.disposals.find(x => x.asset === 'AAA' && x.proceeds === 240);
+  eq([d && d.year, r.income[0].day * 864e5 === Date.UTC(2025, 2, 2), r.income[0].gbp], ['2025-26', true, null], 'Binance (U.K.): 00:30 UTC+1 on 6 April = 6 April in London (BST) -> 2025-26; page time zone ignored for these lines; reward value missing');
+  const cvd = r.disposals.find(x => x.asset === 'AAA' && x.proceeds == null);
+  eq([!!cvd, cvd && /missing GBP value/.test(cvd.status)], [true, true], 'Binance (U.K.): exchange between tokens = disposal to verify (no invented value)');
+  const ck = K.checks(Object.assign(r, { skipped: p.skipped }), K.yearSummary(r, '2024-25'), '2024-25').join(' ');
+  eq([/no GBP value in the Binance file/.test(ck), /fee paid in the token bought/.test(ck)], [true, true], 'Binance (U.K.): missing values and fee in tokens listed to verify');
+  const x = K.parseRows(BN_XLSX('UTC-05:00'), 'export.xlsx'), xs = x.txs.find(t => t.type === 'SELL' && t.asset === 'AAA');
+  eq([x.txs.length, new Date(xs.date).toISOString()], [T.length, '2025-04-06T05:30:00.000Z'], 'Binance (U.K.) Excel: banner, empty columns, offset from the banner');
+  const n = K.fromCSVText(BN_CSV, 'no-offset.csv'), ns = n.txs.find(t => t.type === 'SELL' && t.asset === 'AAA');
+  eq([ns.tz, new Date(ns.date).toISOString(), n.skipped.some(s => /time zone not given/.test(s.why))], [undefined, '2025-04-06T00:30:00.000Z', true], 'Binance (U.K.): no offset -> page time zone applies, flagged');
+  const m = K.mergeFiles([{ name: 'a.csv', p }, { name: 'b.xlsx', p: K.parseRows(BN_XLSX('UTC+1'), 'b.xlsx') }]);
+  eq([m.txs.length, m.dupes], [T.length, T.length], 'Binance (U.K.): same history as CSV and Excel counted once'); }
+{ let asked = ''; const p = K.fromCSVText(BN_CSV, BN_NAME);
+  K.convertFx(p, async u => { asked = u; return { rates: { '2025-03-01': { GBP: 0.83 }, '2025-04-04': { GBP: 0.84 }, '2025-04-07': { GBP: 0.85 } } }; }).then(() => {
+    const s = p.txs.find(t => t.type === 'SELL' && t.asset === 'AAA'); eq([Math.round(s.gbp * 100) / 100, s.fx.on], [252, '2025-04-04'], 'Binance (U.K.): EUR sale converted with the ECB rate of the day or the previous working day'); }); }
 const asyncT = (async () => {
   const urls = [], mock = async u => { urls.push(u); return { rates: { '2025-05-02': { GBP: 0.85 }, '2025-06-02': { GBP: 0.84 } } }; };
   const p = K.fromCSVText('Date,Type,Asset,Quantity,Total (EUR),Fee (EUR)\n2025-05-02,Buy,A,10,100,2\n2025-05-04,Buy,A,10,100,0\n2025-06-02,Sell,A,5,80,1\n2025-07-20,Sell,A,1,10,0');

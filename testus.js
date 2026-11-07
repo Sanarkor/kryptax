@@ -439,4 +439,24 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
 { const fs = require('fs'); for (const f of ['us-export.js', 'uk-engine.js']) { const S = fs.readFileSync(__dirname + '/' + f, 'utf8'), m = /const ascii = (s => [^\n]*?'\?'\));/.exec(S), A = m && eval(m[1]);
     const out = A ? A('Kryptax \u2014 \u201ctest\u201d \u2018a\u2019 \u2026 1\u00a0000\u202f\u20ac \u2212 \u2264 \u00d7') : '';
     eq([/doc\.text = \(s, \.\.\.a\) => t0\(Array\.isArray\(s\) \? s\.map\(ascii\) : ascii\(s\), \.\.\.a\)/.test(S), /^[\x20-\x7e]*$/.test(out), !/\\u2014 U\.S\./.test(S)], [true, true, true], f + ': PDF text ASCII only (' + out + ')'); } }
+// v2.41: Binance "Transaction History" (ENTIRELY FICTITIOUS data): Time column, fixed UTC offset, banner and empty columns (Excel), pairs, internal moves
+const BN_H = 'User ID,Time,Account,Operation,Coin,Change,Remark';
+const BN_L = ['1,2025-03-01 10:00:00,Spot,Deposit,EUR,500,', '1,2025-03-01 10:00:05,Spot,Transaction Buy,AAA,2,', '1,2025-03-01 10:00:05,Spot,Transaction Spend,EUR,-400,', '1,2025-03-01 10:00:05,Spot,Transaction Fee,AAA,-0.01,',
+  '1,2025-03-02 09:00:00,Funding,Gift Card Redemption,BBB,1,Gift Card', '1,2025-03-02 09:01:00,Funding,Transfer Between Spot and Funding,BBB,-1,', '1,2025-03-02 09:01:00,Spot,Transfer Between Spot and Funding,BBB,1,',
+  '1,2025-03-03 00:30:00,Spot,Staking Rewards,BBB,0.01,', '1,2025-03-05 12:00:00,Spot,Binance Convert,AAA,-0.5,', '1,2025-03-05 12:00:00,Spot,Binance Convert,CCC,10,',
+  '1,2025-04-06 00:30:00,Spot,Sell Crypto to Fiat,EUR,300,', '1,2025-04-06 00:30:01,Spot,Sell Crypto to Fiat,AAA,-1,', '1,2025-04-07 12:00:00,Spot,Sell Crypto to Fiat,USD,120,', '1,2025-04-07 12:00:01,Spot,Sell Crypto to Fiat,CCC,-5,',
+  '1,2025-05-01 08:00:00,Spot,Withdraw,BBB,-0.5,', '1,2025-05-02 08:00:00,Spot,Fiat Withdraw,EUR,-300,'];
+const BN_CSV = BN_H + '\n' + BN_L.join('\n'), BN_NAME = 'Binance-Transaction-History-202601011200(UTC+1)-part1-of1.csv';
+const BN_XLSX = (off) => [[], ['', '', 'Transaction History'], ['', '', 'User ID', '1', 'Period(' + off + ')', 'x'], [], ['', '', ...BN_H.split(',').flatMap(h => [h, ''])]].concat(BN_L.map(l => ['', '', ...l.split(',').flatMap(v => [v, ''])]));
+{ const p = U.fromCSVText(BN_CSV, BN_NAME), T = p.txs;
+  eq([T.map(t => t.type).join(' '), p.platformNote], ['BUY IN INCOME CONVERT SELL SELL OUT', 'binance'], 'Binance (U.S.): Time column read, gift card = IN, withdraw = OUT, internal moves ignored');
+  const sEur = T.find(t => t.type === 'SELL' && t.asset === 'AAA'), sUsd = T.find(t => t.type === 'SELL' && t.asset === 'CCC'), buy = T[0];
+  eq([isNaN(sEur.usd), sUsd.usd, isNaN(buy.usd), buy.qty, p.skipped.some(s => /300\.00 EUR not converted to USD/.test(s.why) && s.kept)], [true, 120, true, 1.99, true], 'Binance (U.S.): USD used as USD; EUR amount never taken as USD (value missing, quoted)');
+  eq([new Date(sUsd.date).toISOString(), sUsd.tz], ['2025-04-07T11:00:00.000Z', 'UTC'], 'Binance (U.S.): fixed UTC+1 offset -> UTC instant');
+  const r = U.compute(T, { fileTz: 'Asia/Tokyo', taxTz: 'America/New_York' }), rw = r.rows.find(x => x.asset === 'CCC' && x.proceeds === 120);
+  eq([!!rw, rw && /to verify/.test(rw.status)], [true, true], 'Binance (U.S.): USD sale kept; CCC basis from a token exchange unknown -> to verify, not invented');
+  const sh = U.compute(T, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows.map(x => x.date), sh2 = U.compute(T, { fileTz: 'Asia/Tokyo', taxTz: 'America/New_York' }).rows.map(x => x.date);
+  eq(JSON.stringify(sh) === JSON.stringify(sh2), true, 'Binance (U.S.): dates with a known offset do not depend on the page time zone');
+  const x = U.parseRows(BN_XLSX('UTC+1'), 'export.xlsx'), m = U.mergeFiles([{ name: 'a.csv', p }, { name: 'b.xlsx', p: x }]);
+  eq([x.txs.length, m.txs.length, m.dupes], [T.length, T.length, T.length], 'Binance (U.S.) Excel: banner and empty columns; CSV + Excel counted once'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
