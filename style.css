@@ -498,3 +498,8 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 .delang button{min-width:0;padding:3px 10px;font-size:.85em;line-height:1.3}
 .delang button[aria-pressed="true"]{font-weight:700;border-color:currentColor;opacity:1}
 .delang button[aria-pressed="false"]{opacity:.75}
+
+/* zzm: Germany page only, empty result and drop hint in the page language (German by default, English when chosen); other countries unchanged */
+@media (min-width:1024px){#demode[lang="de"]>#deresult:empty::before{content:"Ihre Ergebnisse erscheinen hier nach der Berechnung."}}
+#demode[lang="de"] section.dropover::after{content:"Dateien hier ablegen"}
+#demode[lang="en"] section.dropover::after{content:"Drop your files here"}
