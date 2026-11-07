@@ -33,3 +33,7 @@ Not read: the official Anlage SO form itself (PDF), the filing deadlines (AO s. 
 | 12 | Calendar year; days in German time (Europe/Berlin). | s. 2 (7), s. 25 EStG | confirmed |
 | 13 | Anlage SO line numbers: the ELSTER notes give lines 43-49 in one place and 45-49 in another (plus 56-57) for crypto assets; income lines 14-21. | ELSTER | to verify |
 | 14 | Utility and security tokens, NFTs (not covered by the BMF letter), commercial trading or mining: not covered. | BMF Rn. 5 | to verify |
+
+## v2.46 (zzk) additions
+- Language: the Germany page can be shown in English (default) or German (switch at the top of the page, kept in this browser under `kx-de-lang`). Rules, figures and open points are identical in both languages; the PDF is ASCII only (ä -> ae, ö -> oe, ü -> ue, ß -> ss, § -> Par.).
+- Binance "Transaction History" (CSV, Excel, PDF) is read with the shared neutral reader (`formats.js` `binanceLedger` / `binancePdfRows`). EUR amounts are kept; other currencies use the existing ECB conversion; exchanges between tokens and rewards have no EUR value in the file and use the existing market price of the minute or stay "to verify". Deposits and withdrawals are transfers, never a purchase or sale: a token deposited from outside has no purchase lot, so its disposal is "no acquisition found - to verify". The file's own UTC offset is used when present. No tax rule was changed.
