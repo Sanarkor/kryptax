@@ -32,4 +32,7 @@ eq(U.compute(U.fromCSVText(H + B).txs, { fileTz: NY, taxTz: NY }).rows.map(r => 
 // 9) Labels: zone shown by name in the CSV, tab title in English for U.S.A.
 { const r = U.compute(U.fromCSVText(H + B).txs, { fileTz: NY, taxTz: NY }), fs = require('fs'), A = fs.readFileSync(__dirname + '/app.js', 'utf8');
   eq([/Tax dates \(b\), \(c\), tax year and 1-year test: Eastern \(America\/New_York\)/.test(U.toCSV(r)), /us0 \? 'Kryptax – Form 8949 & Schedule D for U\.S\. crypto taxes \(estimate\)' : TITLE0/.test(A)], [true, true], 'CSV names the tax zone; U.S. tab title in English, France and U.K. keep the original title'); }
+// 10) v2.52: no code hidden after a // comment in the region switch (the zzp comment had swallowed lang + tr(), so the U.S. header stayed French)
+{ const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), L = A.split('\n');
+  eq([L.some(l => /\/\/.*tr\(u, gl\)/.test(l)), L.some(l => /^\s*document\.documentElement\.lang = gl \? 'de' : u \? 'en' : 'fr'; tr\(u, gl\);/.test(l)), /\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes \(estimate\)'\]/.test(A)], [false, true, true], 'Region switch really calls tr() (U.S. header in English, France/Germany restored)'); }
 console.log(ko ? ko + ' ÉCHEC(S)' : 'testustz : tout est OK'); process.exit(ko ? 1 : 0);
