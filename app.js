@@ -49,19 +49,40 @@
     const place = () => { if (mq.matches) { if (kf.parentNode !== hd) hd.appendChild(kf); kf.classList.add('kofitop'); } else if (kf.parentNode !== home) { home.insertBefore(kf, nx); kf.classList.remove('kofitop'); } };
     place(); try { mq.addEventListener('change', place); } catch (e) { try { mq.addListener(place); } catch (x) {} } } }
   { const fr = $('#regfr'), us = $('#regus'), uk = $('#reguk'), ukp = $('#ukmode'), de = $('#regde'), dep = $('#demode'), rb = $('#regbtn'), rm = $('#regmenu'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
-    const tr = u => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
+    const tr = (u, g) => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
         if (!keep.has(el)) keep.set(el, { h: el.innerHTML, hid: el.hidden, a: attr ? el.getAttribute(attr) : null });
-        const k = keep.get(el);
-        if (attr) { el.setAttribute(attr, u ? enA : k.a); if (en === '') continue; }
+        const k = keep.get(el), gA = g && attr ? DEG.get(sel + '|' + attr) : null, gH = g ? DEG.get(sel) : null;
+        if (attr) { el.setAttribute(attr, u ? (gA || enA) : k.a); if (en === '') continue; }
         if (en === null) { if (!attr) el.hidden = u ? true : k.hid; continue; }
-        el.innerHTML = u ? en : k.h; } };
+        el.innerHTML = u ? (gH || en) : k.h; } };
+    /* v2.46: German texts of the shared parts, used only on the Germany page when its language is German (kx-de-lang); France, U.S.A. and U.K. unchanged. */
+    const DEG = new Map([['header .sub2', 'Kostenlos, Quellcode verfügbar und anonym: Sie behalten die volle Kontrolle über Ihre Daten.'], ['.regions|aria-label', 'Land'],
+      ['footer .disclaim', 'Kryptax ist ein kostenloses Werkzeug mit verfügbarem Quellcode. Es ist keine Steuer-, Finanz- oder Rechtsberatung. Sie bleiben allein verantwortlich für die Prüfung Ihrer Daten.'],
+      ['#whyopen .fl', 'Warum Kryptax?'], ['#whyopen .fs', 'Warum?'], ['#kofi2 > span', '☕ Kryptax unterstützen 🙏'], ['#kofi2|aria-label', 'Kryptax unterstützen, danke'],
+      ['#whyclose|aria-label', 'Schließen'], ['#whytitle', 'Warum ich Kryptax gebaut habe'],
+      ['#why .pv-in > p:nth-of-type(2)', 'Ich habe 2026 mit Krypto angefangen und festgestellt, dass ein einfacher Bericht oft Geld kostet. Also habe ich mein eigenes Werkzeug gebaut und gebe es allen.'],
+      ['#why .pv-in > p:nth-of-type(3)', 'Kostenlos, Quellcode verfügbar, ohne Konto, und Ihre Daten bleiben auf Ihrem Gerät. Die U.S.A.-Version ist im Aufbau: wir bauen sie gemeinsam. Wenn es Ihnen geholfen hat, ist ein kleiner Kaffee immer willkommen ☕'],
+      ['#merciclose|aria-label', 'Schließen'], ['#mercititle', 'Danke für Ihre Unterstützung 🙏'],
+      ['#mercitext', 'Wenn Kryptax Ihnen geholfen hat, können Sie dem Entwickler auf Ko-fi einen kleinen Kaffee spendieren (externe Website, öffnet sich in einem neuen Tab).'],
+      ['#merci .merci-legal', 'Kryptax bleibt kostenlos. Eine Spende ist ein einfaches freiwilliges Dankeschön ohne Gegenleistung und kann weder erstattet noch storniert werden.'],
+      ['#mercikofi', '☕ Auf Ko-fi spenden'], ['#merciok', 'Schließen'], ['#privopen', 'Impressum und Datenschutz'], ['#privtitle', 'Impressum und Datenschutz'],
+      ['#privacy .pv-in > :nth-child(2)', 'Ihre Dateien bleiben bei Ihnen'], ['#privacy .pv-in > :nth-child(3)', 'Alles läuft in Ihrem Browser. Keine Datei, keine Transaktion und kein Betrag wird an einen Kryptax-Server gesendet: Kryptax hat keinen Server, es ist eine einfache Webseite.'],
+      ['#privacy .pv-in > :nth-child(4)', 'Kryptokurse'], ['#privacy .pv-in > :nth-child(5)', 'Um den Wert einer Kryptowährung zu einem Datum zu finden, fragt Ihr Browser öffentliche Kursquellen direkt ab, ohne Konto oder Schlüssel; um eine andere Währung umzurechnen (zum Beispiel in EUR auf der Deutschland-Seite), fragt er Frankfurter nach den Referenzkursen der Europäischen Zentralbank. Gesendet werden nur das Symbol oder die Währung und das Datum oder der Zeitraum, nie Ihre Beträge, Mengen oder Ihr Name. Wie jede Website sehen diese Dienste Ihre IP-Adresse.'],
+      ['#privacy .pv-in > :nth-child(6)', 'In diesem Browser gespeicherte Daten'], ['#privacy .pv-in > :nth-child(7)', 'Ihre Transaktionen, Eingaben und bereits gefundenen Kurse werden im lokalen Speicher dieses Browsers gespeichert, nur auf diesem Gerät. Die Schaltfläche zum Zurücksetzen löscht alles.'],
+      ['#privacy .pv-in > :nth-child(8)', 'Kein Konto, kein Tracking'], ['#privacy .pv-in > :nth-child(9)', 'Kein Konto, keine Werbung, keine Cookies, keine Tracker, keine Reichweitenmessung.'],
+      ['#privacy .pv-in > :nth-child(10)', 'Verantwortung'], ['#privacy .pv-in > :nth-child(11)', 'Kryptax ist ein kostenloses Werkzeug mit verfügbarem Quellcode. Es ist keine Steuer-, Finanz- oder Rechtsberatung. Sie bleiben allein verantwortlich für die Prüfung Ihrer Daten.'],
+      ['#kofinote > h3', 'Spenden'], ['#kofinote > p', 'Eine Schaltfläche „Kryptax unterstützen“ führt zu Ko-fi (externe Website, öffnet sich in einem neuen Tab). Eine Spende ist ein kleines Dankeschön von Herzen: sie ist kostenlos und freiwillig, begründet keinen Anspruch auf eine Leistung oder einen Vorteil und kann, da sie aus freiem Willen erfolgt, weder erstattet noch storniert werden. Kryptax sendet keine Daten an Ko-fi: nur Ihr Browser öffnet die Seite, wenn Sie klicken.'],
+      ['#privacy .pv-in > :nth-child(13)', 'Herausgeber und Hosting'], ['#privacy .pv-in > :nth-child(14)', 'Herausgeber: Damien M. alias „Sanarkor“. Hosting: GitHub Pages (GitHub, Inc.).'],
+      ['#privclose', 'Schließen']]);
+    const deLang = () => { try { return localStorage.getItem('kx-de-lang') === 'de'; } catch (e) { return false; } };
+    let curReg = null;
     const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US';
       [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
-      if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? 'Country: Deutschland' : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
-      document.documentElement.lang = u ? 'en' : 'fr'; tr(u);
+      if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? (deLang() ? 'Land: Deutschland' : 'Country: Deutschland') : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
+      const gl = !!d && deLang(); curReg = v; document.documentElement.lang = gl ? 'de' : u ? 'en' : 'fr'; tr(u, gl);
       { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } { const dl = $('footer .delaw'); if (dl) dl.hidden = !d; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
-      if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'Anlage SO summary for German crypto taxes (estimate)'; }
+      if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = gl ? 'Zusammenfassung Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Anlage SO summary for German crypto taxes (estimate)'; }
       if (save) try { localStorage.setItem(K, d ? 'DE' : g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
     let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK' || s === 'DE') v0 = s; } catch (e) {}
     if (!v0) { let L = [], Z = ''; try { L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; } catch (e) {} try { Z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {} v0 = autoRegion(L, Z); }
@@ -69,6 +90,7 @@
     const opts = () => rm ? Array.from(rm.querySelectorAll('.regopt')) : [];
     const close = (focus) => { if (!rm || rm.hidden) return; rm.hidden = true; rb.setAttribute('aria-expanded', 'false'); if (focus) rb.focus(); };
     const open = (last) => { if (!rm) return; rm.hidden = false; rb.setAttribute('aria-expanded', 'true'); const o = opts(), i = o.findIndex(b => b.classList.contains('on')); const t = last ? o[o.length - 1] : (o[i] || o[0]); if (t) t.focus(); };
+    document.addEventListener('kx-de-lang', () => { if (curReg === 'DE') set('DE'); }); // v2.46 : bascule de langue de la page Allemagne seulement
     if (fr && us) { if (v0 === 'US' || v0 === 'UK' || v0 === 'DE') set(v0); else set('FR');
       fr.addEventListener('click', () => { set('FR', true); close(true); }); us.addEventListener('click', () => { set('US', true); close(true); }); if (uk) uk.addEventListener('click', () => { set('UK', true); close(true); }); if (de) de.addEventListener('click', () => { set('DE', true); close(true); });
       if (rb && rm) { rb.addEventListener('click', () => rm.hidden ? open() : close());

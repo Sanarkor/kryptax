@@ -52,6 +52,44 @@ eq([inc(254.99).incExempt, inc(255).incExempt, inc(255).incomeTaxable, inc(255).
 { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), m = H.match(/<section id="demode"[\s\S]*?<div id="deresult"/), L = H.match(/<span class="law delaw"[^>]*>([\s\S]*?)<\/span>/);
   eq([!!m, m && /[àâçéèêëîïôûùÿœ]|\b(le|la|les|des|vos)\b/.test(m[0]), /Anlage SO summary for German crypto taxes \(estimate\)/.test(fs.readFileSync(__dirname + '/app.js', 'utf8')), !!L, L && /BMF/.test(L[1])], [true, false, true, true, true], 'Germany page in English, title, legal footer'); }
 // missing EUR values: market price of the minute (test double)
+let return_p = null;
+// v2.46: Binance "Transaction History" in the Germany mode and German / English language (ENTIRELY FICTITIOUS data)
+{ const BN_H = 'User ID,Time,Account,Operation,Coin,Change,Remark';
+  const BN_L = ['1,2025-03-01 10:00:00,Spot,Deposit,EUR,500,', '1,2025-03-01 10:00:05,Spot,Transaction Buy,AAA,2,', '1,2025-03-01 10:00:05,Spot,Transaction Spend,EUR,-400,', '1,2025-03-01 10:00:05,Spot,Transaction Fee,AAA,-0.01,',
+    '1,2025-03-02 09:00:00,Funding,Gift Card Redemption,BBB,1,Gift Card', '1,2025-03-02 09:01:00,Funding,Transfer Between Spot and Funding,BBB,-1,', '1,2025-03-02 09:01:00,Spot,Transfer Between Spot and Funding,BBB,1,',
+    '1,2025-03-03 00:30:00,Spot,Staking Rewards,BBB,0.01,', '1,2025-03-05 12:00:00,Spot,Binance Convert,AAA,-0.5,', '1,2025-03-05 12:00:00,Spot,Binance Convert,CCC,10,',
+    '1,2025-04-06 00:30:00,Spot,Sell Crypto to Fiat,EUR,300,', '1,2025-04-06 00:30:01,Spot,Sell Crypto to Fiat,AAA,-1,', '1,2025-04-07 12:00:00,Spot,Sell Crypto to Fiat,USD,120,', '1,2025-04-07 12:00:01,Spot,Sell Crypto to Fiat,CCC,-5,',
+    '1,2025-05-01 08:00:00,Spot,Withdraw,BBB,-0.5,', '1,2025-05-02 08:00:00,Spot,Fiat Withdraw,EUR,-300,', '1,2025-12-31 23:30:00,Spot,Sell Crypto to Fiat,EUR,10,', '1,2025-12-31 23:30:01,Spot,Sell Crypto to Fiat,AAA,-0.05,'];
+  const CSV = BN_H + '\n' + BN_L.join('\n'), NAME = 'Binance-Transaction-History-202601011200(UTC+1)-part1-of1.csv';
+  const XL = [[], ['', '', 'Transaction History'], ['', '', 'User ID', '1', 'Period(UTC+1)', 'x'], [], ['', '', ...BN_H.split(',').flatMap(h => [h, ''])]].concat(BN_L.map(l => ['', '', ...l.split(',').flatMap(v => [v, ''])]));
+  const p = K.fromCSVText(Buffer.from(CSV), NAME), T = p.txs, k = t => [t.type, t.asset, t.date, t.qty, t.amt, t.cur, t.tz, t.toAsset, t.toQty].join('|');
+  eq([p.binance, T.map(t => t.type).join(' '), p.skipped.filter(s => !s.kept).length], [true, 'BUY TRANSFER INCOME CONVERT SELL SELL TRANSFER SELL', 0], 'Binance (DE): Time column, internal moves ignored, legs paired, deposits and withdrawals = transfers');
+  const buy = T[0], sEur = T.find(t => t.type === 'SELL' && t.asset === 'AAA'), sUsd = T.find(t => t.type === 'SELL' && t.asset === 'CCC'), cv = T.find(t => t.type === 'CONVERT');
+  eq([buy.qty, buy.eur, sEur.eur, sEur.tz, new Date(sEur.date).toISOString(), sUsd.cur, sUsd.needFx, isNaN(sUsd.eur), cv.toAsset, cv.toQty, isNaN(cv.eur), !!cv.needFx], [1.99, 400, 300, 'UTC', '2025-04-05T23:30:00.000Z', 'USD', true, true, 'CCC', 10, true, false], 'Binance (DE): EUR kept, USD waits for ECB conversion, token exchange without value, UTC+1 from the file name');
+  const x = K.parseRows(XL, 'export.xlsx'), L = fs.readFileSync(__dirname + '/testdata/binance_fictif.pdf.txt', 'utf8').split('\n'), pd = K.fromPdfLines(L);
+  eq([JSON.stringify(x.txs.map(k)) === JSON.stringify(T.map(k)), JSON.stringify(pd.txs.map(k)) === JSON.stringify(T.slice(0, pd.txs.length).map(k)), pd.txs.length], [true, true, 7], 'Binance (DE): Excel and PDF read like the CSV (same lines, offset from the banner)');
+  const r = K.compute(T.filter(t => !t.needFx), { fileTz: 'Asia/Tokyo' }), last = r.disposals.find(d => d.proceeds === 10);
+  eq([last.year, last.date === Date.UTC(2025, 11, 31)], ['2025', true], 'Binance (DE): 23:30 UTC+1 on 31 Dec = 31 Dec in German time; page time zone ignored for these lines');
+  const cvd = r.disposals.find(d => d.to === 'CCC'), inc = r.income[0], bbb = r.disposals.find(d => d.asset === 'BBB');
+  eq([cvd.stK, cvd.proceeds, inc.eur, inc.kind, inc.counted, !!bbb], ['noval', null, null, 'staking', true, false], 'Binance (DE): exchange and reward without price stay to verify (no invented value); staking = passive income; withdrawal is not a sale');
+  const sold = K.compute(K.fromCSVText(Buffer.from(BN_H + '\n1,2025-03-02 09:00:00,Funding,Gift Card Redemption,BBB,1,Gift Card\n1,2025-06-01 10:00:00,Spot,Sell Crypto to Fiat,EUR,50,\n1,2025-06-01 10:00:01,Spot,Sell Crypto to Fiat,BBB,-1,'), NAME).txs, { fileTz: 'UTC' }).disposals[0];
+  eq([sold.stK, sold.gain], ['noacq', null], 'Binance (DE): token received from outside, then sold: no acquisition found, to verify (transfer is not a purchase)');
+  return_p = { p, r }; }
+{ const { p, r } = return_p, Y = K.yearSummary(Object.assign(r, { skipped: p.skipped, binance: true }), '2025'), res = Object.assign(r, { skipped: p.skipped, binance: true });
+  const en = { chk: K.checks(res, Y, '2025').join('\n'), csv: K.toCSV(res, '2025'), pdf: JSON.stringify(K.pdfData(res, '2025', new Date(Date.UTC(2026, 0, 2)))) };
+  K.setLang('de'); K.misses.clear();
+  const de = { chk: K.checks(res, Y, '2025').join('\n'), csv: K.toCSV(res, '2025'), pdfD: K.pdfData(res, '2025', new Date(Date.UTC(2026, 0, 2))) }; de.pdf = JSON.stringify(de.pdfD);
+  const Y2 = K.yearSummary(res, '2025');
+  K.setLang('en');
+  eq([JSON.stringify(Y2) === JSON.stringify(Y), K.checks(res, Y, '2025').join('\n') === en.chk, K.toCSV(res, '2025') === en.csv], [true, true, true], 'Language: same figures in German and English; back to English gives the same texts');
+  const EN_WORDS = /\b(to verify|disposals?|proceeds|gains?|losses|income|limit|line\(s\)|not in the|Net result|Year|Status of|missing|exchange|wallet or platform|lines skipped)\b/i;
+  eq([EN_WORDS.test(de.chk), EN_WORDS.test(de.csv.replace(/Binance Transaction History|Gift Card|Staking Rewards|Transfer Between Spot and Funding/g, '')), [...K.misses]], [false, false, []], 'Deutsch: no English left in checks and CSV (Binance operation names from the file kept as such), every reason translated');
+  eq([/[^\x20-\x7e]/.test(de.pdf.replace(/\\[nrtu"\\]/g, '')), /Veraeusserung/.test(de.pdf), /zu pruefen/.test(de.pdf), /Pruefen|\?/.test(de.pdfD.title), /BMF-Schreiben vom 6\. Maerz 2025/.test(de.pdfD.foot)], [false, true, true, false, true], 'Deutsch PDF: ASCII only, umlauts written ae/oe/ue/ss, legal sources in German');
+  eq([/Zu prüfen: /.test(K.setLang('de') && K.pdfData(res, '2025').info.join('')), K.setLang('en')], [false, 'en'], 'Deutsch PDF: no non-ASCII letters in the info lines');
+  eq([K.OPEN.length === K.OPEN_DE.length, K.OPEN_DE.every(s => /zu prüfen\.$/.test(s)), K.OPEN.every(s => /to verify\.$/.test(s))], [true, true, true], 'Open points: same list in English and German, all "to verify" / "zu prüfen"');
+  const IH = fs.readFileSync(__dirname + '/index.html', 'utf8'), AP = fs.readFileSync(__dirname + '/app.js', 'utf8'), SR = fs.readFileSync(__dirname + '/de-engine.js', 'utf8');
+  eq([(IH.match(/id="delang"/g) || []).length, /<section id="demode"[^>]*><div id="delang"/.test(IH), /localStorage\.getItem\('kx-de-lang'\) === 'de'/.test(AP), /const gl = !!d && deLang\(\)/.test(AP), /LANG_KEY = 'kx-de-lang'/.test(SR), /let l = 'en'/.test(SR)], [1, true, true, true, true, true], 'Switch only on the Germany page; English by default; choice kept in this browser (kx-de-lang); other countries do not read it');
+  eq([K.STATIC_DE.every(([s]) => s === 'footer .delaw' || s === '#detzl' || /^#de|^#demode/.test(s) || /^#deimp/.test(s))], [true], 'German static texts only target the Germany page and its footer line'); }
 const asyncT = (async () => {
   const p = parse([['2025-01-01 10:00', 'Buy', 'AA', 2, 200], ['2025-02-01 10:00', 'Convert', 'AA', 1, '', '', 'BB', 4], ['2025-03-01', 'Staking reward', 'BB', 1, '']]);
   await K.priceMissing(p, { minute: async (a) => a === 'BB' ? { p: 50, src: 'test', k: 'm' } : null }, 'UTC');
