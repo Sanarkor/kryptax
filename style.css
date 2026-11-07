@@ -425,6 +425,8 @@ footer .disclaim{margin-top:2px}
 }
 /* v2.22 PC : logo et signature x2,25, sous-titre x1,5 (écrans de plus de 560 px de haut) */
 @media (min-width:1024px) and (min-height:561px){header h1{font-size:5.4rem;padding-bottom:.16em}header .sub{font-size:1.575em}}
+/* v2.40 PC : logo +15 % (5,4 -> 6,21 rem), même point de rupture ; la signature suit (fitSig) et reçoit +25 % au total ; mobile inchangé */
+@media (min-width:1024px) and (min-height:561px){header h1{font-size:6.21rem}}
 /* v2.23 U.S.A. : fuseau du fichier dans Options, ligne pleine largeur */
 .usopts .ustzopt{grid-column:1/-1}.usopts .ustzopt select{width:100%;max-width:100%;min-width:0}
 /* v2.23 FRANCE PC : dès l'arrivée, 2 colonnes ; carte « 2. Résultat et export » vide avec un message d'attente, masquée pendant un calcul */
@@ -486,3 +488,7 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 .regmenu .rs{display:none}.regcur .rs{display:none}.regcur .rl{font-size:.86em;letter-spacing:.02em}
 @media (max-width:480px){.regcur .rl{display:none}.regcur .rs{display:inline}}
 .dem .usimp p{margin:.4rem 0}
+
+/* zze: Germany page, same layout as the U.K. page */
+@media (min-width:1024px){.usmode>#deleft{grid-column:1;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto;padding:0 8px 8px 2px}.usmode>#deresult{grid-column:2}.usmode:has(#deresult:empty)>#deleft{position:static;max-height:none;overflow:visible}.usmode>#deresult:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px #0006;color:var(--muted);font-style:italic;margin:8px 0}.usmode>#deresult:empty::before{content:"Your results will appear here after the calculation."}}
+#deresult .note{text-align:left}#deresult .note ul{margin:.35em 0 0;padding-left:1.2em}#deresult .note li{margin:.15em 0}
