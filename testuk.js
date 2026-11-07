@@ -72,6 +72,8 @@ const BN_XLSX = (off) => [[], ['', '', 'Transaction History'], ['', '', 'User ID
 { let asked = ''; const p = K.fromCSVText(BN_CSV, BN_NAME);
   K.convertFx(p, async u => { asked = u; return { rates: { '2025-03-01': { GBP: 0.83 }, '2025-04-04': { GBP: 0.84 }, '2025-04-07': { GBP: 0.85 } } }; }).then(() => {
     const s = p.txs.find(t => t.type === 'SELL' && t.asset === 'AAA'); eq([Math.round(s.gbp * 100) / 100, s.fx.on], [252, '2025-04-04'], 'Binance (U.K.): EUR sale converted with the ECB rate of the day or the previous working day'); }); }
+{ const L = fs.readFileSync(__dirname + '/testdata/binance_fictif.pdf.txt', 'utf8').split('\n'), p = K.fromPdfLines(L), q = K.fromCSVText(BN_CSV, BN_NAME), k = t => [t.type, t.asset, t.date, t.qty, t.amt, t.cur, t.tz].join('|');
+  eq([p.txs.length, JSON.stringify(p.txs.map(k)) === JSON.stringify(q.txs.map(k)), p.skipped.filter(s => !s.kept).length], [q.txs.length, true, 0], 'Binance PDF (U.K.): same reading as the CSV (source currency, UTC offset from the banner)'); }
 const asyncT = (async () => {
   const urls = [], mock = async u => { urls.push(u); return { rates: { '2025-05-02': { GBP: 0.85 }, '2025-06-02': { GBP: 0.84 } } }; };
   const p = K.fromCSVText('Date,Type,Asset,Quantity,Total (EUR),Fee (EUR)\n2025-05-02,Buy,A,10,100,2\n2025-05-04,Buy,A,10,100,0\n2025-06-02,Sell,A,5,80,1\n2025-07-20,Sell,A,1,10,0');

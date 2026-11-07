@@ -202,6 +202,7 @@
     let lines = [];
     for (let i = 1; i <= doc.numPages; i++) { const c = await (await doc.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
     $('#progress').textContent = '';
+    { const B = KF.binancePdfRows && KF.binancePdfRows(lines); if (B) { showMapping(file.name, B, false); if (B.info.unread) showErr(file.name + ' : ' + B.info.unread + ' ligne(s) d’opération du PDF Binance non lue(s), à vérifier.', true); return; } } // v2.42 : relevé PDF Binance « Transaction History » = même lecture que le CSV
     const r = KP.parsePdfLines(lines);
     if (!r.rows.length && !r.fiat.length && !r.rows2.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.' + (r.amb.length ? ' ' + r.amb.length + ' ligne(s) ambiguë(s) non importée(s) : ' + r.amb.map(a => a.why).join(' ; ') + '.' : ''));
     holders[file.name] = KP.holderFromLines(lines); saveHolders();

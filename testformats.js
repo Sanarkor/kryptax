@@ -157,4 +157,11 @@ chk(!fs.readdirSync(__dirname + '/testdata/formats').some(f => new RegExp(['rev'
   const b1 = rd2(H + '\n' + L.join('\n'), 'x(UTC+1).csv'), b2 = F.parse(X2.map((r, i) => i === 2 ? ['', '', 'User ID', '1', 'Period(UTC+1)', 'x'] : r), dx, { source: 'x.xlsx' }, uid);
   b1.txs.forEach(t => t.source = 'x(UTC+1).csv'); b2.txs.forEach(t => t.source = 'x.xlsx');
   const m = P.mergeImport(b1.txs, b2.txs); chk(m.added === 0 && m.dup === b2.txs.length, 'même historique en CSV puis Excel : ' + m.dup + ' doublons écartés, 0 ajouté'); }
+// v2.42 : relevé PDF Binance « Transaction History » (lignes extraites par pdf.js du PDF FICTIF testdata/binance_fictif.pdf, 3 pages) = même lecture que son CSV
+{ const L = fs.readFileSync(__dirname + '/testdata/binance_fictif.pdf.txt', 'utf8').split('\n'), R = F.binancePdfRows(L), C = rd('binance_history_fictif.csv');
+  const k = t => [t.type, t.asset, t.date, t.qty, t.eur, t.feeQty || 0].join('|'), p = R && F.parse(R, F.detect(R), { source: 'releve.pdf' }, uid), q = F.parse(C, F.detect(C), { source: 'x(UTC+1).csv' }, uid);
+  chk(R && R.info.lines === 16 && R.info.unread === 0 && p.bad.length === 0, 'PDF Binance : 16 lignes d’opération lues sur 3 pages, en-têtes répétés ignorés');
+  chk(p && JSON.stringify(p.txs.map(k).sort()) === JSON.stringify(q.txs.map(k).sort()) && /UTC\+1 \(décalage fixe\)/.test(p.tzNote), 'PDF Binance = CSV (fuseau UTC+1 du bandeau, paires à 1 s, frais)');
+  chk(F.binancePdfRows(['Relevé', 'User ID Time Account Operation Coin Change Remark', '1 2025-01-01 10:00:00 Spot Deposit EUR 5']) === null && F.binancePdfRows(L.filter(x => !/^\d/.test(x))) === null, 'PDF Binance : refusé sans bandeau Binance ou sans ligne d’opération');
+  const L2 = L.slice(); L2.splice(9, 0, '1 2025-03-01 10:00:05 Spot ???'); chk(F.binancePdfRows(L2).info.unread === 1, 'PDF Binance : ligne d’opération illisible comptée (jamais devinée)'); }
 process.exit(ok ? 0 : 1);

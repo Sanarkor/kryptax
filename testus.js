@@ -459,4 +459,6 @@ const BN_XLSX = (off) => [[], ['', '', 'Transaction History'], ['', '', 'User ID
   eq(JSON.stringify(sh) === JSON.stringify(sh2), true, 'Binance (U.S.): dates with a known offset do not depend on the page time zone');
   const x = U.parseRows(BN_XLSX('UTC+1'), 'export.xlsx'), m = U.mergeFiles([{ name: 'a.csv', p }, { name: 'b.xlsx', p: x }]);
   eq([x.txs.length, m.txs.length, m.dupes], [T.length, T.length, T.length], 'Binance (U.S.) Excel: banner and empty columns; CSV + Excel counted once'); }
+{ const L = fs.readFileSync(__dirname + '/testdata/binance_fictif.pdf.txt', 'utf8').split('\n'), p = U.fromPdfLines(L), q = U.fromCSVText(BN_CSV, BN_NAME), k = t => [t.type, t.asset, t.date, t.qty, t.usd, t.tz].join('|');
+  eq([p.txs.length, JSON.stringify(p.txs.map(k)) === JSON.stringify(q.txs.map(k))], [q.txs.length, true], 'Binance PDF (U.S.): same reading as the CSV'); }
 console.log(`\n${ok} OK, ${ko} KO`); if (ko) process.exitCode = 1;
