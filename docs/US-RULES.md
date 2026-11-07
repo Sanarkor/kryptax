@@ -309,3 +309,14 @@ Checked on 2026-11-07 on irs.gov (official pages only). Kryptax stays a beta est
 **Reference cases (`testusref.js`, fictitious, computed on paper):** buy with fee, sale exactly on the anniversary (short) and the day after (long), year-end anniversary, transfer between own wallets (date and basis kept), convert with fee, staking income as basis, airdrop without value, unknown basis and missing purchase (to verify, never $0), stablecoin bought and sold, HIFO, duplicate line across two files, Schedule D 7/15/16/21 with both loss limits, boxes by edition in screen data, CSV and PDF data.
 
 **Still open (to verify, not coded):** 1099-DA column (f)/(g) adjustments (codes B, E...) and gross vs net proceeds when a 1099-DA is received; cascading transaction costs; allocation of unused basis to wallets at January 1, 2025 (Rev. Proc. 2024-28 safe harbor); income character and where to report it; collectibles (NFT) rate and code C; leap-day acquisitions; state taxes; final 2026 forms.
+
+## v2.51 — Tax-date time zone no longer taken from the browser (v=20261108zzp)
+
+**Cause (reported in QA, 2026-11-08):** the file times were read in the zone chosen ("Time zone of your file", e.g. Eastern), but dates (b)/(c), the tax year and the 1-year holding test were computed in the **browser's** zone (`taxTz = Intl…resolvedOptions().timeZone`). In a Paris browser a sale on 12/31/2025 23:59 Eastern became 01/01/2026 (tax year 2026). This was a calculation effect, not only a label; amounts were never affected.
+
+**Now:** a separate option "Tax dates (your U.S. time zone)" (Options, right after the file zone, saved in `kryptax.us.settings` as `taxTz`). Automatic = the file zone when it is a U.S. zone, else the browser zone when it is a U.S. zone, else Eastern (America/New_York); a non-U.S. browser zone (Paris, Tokyo…) is never used. The zone used is named on the result screen, in the CSV/Excel and in the PDF.
+- Lines with an explicit UTC offset (Binance "UTC+1" files) keep their exact instant, then take the tax-zone calendar date.
+- A date without a time is a calendar day: it is no longer moved to the previous or next day by a zone change.
+- The tab title is English in U.S.A. mode ("Kryptax – Form 8949 & Schedule D for U.S. crypto taxes (estimate)"); France and Germany unchanged; U.K. keeps the original title (not touched).
+
+**Source and limits:** the IRS texts give calendar-day rules (i8949: "begin counting on the day after you received the property and include the day you disposed of it"; Pub. 544) but no time-zone rule for an individual was found; using your U.S. residence zone is Kryptax's convention, to verify. Leap day (02/29 -> 03/01 anniversary) unchanged, to verify. Tests: `testustz.js` (year boundary Eastern vs UTC/Paris, explicit offset, anniversary depending on the zone, DST, leap day, date-only rows), run under four process time zones by `npm run test:tz`.
