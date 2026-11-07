@@ -146,6 +146,7 @@
      Lines that do not match are ignored; if no line matches, nothing is computed (never an invented result). */
   const PDF_RX = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2})(?:[ ,]+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)?\s+(buy|purchase|sell|sale|convert|exchange|swap|staking reward|reward|airdrop|interest|send|receive|deposit|withdrawal)\s+([A-Z0-9]{2,10})\s+([\d,]*\.?\d+)\s+\$\s?([\d,]*\.?\d+)(?:\s+\$\s?([\d,]*\.?\d+))?(?:\s+(?:→|->|to)\s+([\d,]*\.?\d+)\s+([A-Z0-9]{2,10}))?\s*$/i;
   function fromPdfLines(lines) {
+    { const B = KF.binancePdfRows && KF.binancePdfRows(lines); if (B) { const o = parseRows(B, ''); o.pdf = true; if (B.info.unread) o.skipped.push({ line: 'PDF', why: B.info.unread + ' Binance operation line(s) in the PDF could not be read, to verify' }); return o; } } /* v2.42: Binance PDF statement = same reading as its CSV */
     const rows = [['Date', 'Type', 'Asset', 'Quantity', 'Total (USD)', 'Fee (USD)', 'Received Asset', 'Received Quantity']];
     for (const l of lines) { const m = String(l).replace(/\s+/g, ' ').trim().match(PDF_RX); if (m) rows.push([m[1], m[2], m[3], m[4], m[5], m[6] || '', m[8] || '', m[7] || '']); }
     const p = parseRows(rows); p.matched = rows.length - 1; return p;
