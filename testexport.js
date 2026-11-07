@@ -78,4 +78,31 @@ chk(/Montants en euros \(€\)/.test(txt), 'PDF : « Montants en euros (€) » 
   const Y3 = E.byYear(E.compute(T3, () => null)), x3 = X.exportData(Y3, {}, () => [], T3, 2025);
   const t3 = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, x3, X.title(2025)).output('arraybuffer')) }).toString();
   chk(Y3[2025].exonere === true && x3.totals[0].exonere === true && /<= 305|≤ 305/.test(t3) && !/3AN|3BN/.test(t3.replace(/3AN\/3BN/g, '')) && /exon/i.test(t3), 'PDF : 310 € avec 10 € de frais (218 = 300 €) exonéré, comme à l’écran'); }
+// Impôt estimé dans le PDF = même calcul que « Prélèvement estimé selon le calcul » à l'écran (app.js)
+{ const AP = fs.readFileSync(__dirname + '/app.js', 'utf8'), scr = t => t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30);
+  chk(AP.includes('eur(t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30))'), 'écran : formule du prélèvement estimé inchangée');
+  const C = [{ year: 2025, exonere: true, l224: 50, report: 0 }, { year: 2025, exonere: false, l224: -120, report: 120 }, { year: 2024, exonere: false, l224: 1000.4, report: 1000 }, { year: 2025, exonere: false, l224: 1000.4, report: 1000 }];
+  chk(C.every(c => X.impot(c) === scr(c)), 'PDF : impôt estimé = montant de l’écran (≤ 305 €, perte, 2024, 2025)');
+  chk(JSON.stringify(C.map(X.impotTxt)) === JSON.stringify(['0,00 € (cessions ≤ 305 €)', '0,00 € (pas de plus-value)', '300,00 € (30 % de 1000 €)', '314,00 € (31,4 % de 1000 €)']), 'PDF : ligne impôt estimé, un seul taux, celui de l’année');
+  const tt = x.totals[0]; chk(/Imp.t estim. \(. v.rifier\)/.test(txt) && txt.includes(X.impotTxt(tt).replace(/ /g, ' ').split(' (')[0].replace(/ /g, ' ')), 'PDF : ligne « Impôt estimé (à vérifier) » présente avec le montant'); }
+{ const fs2 = require('fs'), AP = fs2.readFileSync(__dirname + '/app.js', 'utf8'), UE = fs2.readFileSync(__dirname + '/us-engine.js', 'utf8'), CS = fs2.readFileSync(__dirname + '/style.css', 'utf8');
+  chk(AP.includes('prelev = t.exonere || t.l224 <= 0 ? 0 : t.report * (t.year >= 2025 ? 0.314 : 0.30)') && AP.includes('${eur(prelev)}'), 'PC : bandeau = même formule que le cadre (aucun nouveau calcul)');
+  const ks = [...AP.matchAll(/localStorage\.setItem\(([^,]+),/g)].map(m => m[1].trim()); chk(AP.includes("KT = 'kx-theme'") && ks.includes('KT') && /v === 'light' \|\| v === 'dark'/.test(AP), 'thème : clé kx-theme seule, valeur invalide ignorée');
+  chk(/(^|\n)\.kxkpi\{display:none\}/.test(CS) && /@media \(min-width:1024px\)\{\nheader,main,\.banner\{max-width:1400px\}/.test(CS) && /@media print\{\.kxkpi,\.themebtn\{display:none!important\}\}/.test(CS), 'PC : bandeau caché sous 1024 px et à l’impression');
+  chk(CS.includes(':root[data-theme="light"]{') && CS.includes('@media (prefers-color-scheme: light){'), 'thème : clair par préférence système ou choix mémorisé');
+  chk(!/data-theme|kx-theme/.test(fs2.readFileSync(__dirname + '/export.js', 'utf8') + fs2.readFileSync(__dirname + '/us-export.js', 'utf8')), 'thème : PDF/CSV/Excel non concernés');
+  chk(UE.includes("side.innerHTML = wide() ? guideHtml(res) + checksHtml(res) : ''") && UE.includes("(wide() ? '' : guideHtml(res) + checksHtml(res))"), 'U.S. PC : To verify + What to copy dans le panneau latéral, une seule fois'); }
+{ const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), src = AP.match(/  function frBarData\(Y, yc\) \{[\s\S]*?\n  \}\n/)[0];
+  const frBarData = new Function('window', src + 'return frBarData;')({ KryptaxExport: X }), all = X.exportData(Y, {}, () => [], []).totals.filter(t => t.n);
+  const res = all.map(t => { const D = frBarData(Y, Y[t.year].cessions), s = D.assets.reduce((a, i) => a + i.v, 0); return Math.abs(s - t.l224) <= 0.01 * D.assets.length + 1e-9 && D.years.length === all.length && D.years.every((b, i) => b.v === all[i].l224); });
+  chk(res.length > 0 && res.every(Boolean), 'graphiques : somme des barres par crypto = total global de l’année ; barres par année = totaux de l’année (aucun nouveau calcul)');
+  chk(!/kxchart|kxBars/.test(require('fs').readFileSync(__dirname + '/export.js', 'utf8') + require('fs').readFileSync(__dirname + '/us-export.js', 'utf8')) && /@media print\{\.kxcharts\{display:none!important\}\}/.test(require('fs').readFileSync(__dirname + '/style.css', 'utf8')), 'graphiques : écran seulement (ni PDF/CSV/Excel, ni impression)'); }
+{ const IH = require('fs').readFileSync(__dirname + '/index.html', 'utf8'), AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8') + require('fs').readFileSync(__dirname + '/us-engine.js', 'utf8') + require('fs').readFileSync(__dirname + '/us-export.js', 'utf8');
+  chk(/<a id="pvopen"[^>]*target="_blank" rel="noopener"/.test(IH) && !/location\.(href\s*=|assign|replace)/.test(AP), 'PDF : ouverture dans un nouvel onglet (target=_blank, noopener), jamais à la place de la page'); }
+{ const C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
+  chk(/main>#results:empty\{display:flex/.test(C) && /main>#results:empty::before\{content:"2\. Résultat et export/.test(C) && /\)>#results:empty\{display:none\}/.test(C) && !/section:first-of-type>\.fhelp-l\{grid-column:2/.test(C), 'PC, état initial : carte « 2. Résultat et export » vide avec message d’attente (masquée pendant un calcul), « Quel fichier choisir ? » dans la colonne gauche'); }
+{ const A = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), C = require('fs').readFileSync(__dirname + '/style.css', 'utf8');
+  chk(/matchMedia\('\(min-width: 1024px\)'\)/.test(A) && /hd\.appendChild\(kf\)/.test(A) && /home\.insertBefore\(kf, nx\)/.test(A) && /header \.kofifoot\.kofitop\{grid-column:3;grid-row:1/.test(C), 'PC : Pourquoi / Soutenir déplacés (pas copiés) en haut à droite de l’en-tête, retour en bas de page sur mobile'); }
+chk((A => !/window\.open\(pvUrl/.test(A) && /a\.download = pvName/.test(A))(require('fs').readFileSync(__dirname + '/app.js', 'utf8')), 'PDF (v2.44) : aperçu intégré, enregistrement nommé — ancien : nouvel onglet ouvert dans le clic, opener coupé, repli sur l’aperçu si bloqué');
+chk(require('./export.js').pdfName(2024, new Date(Date.UTC(2026, 10, 7, 21, 14))) === 'kryptax-formulaire-2086-2024-sur-2025-07-11-2026-22-14.pdf', 'Nom du PDF : Kryptax, année, date et heure de Paris');
 process.exit(ok ? 0 : 1);
