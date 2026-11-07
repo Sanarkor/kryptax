@@ -29,7 +29,7 @@
       'Network fees on transfers: ' + (eng().FEE_MODES[(T.fees || {}).mode] || eng().FEE_MODES.IGNORE) + ' - tax treatment not settled, to verify',
       'Wallets: ' + (T.wallets && T.wallets.length ? T.wallets.join(', ') : 'one (no wallet column)'),
       'Form 8949 situation: ' + ((eng().catNote ? eng().catNote(F) : eng().CATNOTE[F.cat]) || 'not chosen - to verify'),
-      'Tax year: ' + (T.year || 'all years') + (T.tz ? ' (times in file: ' + T.tz.file + '; tax dates: ' + T.tz.tax + ', to verify)' : ' (sale dates in UTC, to verify)'),
+      'Tax year: ' + (T.year || 'all years') + (T.tz ? ' (times in file: ' + T.tz.file + '; tax dates, tax year and 1-year test: ' + (eng().tzName ? eng().tzName(T.tz.tax) : T.tz.tax) + ', to verify)' : ' (sale dates in UTC, to verify)'),
       'Sales: ' + T.sales + ' (' + T.rows + ' lines' + (T.toVerify ? ', ' + T.toVerify + ' to verify, not in the totals' : '') + ')',
       'Short term: proceeds ' + usd(T.short.proceeds) + ', cost ' + usd(T.short.cost) + ', gain/loss ' + usd(T.short.gain),
       'Long term: proceeds ' + usd(T.long.proceeds) + ', cost ' + usd(T.long.cost) + ', gain/loss ' + usd(T.long.gain),
