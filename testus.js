@@ -164,7 +164,7 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   const a = U.compute(T, { fileTz: 'UTC', taxTz: 'UTC' }), b = U.compute(T, { fileTz: 'UTC', taxTz: 'America/Los_Angeles' });
   eq(JSON.stringify(U.years(a)) + JSON.stringify(U.years(b)), '[2025][2024]', 'sale near midnight: tax year 2025 in UTC, 2024 in Pacific');
   eq(b.totals.tz.file + '|' + b.totals.tz.tax, 'UTC|America/Los_Angeles', 'time zones kept in the result');
-  eq(/\nTime zones,File: UTC,Tax dates: America\/Los_Angeles/.test(U.toCSV(b)), true, 'CSV shows the time zones');
+  eq(/\nTime zones,File: UTC,"?Tax dates \(b\), \(c\), tax year and 1-year test: Pacific \(America\/Los_Angeles\)/.test(U.toCSV(b)), true, 'CSV shows the time zones');
   eq(/Times in file/.test(U.toCSV(U.compute(T))), false, 'CSV without time zone option: no time zone line');
   const H = [{ line: 2, date: W(2024, 6, 17, 20), type: 'BUY', asset: 'ETH', qty: 1, usd: 1000, fee: 0, wallet: '' }, { line: 3, date: W(2025, 6, 18, 2), type: 'SELL', asset: 'ETH', qty: 1, usd: 2000, fee: 0, wallet: '' }];
   eq(U.compute(H, { fileTz: 'UTC', taxTz: 'UTC' }).rows[0].term + '|' + U.compute(H, { fileTz: 'UTC', taxTz: 'America/New_York' }).rows[0].term, 'long|short', 'holding period by calendar day in the tax zone (Pub. 544 example dates)'); }
@@ -425,7 +425,7 @@ eq(/\['header \.sub', 'Form 8949 & Schedule D for U\.S\. crypto taxes'\]/.test(f
   eq([sA(B.assets) === r.totals.gain, sA(B.years) === r.totals.gain, per.every(x => x === 1), B.years.length === ys.length, r.rows.some(x => x.status !== 'ok') ? B.assets.every(i => isFinite(i.v)) : true],
     [true, true, true, true, true], 'Charts: sum of the asset bars = net gain shown (each year and all years), sum of the year bars = total, "to verify" lines left out'); }
 { const H = fs.readFileSync(__dirname + '/index.html', 'utf8'), E = fs.readFileSync(__dirname + '/us-engine.js', 'utf8'), imp = (H.match(/<section id="usimp"[\s\S]*?<\/section>/) || [''])[0];
-  eq([/<label class="ustzopt">Time zone of your file <select id="ustz"><\/select><\/label>/.test(H), /g\.insertBefore\(tzLab, g\.firstChild\)/.test(E), /saveSettings\(LS, \{ method, fees, cat, fstat, tz: fileTz \}\)/.test(E)],
+  eq([/<label class="ustzopt">Time zone of your file <select id="ustz"><\/select><\/label>/.test(H), /g\.insertBefore\(tzLab, g\.firstChild\)/.test(E), /saveSettings\(LS, \{ method, fees, cat, fstat, tz: fileTz, taxTz: taxChoice \}\)/.test(E)],
     [true, true, true], 'Time zone of the file: first line of Options (set before import), same select and saved settings'); void imp; }
 { const C = fs.readFileSync(__dirname + '/style.css', 'utf8');
   eq([/\.usmode>#usresult:empty\{display:flex/.test(C), /\.usmode>#usresult:empty::before\{content:"Your results will appear here after the calculation\."\}/.test(C), /#usleft>#usside:empty\{display:none\}/.test(C), /usmode:has\(#usresult:empty\)>#usleft\{grid-column:1\/-1/.test(C), /usmode:has\(#usresult:empty\)\{grid-template-columns/.test(C) || /usmode:has\(#usresult:empty\)>#usleft\{[^}]*display:grid/.test(C)], [true, true, true, false, false], 'Wide screens, before import: Options then 1. Import stacked on the left as in the result layout, empty result card with an English waiting message only'); }

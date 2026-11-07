@@ -156,6 +156,18 @@
   }
   /* Time zones (v1.8): file times are wall-clock times in the file's zone; tax dates are calendar days in the taxpayer's zone (this browser). No network: Intl only. */
   const US_TZ = [['America/New_York', 'Eastern'], ['America/Chicago', 'Central'], ['America/Denver', 'Mountain'], ['America/Los_Angeles', 'Pacific'], ['America/Anchorage', 'Alaska'], ['Pacific/Honolulu', 'Hawaii'], ['UTC', 'UTC']];
+  /* v2.51 tax calendar zone (dates (b)/(c), tax year, 1-year holding test) — never the browser zone by default.
+     IRS texts give calendar dates ("begin counting on the day after you received the property", i8949) but no time-zone rule for an
+     individual: Kryptax uses the U.S. zone you choose ("Tax dates"), by default the zone of the file when it is a U.S. zone, else the
+     browser zone when it is a U.S. zone, else Eastern (America/New_York). Shown on screen and in every export, to verify. */
+  const US_ZONES = US_TZ.map(z => z[0]).filter(z => z !== 'UTC');
+  function resolveTaxTz(choice, fileTz, browserTz) {
+    if (choice && US_TZ.some(z => z[0] === choice)) return { tz: choice, how: 'chosen' };
+    if (US_ZONES.includes(fileTz)) return { tz: fileTz, how: 'same as the file' };
+    if (US_ZONES.includes(browserTz)) return { tz: browserTz, how: 'this browser' };
+    return { tz: 'America/New_York', how: 'default (Eastern)' };
+  }
+  const tzName = z => { const f = US_TZ.find(x => x[0] === z); return f ? (z === 'UTC' ? 'UTC' : f[1] + ' (' + z + ')') : z; };
   const tzFmt = {};
   function tzOffset(zone, inst) { // wall-clock (as UTC ms) minus instant, in ms
     if (!zone || zone === 'UTC') return 0;
@@ -251,7 +263,7 @@
   }
   function compute(txs, opts) {
     opts = opts || {};
-    if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: shiftTz(t.date, t.tz || opts.fileTz || 'UTC', opts.taxTz || 'UTC') })); /* v2.41: t.tz = 'UTC' when the instant is known (Binance offset) */
+    if (opts.fileTz || opts.taxTz) txs = txs.map(t => Object.assign({}, t, { date: !t.tz && t.date % 864e5 === 0 ? t.date : shiftTz(t.date, t.tz || opts.fileTz || 'UTC', opts.taxTz || 'UTC') })); /* v2.51: a date without a time (00:00:00) is a calendar day: kept as is, never moved to the previous/next day */ /* v2.41: t.tz = 'UTC' when the instant is known (Binance offset) */
     const manualCost = opts.manualCost || {}, method = opts.method === 'HIFO' ? 'HIFO' : opts.method === 'MANUAL' ? 'MANUAL' : 'FIFO', picks = opts.picks || {}, sales = [];
     const unit = l => isFinite(l.cost) && l.qty > 0 ? l.cost / l.qty : -Infinity;
     const nextIdx = L => { if (method !== 'HIFO') return 0; let b = 0; for (let i = 1; i < L.length; i++) if (unit(L[i]) > unit(L[b]) + 1e-9) b = i; return b; };
@@ -458,7 +470,7 @@
     const line = (r, note) => [r.desc, mdy(r.acquired), mdy(r.sold), r.proceeds, r.cost, '', null, r.gain, note].concat(hasW ? [r.wallet || ''] : []);
     row('title', ['Kryptax - U.S. summary (estimate) - Draft to verify - not tax advice']);
     row('kv', ['Tax year', T.year ? String(T.year) : 'All years']);
-    if (T.tz) row('kv', ['Time zones', 'File: ' + T.tz.file, 'Tax dates: ' + T.tz.tax + ' (to verify)']);
+    if (T.tz) row('kv', ['Time zones', 'File: ' + T.tz.file, 'Tax dates (b), (c), tax year and 1-year test: ' + tzName(T.tz.tax) + ' (to verify)']);
     row('kv', ['Lot method', METHOD_TXT[T.method] || METHOD_TXT.FIFO]);
     row('kv', ['Network fees on transfers', FEE_MODES[(T.fees || {}).mode] || FEE_MODES.IGNORE, 'Tax treatment not settled - to verify']);
     if (T.fees && feeLine(T.fees)) row('kv', ['Network fees', feeLine(T.fees).replace(/ — /g, ' - ')]);
@@ -607,7 +619,7 @@
   /* v2.15 option choices kept in this browser (localStorage only): lot method, Form 8949 box, fee option, filing status, time zone of the file dates.
      Manual lot picks per sale, the year and the amounts entered are not saved (they depend on the file).
      Never file data, transactions or amounts. Invalid or unreadable values are ignored (defaults used). */
-  const SET_KEY = 'kryptax.us.settings', SET_OK = { method: ['FIFO', 'HIFO', 'MANUAL'], cat: ['', 'none', 'nobasis', 'basis'], fees: Object.keys(FEE_MODES), fstat: Object.keys(FSTAT), tz: US_TZ.map(z => z[0]) };
+  const SET_KEY = 'kryptax.us.settings', SET_OK = { method: ['FIFO', 'HIFO', 'MANUAL'], cat: ['', 'none', 'nobasis', 'basis'], fees: Object.keys(FEE_MODES), fstat: Object.keys(FSTAT), tz: US_TZ.map(z => z[0]), taxTz: US_TZ.map(z => z[0]) };
   const pickSettings = v => { const o = {}; if (v && typeof v === 'object') for (const k in SET_OK) if (typeof v[k] === 'string' && SET_OK[k].includes(v[k])) o[k] = v[k]; return o; };
   const loadSettings = st => { try { return pickSettings(JSON.parse(st.getItem(SET_KEY))); } catch (e) { return {}; } };
   const saveSettings = (st, v) => { try { st.setItem(SET_KEY, JSON.stringify(pickSettings(v))); return true; } catch (e) { return false; } };
@@ -620,7 +632,7 @@
     let h = '', g = null; for (const c of C) { if (CHK_GRP[c.rank] !== g) { h += (g ? '</ul>' : '') + '<p class="uschk-h">' + e(CHK_GRP[c.rank]) + '</p><ul>'; g = CHK_GRP[c.rank]; } h += li(c); }
     return `<div class="warn uschecks"><b>To verify (${C.length})</b>${h}</ul></div>`;
   }
-  const api = { csvSafe, catNote, edition, CAT24, stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
+  const api = { resolveTaxTz, tzName, csvSafe, catNote, edition, CAT24, stampName, checksBlock, CHK_GRP, SET_KEY, loadSettings, saveSettings, clearSettings, LOSS_LIMIT, FSTAT, lossLimit, FEE_MODES, feeLine, US_TZ, tzOffset, shiftTz, years, forYear, barData, pairTransfers, mapHeader, kind, headerIndex, parseRows, fromCSVText, fromWorkbook, fromPdfLines, compute, isLong, toCSV, incomeCSV, incomeType, mdy, usd, daCompare, form8949, CATNOTE, daLines, carryLines, scheduleD, usReport, toXLSX, guide, checks };
 
   /* ---------- U.S.A. page (browser only) ---------- */
   function mount(doc) {
@@ -631,13 +643,19 @@
     let last = null, cur = null, pdfN = '', method = 'FIFO', fees = 'IGNORE', picks = {}, year = null, mcost = {}, da = {}, cat = '', fstat = '', carry = {};
     let LS = null; try { LS = W0.localStorage || null; } catch (x) {}
     if (LS) { const S = loadSettings(LS); if (S.method) method = S.method; if (S.fees) fees = S.fees; if (S.cat != null) cat = S.cat; if (S.fstat != null) fstat = S.fstat; }
-    const keepSet = () => { if (LS) saveSettings(LS, { method, fees, cat, fstat, tz: fileTz }); };
-    let taxTz = 'UTC'; try { taxTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
-    let fileTz = taxTz; const tzSel = doc.getElementById('ustz');
+    let taxChoice = ''; const keepSet = () => { if (LS) saveSettings(LS, { method, fees, cat, fstat, tz: fileTz, taxTz: taxChoice }); };
+    let browserTz = 'UTC'; try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (x) {}
+    const taxTzNow = () => resolveTaxTz(taxChoice, fileTz, browserTz); // v2.51: tax dates no longer follow the browser zone
+    let fileTz = browserTz; const taxTz = browserTz; const tzSel = doc.getElementById('ustz');
     if (tzSel) { const L = US_TZ.some(z => z[0] === taxTz) ? US_TZ : [[taxTz, 'This browser']].concat(US_TZ);
       tzSel.innerHTML = L.map(z => `<option value="${esc(z[0])}"${z[0] === fileTz ? ' selected' : ''}>${esc(z[1] === 'UTC' ? 'UTC' : z[1] + ' (' + z[0] + ')')}</option>`).join('');
       tzSel.addEventListener('change', () => { fileTz = tzSel.value; keepSet(); if (cur) render(); }); }
     if (LS) { const z = loadSettings(LS).tz; if (z) { fileTz = z; if (tzSel) tzSel.value = z; } }
+    const taxSel = doc.getElementById('ustaxtz');
+    if (taxSel) { if (LS) taxChoice = loadSettings(LS).taxTz || '';
+      const draw = () => { const r = taxTzNow(); taxSel.innerHTML = `<option value="">Automatic: ${esc(tzName(r.tz))}${taxChoice ? '' : ' — ' + esc(r.how)}</option>` + US_TZ.map(z => `<option value="${esc(z[0])}"${z[0] === taxChoice ? ' selected' : ''}>${esc(tzName(z[0]))}</option>`).join(''); taxSel.value = taxChoice; };
+      draw(); taxSel.addEventListener('change', () => { taxChoice = taxSel.value; keepSet(); draw(); if (cur) render(); });
+      if (tzSel) tzSel.addEventListener('change', draw); taxSel.__draw = draw; }
     const lotLabel = l => `line ${l.line} · ${mdy(l.date)} · ${+l.qty.toPrecision(8)} left · ${isFinite(l.unit) ? usd(l.unit) + '/unit' : 'cost unknown'}`;
     function manualHtml(res) {
       if (!res.sales.length) return '';
@@ -687,7 +705,7 @@
     });
     vbtn.addEventListener('click', () => { if (!files.length) return; const m = mergeFiles(files.map(x => ({ name: x.name, p: x.p }))); fmsg.innerHTML = '';
       const note = files.map(x => x.note).join('') + (m.dupes ? '<p class="warn">' + m.dupes + ' line' + (m.dupes > 1 ? 's' : '') + ' already found in an earlier file: counted once (to verify).</p>' : '') + (m.tzMix ? '<p class="warn">The files do not use the same time zone; the time zone of the first file is used (to verify).</p>' : '');
-      vbtn.disabled = true; cur = m; pdfN = note; picks = {}; year = null; mcost = {}; da = {}; carry = {}; if (m.fileTz && tzSel) { fileTz = m.fileTz; tzSel.value = m.fileTz; } render(); });
+      vbtn.disabled = true; cur = m; pdfN = note; picks = {}; year = null; mcost = {}; da = {}; carry = {}; if (m.fileTz && tzSel) { fileTz = m.fileTz; tzSel.value = m.fileTz; } if (taxSel && taxSel.__draw) taxSel.__draw(); render(); });
     async function readOne(f) {
       const name = f.name.toLowerCase(), data = new Uint8Array(await f.arrayBuffer()), W = typeof window !== 'undefined' ? window : root;
       let p, pdfNote = '';
@@ -747,7 +765,7 @@
         + '</div><p class="hint">Specific identification (HIFO, manual) needs records at the time of sale. Fee treatment and box choice: to verify. Default values give the same results as before.</p><p class="hint">These choices and the time zone are kept in this browser only (no file data, no amounts, no manual lot picks). <a href="#" id="ussetreset">Reset saved settings</a></p></details>';
     }
     const opts = doc.createElement('div'); opts.id = 'usopts'; const imp = doc.getElementById('usimp');
-    if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const tips = () => opts.querySelectorAll('select').forEach(x => { const o = x.options[x.selectedIndex]; x.title = o ? o.text : ''; }); /* v2.19 full option text as a tooltip */ const tzLab = tzSel && tzSel.closest ? tzSel.closest('label') : null; /* v2.23 the file time zone sits first, on its own full-width line, inside Options */ const drawOpts = () => { opts.innerHTML = optsHtml(); const g = opts.querySelector('.usopts .grid'); if (tzLab && g) g.insertBefore(tzLab, g.firstChild); tips(); }; drawOpts(); opts.addEventListener('change', tips);
+    if (imp && imp.parentNode) imp.parentNode.insertBefore(opts, imp); const tips = () => opts.querySelectorAll('select').forEach(x => { const o = x.options[x.selectedIndex]; x.title = o ? o.text : ''; }); /* v2.19 full option text as a tooltip */ const tzLab = tzSel && tzSel.closest ? tzSel.closest('label') : null; /* v2.23 the file time zone sits first, on its own full-width line, inside Options */ const drawOpts = () => { opts.innerHTML = optsHtml(); const g = opts.querySelector('.usopts .grid'); if (tzLab && g) g.insertBefore(tzLab, g.firstChild); { const tl = taxSel && taxSel.closest ? taxSel.closest('label') : null; if (tl && g) g.insertBefore(tl, tzLab && tzLab.parentNode === g ? tzLab.nextSibling : g.firstChild); } /* v2.51 tax dates zone right after the file zone */ tips(); }; drawOpts(); opts.addEventListener('change', tips);
     // v2.18 wide screens (>= 1024px): options + import in a left column, "What to copy and where" + "To verify" in a side panel under them
     const left = doc.createElement('div'); left.id = 'usleft'; const side = doc.createElement('div'); side.id = 'usside';
     if (imp && imp.parentNode) { imp.parentNode.insertBefore(left, opts); left.appendChild(opts); left.appendChild(imp); left.appendChild(side); }
@@ -794,13 +812,13 @@
         + usBars('kxassets', `Net gain or loss by asset${year ? ' (' + year + ')' : ' (all years)'}`, D.assets, ((tv ? tv + ' ' : '') + 'Sum of the bars = net gain or loss above.').trim()) + '</div>';
     }
     function render() {
-      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
+      const p = cur, pdfNote = pdfN, full = compute(p.txs, { method, fees, picks, fileTz, taxTz: taxTzNow().tz, manualCost: mcost }), Ys = years(full); if (year == null) year = Ys.length ? Ys[Ys.length - 1] : 0;
       const res = last = forYear(full, year), T = res.totals, M = { FIFO: 'FIFO', HIFO: 'HIFO', MANUAL: 'manual choice' }[method];
       const hasW = res.rows.some(r => r.wallet);
       const trs = res.rows.map(r => `<tr class="${r.status === 'ok' ? (r.user ? 'ususer' : '') : 'tv'}"><td>${esc(r.desc)}${r.user ? ' <span class="hint">(cost entered by you)</span>' : ''}</td>${hasW ? `<td>${esc(r.wallet || '?')}</td>` : ''}<td>${mdy(r.acquired)}</td><td>${mdy(r.sold)}</td><td>${usd(r.proceeds)}</td><td>${usd(r.cost)}</td><td>${usd(r.gain)}</td><td>${r.term || '?'}</td></tr>`).join('');
       const sel = Ys.length > 1 ? `<div class="grid"><label>Tax year <select id="usyear">${Ys.map(y => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('')}<option value="0"${!year ? ' selected' : ''}>All years</option></select></label></div>` : '';
       const exp = `<p class="usexp"><button type="button" id="uspdfmain" class="btn"${W0.KryptaxUSExport && W0.jspdf ? '' : ' hidden'}>Download PDF summary</button> <button type="button" id="uscsvmain" class="btn ghost">Download CSV (summary)</button>${W0.XLSX && W0.XLSX.write ? ' <button type="button" id="usxlsxmain" class="btn ghost">Download Excel (.xlsx)</button>' : ''}</p>`;
-      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + kpiHtml(res) + (wide() ? '' : guideHtml(res) + checksHtml(res)) + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)} · tax dates: ${esc(taxTz)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
+      out.innerHTML = pdfNote + `<h2 class="usreshead">2. Result${year ? ' ' + year : ' (all years)'}</h2>` + sel + kpiHtml(res) + (wide() ? '' : guideHtml(res) + checksHtml(res)) + `<div class="note total-global" role="status"><b>${T.sales} sale${T.sales === 1 ? '' : 's'}</b> (${T.rows} line${T.rows === 1 ? '' : 's'}, ${M})<br>Short term: <b>${usd(T.short.gain)}</b> · Long term: <b>${usd(T.long.gain)}</b><br>Total gain or loss: <b>${usd(T.gain)}</b>${T.sales ? '' : '<br>No sale in this year.'}<br><span class="hint">Times in file: ${esc(fileTz)}${p.txs.some(t => t.tz) ? ' (lines with an explicit UTC offset use it)' : ''} · tax dates (dates, tax year, 1-year test): <b>${esc(tzName(taxTzNow().tz))}</b>, ${esc(taxTzNow().how)} (to verify). Estimate, to verify — no tax computed.</span></div>` + (T.sales ? exp : '')
         + (T.income.count ? `<div class="note"><b>Income (staking / airdrops / interest): ${usd(T.income.usd)}</b> (${T.income.count - T.income.unknown} of ${T.income.count} line${T.income.count > 1 ? 's' : ''})<br>Ordinary income, to verify — not tax advice; no tax rates applied. Each amount is also the cost basis of the new lot.</div>`
           + `<div class="scroll"><table class="us8949 usincome"><tr><th>Date</th><th>Asset</th><th>Quantity</th><th>Value USD</th><th>Type</th></tr>${res.income.map(r => `<tr class="${r.status === 'ok' ? '' : 'tv'}"><td>${mdy(r.date)}</td><td>${esc(r.asset)}</td><td>${+r.qty.toPrecision(10)}</td><td>${r.usd == null ? 'to verify' : usd(r.usd)}</td><td>${r.type}</td></tr>`).join('')}</table></div>`
           + `<p><button type="button" id="usinccsv" class="small">Download CSV (income)</button></p>` : '')

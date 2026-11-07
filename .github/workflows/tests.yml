@@ -44,3 +44,5 @@ jobs:
         run: node testpdf.mjs > out-pdf.txt; s=$?; cat out-pdf.txt; ! grep -q "ÉCHEC" out-pdf.txt && exit $s
       - name: node testusref.js
         run: node testusref.js > out-usref.txt; s=$?; cat out-usref.txt; ! grep -q "ÉCHEC" out-usref.txt && exit $s
+      - name: node testustz.js
+        run: node testustz.js > out-ustz.txt; s=$?; cat out-ustz.txt; ! grep -q "ÉCHEC" out-ustz.txt && exit $s
