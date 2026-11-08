@@ -66,6 +66,7 @@
     if (/(gift|donat|\bdon\b|payment|paiement|tip|pourboire).*(received|receive|reçu|recu|\bin\b|incoming|entrant)|(received|receive|reçu|recu|incoming|entrant).*(gift|donat|\bdon\b|payment|paiement|tip|pourboire)/.test(t)) return 'RECV';
     if (/(network|withdraw(al)?|gas|transfer|retrait|réseau|reseau|blockchain) fee|frais (de |du )?(réseau|reseau|retrait|transfert|gaz)|^fees?$|^frais$/.test(t)) return 'NETFEE';
     if (!RW.test(t) && /unstak|\bstake\b|\bstaked\b|staking (lock|unlock|subscription|purchase|redemption|redeem|deposit|withdraw)|subscri|redeem|redemption|unlock|\block(ed)?\b|delegat|savings|épargne|epargne|(simple )?earn (sub|red)|wrap|unwrap|bridge/.test(t)) return 'MOVE';
+    if (!RW.test(t) && /stak|jalonnement/.test(t)) return 'STAKEAMB'; // v2.58 : « Staking » seul = ambigu (récompense ? dépôt ?) : à examiner, jamais une récompense inventée
     if (/^(purchase of goods|paiement|achat de bien)/.test(t)) return 'SPEND';
     if (/^(buy|purchase|bought|achat|achet)/.test(t)) return 'BUY';
     if (/^(convert|exchange|swap|trade|échange|echange|conversion)/.test(t)) return 'CONVERT';
@@ -171,7 +172,7 @@
       if (!type || !isFinite(D.date) || !asset || !(qty > 0)) { out.skipped.push({ line: n, why: g === 'EXCH_OUT' ? B('échange sans l\'actif reçu, à vérifier', 'swap without the asset received, to verify') : !type ? B('type inconnu', 'unknown type') : B('ligne illisible', 'unreadable line') }); return; }
       const cs = [...new Set([row[3], row[4], row[5]].map(curOf).filter(Boolean))]; if (cs.length > 1) { out.skipped.push({ line: n, why: B('devises différentes dans la ligne, à vérifier', 'different currencies in the line, to verify') }); return; }
       if (!cs.length) { const empty = ![row[3], row[4], row[5]].some(x => String(x || '').trim());
-        if (!(empty && (type === 'INCOME' || type === 'AIRDROP' || type === 'MINING'))) { out.skipped.push({ line: n, why: B('devise non indiquée dans le relevé PDF, à vérifier', 'currency not stated in the PDF statement, to verify') }); return; }
+        if (!(empty && (type === 'INCOME' || type === 'AIRDROP' || type === 'MINING' || type === 'STAKEAMB'))) { out.skipped.push({ line: n, why: B('devise non indiquée dans le relevé PDF, à vérifier', 'currency not stated in the PDF statement, to verify') }); return; }
         cs.push('CAD'); } // v2.56 : récompense sans aucun montant : gardée comme récompense SANS valeur (coût inconnu, signalé), jamais un coût de 0
       const price = num(row[3]), val = num(row[4]), fee = num(row[5]);
       const t = { line: n, date: D.date, type, rawType: raw, asset, qty, amt: isFinite(val) ? val : isFinite(price) ? price * qty : NaN, feeAmt: isFinite(fee) && fee > 0 ? fee : 0, cur: cs[0], toAsset: '', toQty: NaN };
@@ -257,7 +258,7 @@
     let cover = -Infinity; ev.forEach(({ t }) => { const d = dayOf(t); if (d > cover) cover = d; }); if (opts.coverEnd != null) cover = opts.coverEnd;
     function pass(dec) {
       const P = {}, pool = a => P[a] || (P[a] = { q: 0, c: 0, unknown: false, unc: null, acq: [], hist: [], move: null });
-      const disposals = [], income = [], notes = [], transfers = { count: 0, withFee: 0 }, moves = [], fees = [];
+      const disposals = [], income = [], notes = [], transfers = { count: 0, withFee: 0 }, moves = [], fees = [], stakeAmb = [];
       const acquire = (asset, d, qty, cost, line, how) => { const p = pool(asset), k = cost != null && isFinite(cost); p.q += qty; if (!k) p.unknown = true; else p.c += cost;
         if (p.padj) { p.c += p.padj; p.padj = 0; } if (p.uncNext) { p.unc = p.unc || p.uncNext; p.uncNext = null; } p.acq.push({ day: d, qty, line, how, known: k }); p.hist.push({ day: d, q: p.q }); };
       const empty = p => { p.q = 0; p.c = 0; p.unknown = false; p.unc = null; p.move = null; }; // padj / uncNext gardés : ils visent les unités rachetées ensuite
@@ -289,11 +290,13 @@
         } else if (t.type === 'INCOME' || t.type === 'MINING' || t.type === 'AIRDROP' || t.type === 'RECV') {
           acquire(t.asset, d, t.qty, v, t.line, t.type === 'RECV' ? 'reçu' : 'récompense'); income.push({ line: t.line, day: d, year: yearOf(d), asset: t.asset, qty: t.qty, cad: v, type: t.rawType, kind: t.type });
         } else if (t.type === 'MOVE') { const p = pool(t.asset); moves.push({ line: t.line, day: d, year: yearOf(d), asset: t.asset, qty: t.qty, type: t.rawType }); p.move = p.move || t.line; }
+        else if (t.type === 'STAKEAMB') { const p = pool(t.asset), u = ['staking ambigu ligne ' + t.line + ' non classé', 'ambiguous staking line ' + t.line + ' not classified']; stakeAmb.push({ line: t.line, day: d, year: yearOf(d), asset: t.asset, qty: t.qty, cad: v, type: t.rawType });
+          if (p.q > EPS) p.unc = p.unc || u; else p.uncNext = p.uncNext || u; } // ni stock ni coût ajoutés ; ventes suivantes de l'actif hors totaux
         else if (t.type === 'NETFEE') { const p = pool(t.asset), q = Math.min(t.qty, p.q), part = p.q > 0 ? p.c * q / p.q : 0; fees.push({ line: t.line, day: d, year: yearOf(d), asset: t.asset, qty: t.qty, short: t.qty > p.q * (1 + 1e-9) + EPS });
           p.q -= q; p.c -= part; if (t.qty > q + EPS && !p.unc) p.unc = ['frais réseau supérieurs au solde (ligne ' + t.line + ')', 'network fee larger than the balance (line ' + t.line + ')']; p.hist.push({ day: d, q: p.q }); if (p.q <= EPS && !p.unc) empty(p); }
         else if (t.type === 'TRANSFER') { transfers.count++; if (t.fee > 0 || t.feeAmt > 0) { transfers.withFee++; const p = pool(t.asset); if (p.q > EPS && !p.unc) p.unc = ['frais de transfert de quantité inconnue (ligne ' + t.line + ')', 'transfer fee of unknown quantity (line ' + t.line + ')']; } }
       });
-      return { P, disposals, income, notes, transfers, moves, fees };
+      return { P, disposals, income, notes, transfers, moves, fees, stakeAmb };
     }
     const heldAt = (p, day) => { let q = 0; for (const h of p.hist) { if (h.day <= day) q = h.q; else break; } return q; };
     const dec = {}; let R = pass(dec);
@@ -313,7 +316,7 @@
     const pools = {}; for (const a of Object.keys(R.P).sort()) pools[a] = { qty: R.P[a].q, acb: R.P[a].unknown || R.P[a].unc ? null : r2(R.P[a].c) };
     R.disposals.sort((a, b) => a.day - b.day || (a.asset < b.asset ? -1 : 1));
     const years = [...new Set(R.disposals.map(x => x.year).concat(R.income.map(x => x.year)))].sort();
-    return { disposals: R.disposals, income: R.income, pools, notes: R.notes, transfers: R.transfers, moves: R.moves, netFees: R.fees, sameDay: sameDay.size, fileTz, taxTz, coverEnd: cover, years };
+    return { disposals: R.disposals, income: R.income, pools, notes: R.notes, transfers: R.transfers, moves: R.moves, stakeAmb: R.stakeAmb, netFees: R.fees, sameDay: sameDay.size, fileTz, taxTz, coverEnd: cover, years };
   }
   function yearSummary(res, y) {
     y = +y; const D = res.disposals.filter(x => x.year === y), ok = D.filter(x => x.status === 'ok'), sum = (L, f) => r2(L.reduce((a, x) => a + f(x), 0)) || 0;
@@ -326,11 +329,12 @@
     if (cand.length) why.push(B(cand.length + ' perte(s) en attente ou à examiner', cand.length + ' loss(es) pending or to review'));
     if (res.dupPending) why.push(B(res.dupPending + ' doublon(s) possible(s) non confirmé(s)', res.dupPending + ' possible duplicate(s) not confirmed'));
     if (withMove.length) why.push(B(withMove.length + ' vente(s) après un mouvement de staking/épargne à confirmer', withMove.length + ' sale(s) after a staking/savings movement to confirm'));
+    { const sa = (res.stakeAmb || []).filter(x => x.year === y); if (sa.length) why.push(B(sa.length + ' ligne(s) « staking » ambiguë(s) non classée(s)', sa.length + ' ambiguous "staking" line(s) not classified')); }
     { const ign = (res.skipped || []).filter(x => !x.kept).length; if (ign) why.push(B(ign + ' ligne(s) ignorée(s) ou sans taux', ign + ' line(s) ignored or without a rate')); }
     return { year: y, count: ok.length, proceeds: sum(ok, x => x.proceeds), acb: sum(ok, x => x.acb), fees: sum(ok, x => x.fees), gains, losses, net, rate, rateSrc: INCL_SRC[y] ? B(INCL_SRC[y], INCL_SRC_EN[y]) : null, form: FORM[y] ? B(FORM[y], FORM_EN[y]) : null,
       taxable: rate == null ? null : net > 0 ? r2(net * rate) : 0, allowableLoss: rate == null ? null : net < 0 ? r2(-net * rate) : 0, denied: sum(den, x => x.denied), deniedList: den,
       candidates: cand, candidateLoss: sum(cand, x => -x.gain), toVerify: tv, disposals: D, income: inc, incomeCad: sum(inc.filter(x => x.cad != null), x => x.cad), incomeUnknown: inc.filter(x => x.cad == null).length,
-      moves: mv.filter(x => x.year === y), partial: why.length > 0, partialWhy: why };
+      moves: mv.filter(x => x.year === y), stakeAmb: (res.stakeAmb || []).filter(x => x.year === y), partial: why.length > 0, partialWhy: why };
   }
   const p2 = n => String(n).padStart(2, '0');
   const amt = v => LANG === 'en' ? (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : (v < 0 ? '-' : '') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0').replace('.', ',');
@@ -359,6 +363,7 @@
     if (Y.disposals.some(x => x.gift)) chk.push(T('Dons : disposition à la juste valeur marchande, règles particulières (conjoint, organisme de bienfaisance) non traitées, à vérifier.', 'Gifts: disposition at fair market value; special rules (spouse, charity) not handled, to verify.'));
     if (res.dupPending) chk.push(res.dupPending + T(' ligne(s) identique(s) dans deux fichiers, sans identifiant : doublon ou deux opérations réelles ? Gardées toutes les deux en attendant votre choix.', ' identical line(s) in two files, without an ID: duplicate or two real operations? Both kept until you choose.'));
     if (res.sameDay) chk.push(res.sameDay + T(' jour(s) avec acquisition et vente du même actif sans heure : ordre inconnu, ventes de ce jour hors totaux. Ajoutez l\'heure si possible.', ' day(s) with an acquisition and a sale of the same asset without a time: order unknown, that day\'s sales outside the totals. Add the time if possible.'));
+    if (Y.stakeAmb.length) chk.push(Y.stakeAmb.length + T(' ligne(s) « Staking » sans précision (lignes ' + [...new Set(Y.stakeAmb.map(x => x.line))].slice(0, 8).join(', ') + ') : récompense, dépôt ou retrait ? Non classées : ni revenu, ni stock, ni coût ajoutés ; ventes suivantes de ces actifs hors totaux. Précisez le type (ex. « Staking reward » ou « Stake »).', ' "Staking" line(s) without detail (lines ' + [...new Set(Y.stakeAmb.map(x => x.line))].slice(0, 8).join(', ') + '): reward, deposit or withdrawal? Not classified: no income, holdings or cost added; later sales of these assets outside the totals. Specify the type (e.g. "Staking reward" or "Stake").'));
     if (Y.moves.length) chk.push(Y.moves.length + T(' mouvement(s) de staking, d\'épargne ou d\'enveloppement (lignes ' + [...new Set(Y.moves.map(x => x.line))].slice(0, 8).join(', ') + ') : comptés comme vos propres fonds, sans récompense ni vente. Si le jeton ou le propriétaire change (jeton enveloppé, staking liquide), c\'est une disposition : à examiner ; les ventes suivantes de ces actifs restent à confirmer.', ' staking, savings or wrapping movement(s) (lines ' + [...new Set(Y.moves.map(x => x.line))].slice(0, 8).join(', ') + '): treated as your own funds, no reward and no sale. If the token or the owner changes (wrapped token, liquid staking), it is a disposition: to review; later sales of these assets remain to confirm.'));
     { const nf = (res.netFees || []).filter(x => x.year === Y.year); if (nf.length) chk.push(nf.length + T(' frais réseau payé(s) en crypto : quantité retirée du solde avec sa part de PBR ; disposition possible, à examiner.', ' network fee(s) paid in crypto: quantity removed from the balance with its share of ACB; possible disposition, to review.')); }
     { const rc = Y.income.filter(x => x.kind === 'RECV').length; if (rc) chk.push(rc + T(' réception(s) (don ou paiement reçu) : acquisition, pas une vente ; coût = valeur reçue si indiquée (juste valeur marchande à confirmer). Un paiement reçu peut être un revenu : à examiner.', ' receipt(s) (gift or payment received): an acquisition, not a sale; cost = value received if stated (fair market value to confirm). A payment received can be income: to review.')); }
