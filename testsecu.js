@@ -34,15 +34,19 @@ chk(X.frRate(2024).total === 0.30 && X.frRate(2025).total === 0.314 && X.frRate(
   const fn = P.priceLookup(txs, cache, { SOLX: 12 }, { zeroIfUnknown: true }), r = E.compute(txs, fn), L = P.priceSources(fn, r.cessions), j = L.join('\n');
   chk(r.cessions.length === 1 && r.cessions[0].l212 > 0, 'Origine des cours : cession fictive calculée');
   chk(L.length === new Set(L.map(l => l.split(' : ')[0])).size, 'Origine des cours : une seule ligne par actif');
-  chk(/BTC : prix de la cession elle-même/.test(j), 'BTC vendu : prix implicite de la cession');
-  chk(/ETH : cours à la minute \(Coinbase ±2 min\)/.test(j), 'ETH : cours minute avec source et écart réels');
-  chk(/ADA : cours horaire \(CoinGecko, à 1 h de l’heure demandée\)/.test(j), 'ADA : cours horaire, décalage d’1 h signalé');
-  chk(/SOLX : cours saisi par vous/.test(j), 'SOLX : cours saisi');
-  chk(/XRPZ : estimé : prix d’une de vos opérations à moins de 30 jours/.test(j), 'XRPZ : estimé depuis une opération');
-  chk(/<b>NOPE<\/b> : aucun cours trouvé, compté 0 €/.test(j), 'Actif inconnu : compté 0 €, pas de source inventée (texte brut, échappé à l’affichage PDF/ascii)');
+  chk(/BTC : relevé \(prix de cession\)$/m.test(j), 'BTC vendu : prix implicite de la cession');
+  chk(/ETH : Coinbase ±2 min \(minute\)$/m.test(j), 'ETH : cours minute avec source et écart réels');
+  chk(/ADA : CoinGecko \(horaire, à 1 h\)$/m.test(j), 'ADA : cours horaire, décalage d’1 h signalé');
+  chk(/SOLX : saisi par vous$/m.test(j), 'SOLX : cours saisi');
+  chk(/XRPZ : ≈ estimé \(vos opérations < 30 j\)$/m.test(j), 'XRPZ : estimé depuis une opération');
+  chk(/<b>NOPE<\/b> : aucun cours \(0 €\)$/m.test(j), 'Actif inconnu : compté 0 €, pas de source inventée (texte brut, échappé à l’affichage PDF/ascii)');
   const fn2 = P.priceLookup(txs, cache, { SOLX: 12 }, { zeroIfUnknown: true }), r2 = E.compute(JSON.parse(JSON.stringify(txs)), fn2);
   chk(Math.abs(r2.cessions[0].l212 - r.cessions[0].l212) < 1e-9 && fn2.how instanceof Map, 'Justificatif sans effet sur les montants (212 identique)');
   fn.how.clear(); chk(/ETH : origine non enregistrée/.test(P.priceSources(fn, r.cessions).join('\n')), 'Sans métadonnée : « origine non enregistrée » (rien d’inventé)');
+  { // v2.60 : plusieurs cessions, sources seconde/minute/relevé groupées : une ligne par actif, sans « ×1 » répété
+    const T = [Date.UTC(2025, 6, 1, 10), Date.UTC(2025, 7, 1, 10), Date.UTC(2025, 8, 1, 10)], how = new Map([['BTC|' + T[0], { k: 'seconde', src: 'Binance' }], ['BTC|' + T[1], { k: 'minute', src: 'Binance' }], ['BTC|' + T[2], { k: 'minute', src: 'OKX' }], ['ETH|' + T[0], { k: 'minute', src: 'Binance' }], ['ETH|' + T[1], { k: 'minute', src: 'Binance' }], ['ETH|' + T[2], { k: 'estimé', src: 'cache' }]]);
+    const C = T.map((d, i) => ({ date: d, asset: 'SOL', detail212: [{ asset: 'BTC' }, { asset: 'ETH' }, { asset: 'SOL', implied: true }] })), L2 = P.priceSources({ how }, C), j2 = L2.join('\n');
+    chk(L2.length === 3 && /^BTC : Binance \(seconde, minute\) ; OKX \(minute\)$/m.test(j2) && /^ETH : Binance \(minute ×2\) ; ≈ estimé \(cours le plus proche\)$/m.test(j2) && /^SOL : relevé \(prix de cession ×3\)$/m.test(j2) && !/×1/.test(j2), 'Annexe compacte : 3 lignes (BTC/ETH/SOL), sources groupées, estimation marquée ≈, aucun ×1 [' + L2.join(' | ') + ']'); }
   const many = [{ date: T1, detail212: Array.from({ length: 60 }, (_, i) => ({ asset: 'T' + i, value: 1 })) }];
   chk(P.priceSources(fn, many).length === 41, 'Annexe compacte : 40 actifs maximum + 1 ligne de reste');
 }

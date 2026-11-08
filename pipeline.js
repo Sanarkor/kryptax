@@ -561,13 +561,29 @@
     const src = h.src ? ' ' + h.src : '', off = h.dh ? `, à ${Math.abs(h.dh)} h de l’heure demandée` : '';
     return (h.k === 'seconde' ? 'cours à la seconde' : h.k === 'minute' ? 'cours à la minute' : h.k === 'horaire' ? 'cours horaire' : h.k === 'journalier' ? 'cours journalier' : 'cours') + (src || off ? ' (' + (h.src || 'source non enregistrée') + off + ')' : '');
   };
+  /* v2.60 : annexe COMPACTE, une ligne par actif, groupée par source : « BTC : Binance (seconde, minute ×2) ; relevé (prix de cession) ».
+     Méthode, source et décalage d'heure gardés ; estimations marquées « ≈ » (jamais présentées comme cours réel) ; ×n seulement si n > 1.
+     Limite : méthodes regroupées par actif, sans attribution cession par cession (la colonne de précision est masquée, SHOW_PREC = false). Les métadonnées fn.how restent intactes. */
+  const SHORT_K = { seconde: 'seconde', minute: 'minute', horaire: 'horaire', journalier: 'journalier' };
+  function compactKey(h, fiat, d) {
+    if (d && d.asset === '(saisie manuelle)') return ['saisie', 'valeur 212 saisie par vous'];
+    if (d && d.implied) return ['relevé', 'prix de cession'];
+    if (fiat) return ['parité fixe', ''];
+    if (!h) return ['origine non enregistrée', ''];
+    if (h.k === 'saisi') return ['saisi par vous', ''];
+    if (h.k === 'inconnu') return ['aucun cours (0 €)', ''];
+    if (h.k === 'estimé') return ['≈ estimé', h.src === 'opération' ? 'vos opérations < 30 j' : h.src === 'opération lointaine' ? 'vos opérations > 30 j' : 'cours le plus proche'];
+    return [h.src || 'source non enregistrée', (SHORT_K[h.k] || 'cours') + (h.dh ? ', à ' + Math.abs(h.dh) + ' h' : '')];
+  }
   function priceSources(fn, cessions, opt) {
     opt = opt || {}; const max = opt.max || 40, G = {}, how = fn && fn.how;
     for (const c of cessions || []) for (const d of c.detail212 || []) {
-      const lab = d.asset === '(saisie manuelle)' ? 'valeur globale (212) saisie par vous' : d.implied ? 'prix de la cession elle-même (relevé)' : howLabel(how && how.get(d.asset + '|' + c.date), d.asset === 'EUR');
-      const a = d.asset === '(saisie manuelle)' ? 'Portefeuille' : d.asset, g = G[a] = G[a] || { n: 0, m: {} }; g.n++; g.m[lab] = (g.m[lab] || 0) + 1;
+      const [src, m] = compactKey(how && how.get(d.asset + '|' + c.date), d.asset === 'EUR', d);
+      const a = d.asset === '(saisie manuelle)' ? 'Portefeuille' : d.asset, g = G[a] = G[a] || { n: 0, s: {} }; g.n++;
+      const S = g.s[src] = g.s[src] || { n: 0, m: {} }; S.n++; if (m) S.m[m] = (S.m[m] || 0) + 1;
     }
-    const L = Object.entries(G).sort((x, y) => y[1].n - x[1].n || x[0].localeCompare(y[0])).map(([a, g]) => a + ' : ' + Object.entries(g.m).sort((x, y) => y[1] - x[1]).map(([l, k]) => l + (Object.keys(g.m).length > 1 || k > 1 ? ' ×' + k : '')).join(' ; '));
+    const L = Object.entries(G).sort((x, y) => y[1].n - x[1].n || x[0].localeCompare(y[0])).map(([a, g]) => a + ' : ' + Object.entries(g.s).sort((x, y) => y[1].n - x[1].n).map(([src, S]) => {
+      const ms = Object.entries(S.m).sort((x, y) => y[1] - x[1]).map(([m, k]) => m + (k > 1 ? ' ×' + k : '')); return src + (ms.length ? ' (' + ms.join(', ') + ')' : S.n > 1 ? ' ×' + S.n : ''); }).join(' ; '));
     return L.length > max ? L.slice(0, max).concat(['… et ' + (L.length - max) + ' autre(s) actif(s)']) : L;
   }
   function priceLookup(txs, cache, manual, opts) {
