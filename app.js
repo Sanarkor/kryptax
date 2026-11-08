@@ -48,7 +48,7 @@
   { const kf = document.querySelector('.kofifoot'), hd = document.querySelector('header'); if (kf && hd && window.matchMedia) { const home = kf.parentNode, nx = kf.nextSibling, mq = matchMedia('(min-width: 1024px)');
     const place = () => { if (mq.matches) { if (kf.parentNode !== hd) hd.appendChild(kf); kf.classList.add('kofitop'); } else if (kf.parentNode !== home) { home.insertBefore(kf, nx); kf.classList.remove('kofitop'); } };
     place(); try { mq.addEventListener('change', place); } catch (e) { try { mq.addListener(place); } catch (x) {} } } }
-  { const fr = $('#regfr'), us = $('#regus'), uk = $('#reguk'), ukp = $('#ukmode'), de = $('#regde'), dep = $('#demode'), rb = $('#regbtn'), rm = $('#regmenu'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
+  { const fr = $('#regfr'), us = $('#regus'), uk = $('#reguk'), ukp = $('#ukmode'), de = $('#regde'), dep = $('#demode'), ca = $('#regca'), cap = $('#camode'), rb = $('#regbtn'), rm = $('#regmenu'), page = $('#usmode'), m = document.querySelector('main'), K = 'kx-region', keep = new Map();
     const tr = (u, g) => { for (const [sel, en, attr, enA] of EN) { const el = $(sel); if (!el) continue;
         if (!keep.has(el)) keep.set(el, { h: el.innerHTML, hid: el.hidden, a: attr ? el.getAttribute(attr) : null });
         const k = keep.get(el), gA = g && attr ? DEG.get(sel + '|' + attr) : null, gH = g ? DEG.get(sel) : null;
@@ -76,24 +76,26 @@
       ['#privclose', 'Schließen']]);
     const deLang = () => { try { return localStorage.getItem('kx-de-lang') !== 'en'; } catch (e) { return true; } }; // v2.47 : allemand par défaut, anglais seulement si choisi
     let curReg = null, TITLE0 = null;
-    const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US';
-      [[fr, !u], [us, us0], [uk, g], [de, d]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
-      if (rb) { const c = rb.querySelector('.regcur'), src = d ? de : g ? uk : u ? us : fr; if (c && src) { c.innerHTML = src.innerHTML; c.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? (deLang() ? 'Land: Deutschland' : 'Country: Deutschland') : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : 'Pays : France'); }
-      const gl = !!d && deLang(); curReg = v; if (TITLE0 == null) TITLE0 = document.title; document.title = d ? (gl ? 'Kryptax – Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Kryptax – Anlage SO summary for German crypto taxes (estimate)') : us0 ? 'Kryptax – Form 8949 & Schedule D for U.S. crypto taxes (estimate)' : TITLE0; // v2.51 : onglet U.S.A. en anglais, retour France/DE inchangé
+    const set = (v, save) => { const g = v === 'UK' && uk && ukp, d = v === 'DE' && de && dep, u = v === 'US' || g || d, us0 = v === 'US', c = v === 'CA' && ca && cap; // v2.53 : Canada = page en français (pas de traduction anglaise)
+      [[fr, !u && !c], [us, us0], [uk, g], [de, d], [ca, !!c]].forEach(([b, on]) => { if (b) { b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } });
+      if (rb) { const rc = rb.querySelector('.regcur'), src = d ? de : g ? uk : c ? ca : u ? us : fr; if (rc && src) { rc.innerHTML = src.innerHTML; rc.lang = u ? 'en' : 'fr'; } rb.setAttribute('aria-label', d ? (deLang() ? 'Land: Deutschland' : 'Country: Deutschland') : g ? 'Country: U.K.' : u ? 'Country: U.S.A.' : c ? 'Pays : Canada' : 'Pays : France'); }
+      const gl = !!d && deLang(); curReg = v; if (TITLE0 == null) TITLE0 = document.title; document.title = d ? (gl ? 'Kryptax – Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Kryptax – Anlage SO summary for German crypto taxes (estimate)') : us0 ? 'Kryptax – Form 8949 & Schedule D for U.S. crypto taxes (estimate)' : c ? 'Kryptax – Gains en capital crypto au Canada, feuille de calcul Annexe 3 (estimation)' : TITLE0; // v2.51 : onglet U.S.A. en anglais, retour France/DE inchangé
       document.documentElement.lang = gl ? 'de' : u ? 'en' : 'fr'; tr(u, gl); { const tb = $('#themebtn'); if (tb && tb.__draw) tb.__draw(); }
-      { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } { const dl = $('footer .delaw'); if (dl) dl.hidden = !d; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; document.documentElement.classList.toggle('kx-uk', !!g); document.documentElement.classList.toggle('kx-de', !!d);
+      { const ul = $('footer .uslaw'); if (ul) ul.hidden = !us0; } { const kl = $('footer .uklaw'); if (kl) kl.hidden = !g; } { const dl = $('footer .delaw'); if (dl) dl.hidden = !d; } if (page) page.hidden = !us0; if (m) m.hidden = u; if (ukp) ukp.hidden = !g; if (dep) dep.hidden = !d; if (cap) cap.hidden = !c; if (c && m) m.hidden = true; document.documentElement.classList.toggle('kx-ca', !!c); document.documentElement.classList.toggle('kx-uk', !!g);
+      { const fl = $('footer .law'), cl = $('footer .calaw'); if (cl) cl.hidden = !c; if (c && fl) fl.hidden = true; } document.documentElement.classList.toggle('kx-de', !!d);
       if (g) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'SA108 Capital Gains Tax summary for U.K. crypto taxes'; }
       if (d) { const sb = $('header .sub'); if (sb) sb.innerHTML = gl ? 'Zusammenfassung Anlage SO für Krypto-Steuern in Deutschland (Schätzung)' : 'Anlage SO summary for German crypto taxes (estimate)'; }
-      if (save) try { localStorage.setItem(K, d ? 'DE' : g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
-    let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK' || s === 'DE') v0 = s; } catch (e) {}
+      if (c) { const sb = $('header .sub'); if (sb) sb.innerHTML = 'Feuille de calcul de l’Annexe 3 pour la crypto au Canada (estimation)'; const dc = $('footer .disclaim'); if (dc) dc.innerHTML = 'Kryptax est un outil gratuit, à code source disponible. Ce n’est pas un conseil fiscal, financier ou juridique. Vous restez seul responsable de la vérification de vos données et de votre déclaration à l’ARC.'; }
+      if (save) try { localStorage.setItem(K, c ? 'CA' : d ? 'DE' : g ? 'UK' : u ? 'US' : 'FR'); } catch (e) {} };
+    let v0 = null; try { const s = localStorage.getItem(K); if (s === 'US' || s === 'FR' || s === 'UK' || s === 'DE' || s === 'CA') v0 = s; } catch (e) {}
     if (!v0) { let L = [], Z = ''; try { L = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]; } catch (e) {} try { Z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {} v0 = autoRegion(L, Z); }
     /* Sélecteur pays : un seul bouton (drapeau + pays choisi) qui ouvre un petit menu ; extensible à d'autres pays (ajouter un .regopt) */
     const opts = () => rm ? Array.from(rm.querySelectorAll('.regopt')) : [];
     const close = (focus) => { if (!rm || rm.hidden) return; rm.hidden = true; rb.setAttribute('aria-expanded', 'false'); if (focus) rb.focus(); };
     const open = (last) => { if (!rm) return; rm.hidden = false; rb.setAttribute('aria-expanded', 'true'); const o = opts(), i = o.findIndex(b => b.classList.contains('on')); const t = last ? o[o.length - 1] : (o[i] || o[0]); if (t) t.focus(); };
     document.addEventListener('kx-de-lang', () => { if (curReg === 'DE') set('DE'); }); // v2.46 : bascule de langue de la page Allemagne seulement
-    if (fr && us) { if (v0 === 'US' || v0 === 'UK' || v0 === 'DE') set(v0); else set('FR');
-      fr.addEventListener('click', () => { set('FR', true); close(true); }); us.addEventListener('click', () => { set('US', true); close(true); }); if (uk) uk.addEventListener('click', () => { set('UK', true); close(true); }); if (de) de.addEventListener('click', () => { set('DE', true); close(true); });
+    if (fr && us) { if (v0 === 'US' || v0 === 'UK' || v0 === 'DE' || v0 === 'CA') set(v0); else set('FR');
+      fr.addEventListener('click', () => { set('FR', true); close(true); }); us.addEventListener('click', () => { set('US', true); close(true); }); if (uk) uk.addEventListener('click', () => { set('UK', true); close(true); }); if (de) de.addEventListener('click', () => { set('DE', true); close(true); }); if (ca) ca.addEventListener('click', () => { set('CA', true); close(true); });
       if (rb && rm) { rb.addEventListener('click', () => rm.hidden ? open() : close());
         rb.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(e.key === 'ArrowUp'); } });
         rm.addEventListener('keydown', e => { const o = opts(), i = o.indexOf(document.activeElement);
