@@ -46,3 +46,5 @@ jobs:
         run: node testusref.js > out-usref.txt; s=$?; cat out-usref.txt; ! grep -q "ÉCHEC" out-usref.txt && exit $s
       - name: node testustz.js
         run: node testustz.js > out-ustz.txt; s=$?; cat out-ustz.txt; ! grep -q "ÉCHEC" out-ustz.txt && exit $s
+      - name: Canada (testca.js)
+        run: node testca.js > out-ca.txt; s=$?; cat out-ca.txt; ! grep -q "ÉCHEC" out-ca.txt && exit $s
