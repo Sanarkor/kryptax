@@ -1,4 +1,4 @@
-# Canada — règles appliquées (v2.54, bêta)
+# Canada — règles appliquées (v2.56, bêta)
 
 Feuille de calcul **estimative** pour un particulier canadien, crypto détenue **à titre de capital**. Ce n'est pas un formulaire officiel ni un conseil fiscal. Aucun impôt fédéral ou provincial n'est calculé.
 
@@ -19,8 +19,12 @@ Feuille de calcul **estimative** pour un particulier canadien, crypto détenue *
 - Coût ou acquisition manquant : jamais mis à 0. La disposition est « à vérifier » et sort des totaux.
 - Récompenses (staking, minage, airdrop) : ajoutées au PBR à leur valeur si elle est connue, sinon coût inconnu. Revenu ou capital : **à examiner**.
 
-## Pertes apparentes (limite volontaire)
-Une perte est **« à examiner »** et sortie du total définitif quand le même actif a été acquis dans les 30 jours avant ou après et est encore détenu au 30e jour, ou quand le fichier ne couvre pas ces 30 jours. On ne calcule **ni refus partiel ni ajout au PBR**. Les achats du conjoint ou de sociétés affiliées sont invisibles : un avertissement est affiché.
+## Pertes apparentes (v2.56)
+Sources relues le 08/11/2026 : LIR art. 54 « superficial loss », 40(2)g)(i) (perte refusée), 53(1)f) (ajout au PBR du bien substitué) — Justice Laws, à jour au 2026-10-19 ; ARC « Capital losses » ; méthode administrative de l'ARC pour un rachat partiel (interprétation technique 2004-0073011E5 : perte refusée = min(S, P, B) / S × L ; S vendu, P acquis dans les 61 jours, B détenu à la fin de la période, L perte).
+- **Cas simple, calculé** : vos achats visibles dans les fichiers, aucune autre disposition du même actif dans la fenêtre de 61 jours, coûts connus, données couvrant J+30. Part refusée = min(S, P, B) / S × L, non déductible, ajoutée au PBR des unités restantes (ou des unités rachetées après la vente, au moment du rachat, même l'année suivante).
+- **Données jusqu'à J+30 absentes** : perte « en attente » (pas perdue), hors totaux ; totaux partiels.
+- **Cas complexe** (autre vente dans la fenêtre, coût inconnu) : perte « à examiner », hors totaux, et PBR de l'actif **incertain** ensuite : les ventes suivantes sortent des totaux jusqu'à ce que le solde revienne à zéro. Aucune simulation inventée.
+- Achats du conjoint ou de sociétés affiliées : invisibles, avertissement affiché.
 
 ## Non couvert
 Activité d'entreprise, revenu de minage ou de staking professionnel, pertes d'autres années, report rétrospectif, autres biens, impôt fédéral et provincial, règles du Québec (TP-1), cours de crypto manquants (non recherchés). 
@@ -42,3 +46,19 @@ Activité d'entreprise, revenu de minage ou de staking professionnel, pertes d'a
 ## Limites restantes
 - Les raisons d'exclusion produites par le lecteur Binance partagé (formats.js) sont en anglais dans les deux langues, comme pour les autres pays.
 - Le test sur un vrai PDF Binance passe par le texte extrait (fixture partagée), pas par un fichier PDF réel ouvert dans le navigateur.
+
+## v2.56 (audit Canada)
+- **Staking / épargne** : Stake, Unstake, Staking lock/unlock/subscription/redemption, Simple Earn subscription/redemption, wrap, bridge = mouvement de vos propres fonds (ni récompense ni vente, pas de double quantité). Ce n'est pas une neutralité fiscale universelle : si le jeton ou le propriétaire change, c'est une disposition à examiner ; les ventes suivantes sont signalées et les totaux marqués partiels. « Staking Rewards » et « Staking » seul (vocabulaire de l'aide) restent des récompenses.
+- **Reçu ≠ envoyé** : Gift/Don/Payment/Paiement **reçu** = acquisition (coût = valeur indiquée, sinon inconnu ; revenu possible, à examiner), jamais une disposition. Don envoyé = disposition.
+- **Échange avec une monnaie** (Convert CAD → BTC) = achat ; BTC → CAD = vente. Plus de « vente de CAD ».
+- **Frais réseau** payés en crypto (Withdrawal fee, Network fee…) : quantité retirée du solde avec sa part de PBR (disposition possible, à examiner). Transfert avec frais en monnaie seulement (quantité crypto inconnue) : PBR incertain ensuite.
+- **Date sans heure** : achat et vente du même actif le même jour → ordre inconnu, ventes du jour hors totaux.
+- **Doublons entre fichiers** : même ID de transaction = vrai doublon (compté une fois) ; sans ID, lignes identiques gardées et signalées jusqu'au choix « Doublons » / « Opérations distinctes » ; même relevé importé sous un autre nom : ignoré.
+- **Excel** : « date seule » décidé par le format de la cellule (sans heure) et une valeur entière ; un format avec heure garde l'heure même à minuit (converti du fuseau du fichier) ; calendrier 1904 géré.
+- **Totaux partiels** : écran, CSV et PDF disent « partiels » (ils peuvent monter ou baisser) dès qu'une ligne utile est hors calcul. Le mot « définitif » n'est plus utilisé.
+- **CSV** : tout texte commençant par = + - @ (même après des espaces) est préfixé d'une apostrophe ; les vrais nombres restent intacts.
+- **Taux 2026** : 1/2 selon l'al. 38a) en vigueur (Justice Laws, à jour au 2026-10-19) ; guide et Annexe 3 2026 de l'ARC non vérifiés : mention « à vérifier » conservée.
+- **« $ » seul** (relevés CSV ou PDF) : lignes mises de côté, jamais devinées ; l'utilisateur choisit USD ou CAD si le relevé le précise (ex. section ou compte USD). Sans choix : hors calcul, totaux partiels.
+- **Relevé PDF (ancien format, frais à part)** : vente et achat à la même seconde avec les mêmes frais = échange ; frais comptés une fois (moitié vente, moitié achat), comme le mode U.K.
+- **Récompense sans aucun montant** dans un relevé PDF (ex. récompenses « Apprendre ») : gardée comme récompense **sans valeur** (coût inconnu, signalé), au lieu d'être écartée.
+- Limite connue : la France considère que, dans un relevé en €, la valeur d'un achat inclut déjà les frais ; le Canada (comme le U.K.) ajoute les frais au coût. À confirmer sur un relevé réel avant de changer.
