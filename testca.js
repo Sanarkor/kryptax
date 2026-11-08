@@ -25,10 +25,10 @@ const BASE = [['2025-01-10 10:00', 'Buy', 'BTC', 1, 10000, 50], ['2025-03-01 10:
   const m = C.mergeFiles([{ name: 'a', p: p1 }, { name: 'b', p: p2 }]), r = C.compute(m.txs, { fileTz: TO, taxTz: TO });
   eq([D(r, '01/04/2025').acb, D(r, '01/04/2025').gain], [200, 50], 'PBR global sur deux fichiers (pas FIFO, pas par portefeuille)'); }
 // 3) Coûts manquants : récompense sans valeur puis vente -> à vérifier (jamais un coût de 0) ; vente sans acquisition -> à vérifier.
-{ const r = run([['2025-01-05', 'Staking', 'DOT', 2, '', ''], ['2025-02-05', 'Sell', 'DOT', 1, 20, 0], ['2025-03-05', 'Sell', 'XRP', 10, 5, 0]]), Y = C.yearSummary(r, 2025);
+{ const r = run([['2025-01-05', 'Staking reward', 'DOT', 2, '', ''], ['2025-02-05', 'Sell', 'DOT', 1, 20, 0], ['2025-03-05', 'Sell', 'XRP', 10, 5, 0]]), Y = C.yearSummary(r, 2025);
   eq([D(r, '05/02/2025').gain, /PBR\) inconnu/.test(D(r, '05/02/2025').status), /aucune acquisition/.test(D(r, '05/03/2025').status), Y.count, Y.toVerify.length, r.income[0].cad, Y.incomeUnknown], [null, true, true, 0, 2, null, 1], 'Coût inconnu et acquisition manquante : à vérifier, hors totaux'); }
 // 4) Récompense avec valeur : ajoutée au PBR à sa valeur ; listée à part (revenu ou capital à examiner).
-{ const r = run([['2025-01-05', 'Staking', 'DOT', 2, 30, ''], ['2025-02-05', 'Sell', 'DOT', 1, 20, 0], ['2025-04-01', 'Buy', 'ZZZ', 1, 1, 0]]);
+{ const r = run([['2025-01-05', 'Staking reward', 'DOT', 2, 30, ''], ['2025-02-05', 'Sell', 'DOT', 1, 20, 0], ['2025-04-01', 'Buy', 'ZZZ', 1, 1, 0]]);
   eq([D(r, '05/02/2025').acb, D(r, '05/02/2025').gain, C.yearSummary(r, 2025).incomeCad], [15, 5, 30], 'Récompense valorisée : coût = valeur reçue'); }
 // 5) v2.56 Perte apparente (cas simple, vos achats) : rachat 1 ETH dans les 30 jours, détenu à J+30 -> S=1, P=1, B=1 : perte de 1 000 refusée en entier
 //    (LIR art. 54, 40(2)g)(i)) et ajoutée au PBR du rachat (art. 53(1)f)) : PBR ETH = 2 100 + 1 000 = 3 100. Perte déductible 2025 = 0.
@@ -120,7 +120,7 @@ const BASE = [['2025-01-10 10:00', 'Buy', 'BTC', 1, 10000, 50], ['2025-03-01 10:
   // 17) Staking : blocage / déblocage = vos propres fonds (pas de récompense inventée, pas de double inventaire) ; seule la récompense est un revenu.
   //     10 ETH 20 000 ; Stake 10 ; Unstake 10 ; récompense 0,1 ETH = 300 ; vente 10 ETH 30 000 : PBR 20 300 × 10 / 10,1 = 20 099,01 ; gain 9 900,99. Totaux « partiels » (mouvement à confirmer).
   { const r = run([['2025-01-10 10:00', 'Buy', 'ETH', 10, 20000, 0], ['2025-02-01 10:00', 'Stake', 'ETH', 10, '', ''], ['2025-03-01 10:00', 'Unstake', 'ETH', 10, '', ''], ['2025-03-01 11:00', 'Staking Rewards', 'ETH', 0.1, 300, ''], ['2025-06-01 10:00', 'Sell', 'ETH', 10, 30000, 0], ['2025-08-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025), x = D(r, '01/06/2025');
-    eq([x.acb, x.gain, r.income.length, r.moves.length, +r.pools.ETH.qty.toFixed(6), Y.partial, ['Unstake', 'Staking unlock', 'Simple Earn redemption', 'Staking subscription', 'Staking Rewards', 'Staking'].map(C.kind).join()], [20099.01, 9900.99, 1, 2, 0.1, true, 'MOVE,MOVE,MOVE,MOVE,INCOME,INCOME'], 'Staking : déblocage sans récompense ni double quantité ; récompense seule au revenu ; totaux à confirmer'); }
+    eq([x.acb, x.gain, r.income.length, r.moves.length, +r.pools.ETH.qty.toFixed(6), Y.partial, ['Unstake', 'Staking unlock', 'Simple Earn redemption', 'Staking subscription', 'Staking Rewards', 'Staking'].map(C.kind).join()], [20099.01, 9900.99, 1, 2, 0.1, true, 'MOVE,MOVE,MOVE,MOVE,INCOME,STAKEAMB'], 'Staking : déblocage sans récompense ni double quantité ; récompense seule au revenu ; totaux à confirmer'); }
   // 18) Reçu ≠ envoyé : don reçu = acquisition (coût = valeur indiquée), paiement reçu = acquisition (revenu possible), jamais une vente.
   { const r = run([['2025-01-10 10:00', 'Gift received', 'ETH', 2, 6000, 0], ['2025-01-11 10:00', 'Payment received', 'BTC', 0.5, 60, 0], ['2025-01-12 10:00', 'Paiement reçu', 'BTC', 0.5, 40, 0], ['2025-03-10 10:00', 'Sell', 'ETH', 2, 7000, 0], ['2025-06-01 10:00', 'Gift sent', 'BTC', 0.1, 20, 0]]);
     eq([r.disposals.length, D(r, '10/03/2025').gain, r.income.map(x => x.kind).join(), D(r, '01/06/2025').gift, D(r, '01/06/2025').acb], [2, 1000, 'RECV,RECV,RECV', true, 10], 'Don/paiement reçu : acquisition ; don envoyé : disposition (PBR 100/1 × 0,1 = 10)'); }
@@ -164,5 +164,16 @@ const BASE = [['2025-01-10 10:00', 'Buy', 'BTC', 1, 10000, 50], ['2025-03-01 10:
   // 28) Récompenses gratuites sans valeur : regroupées par actif, « gratuit » ≠ valeur nulle (jamais un coût de 0).
   { const r = run([['2025-01-05', 'Learn reward', 'ADA', 5, '', ''], ['2025-02-05', 'Learn reward', 'ADA', 3, '', ''], ['2025-03-05', 'Learn reward', 'DOT', 1, '', ''], ['2025-06-01', 'Buy', 'ZZZ', 1, 1, 0]]), k = C.checks(r, C.yearSummary(r, 2025)).join(' ');
     eq([/ADA \(2\), DOT \(1\)/.test(k), /pas dire valeur nulle/.test(k), r.pools.ADA.acb], [true, true, null], 'Récompenses sans valeur regroupées par actif ; coût inconnu (pas 0)'); }
+  // 29) v2.58 « Staking » seul = ambigu : ni revenu, ni stock, ni coût inventés ; vente suivante hors totaux. « Staking reward » (EN) / « Récompense de staking » (FR) = récompense.
+  { const amb = run([['2025-01-01 10:00', 'Buy', 'ETH', 1, 1000, 0], ['2025-02-01 10:00', 'Staking', 'ETH', 0.1, '', ''], ['2025-03-01 10:00', 'Sell', 'ETH', 0.5, 800, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]), Ya = C.yearSummary(amb, 2025), ka = C.checks(amb, Ya).join(' ');
+    const amb2 = run([['2025-01-01 10:00', 'Buy', 'ETH', 1, 1000, 0], ['2025-02-01 10:00', 'Jalonnement', 'ETH', 0.1, '', ''], ['2025-03-01 10:00', 'Sell', 'ETH', 1.1, 1500, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]);
+    const rwE = run([['2025-01-01 10:00', 'Buy', 'ETH', 1, 1000, 0], ['2025-02-01 10:00', 'Staking reward', 'ETH', 0.1, 200, ''], ['2025-03-01 10:00', 'Sell', 'ETH', 1.1, 1500, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]);
+    const rwF = run([['2025-01-01 10:00', 'Buy', 'ETH', 1, 1000, 0], ['2025-02-01 10:00', 'Récompense de staking', 'ETH', 0.1, 200, ''], ['2025-03-01 10:00', 'Sell', 'ETH', 1.1, 1500, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]);
+    eq([amb.income.length, amb.stakeAmb.length, /PBR incertain \(staking ambigu/.test(D(amb, '01/03/2025').status), Ya.count, Ya.partial, /sans précision/.test(ka), /aucune acquisition/.test(D(amb2, '01/03/2025').status), amb2.income.length,
+        rwE.income.length, D(rwE, '01/03/2025').gain, rwF.income.length, D(rwF, '01/03/2025').gain, C.yearSummary(rwE, 2025).partial],
+       [0, 1, true, 0, true, true, true, 0, 1, 300, 1, 300, false], 'Staking ambigu : à examiner, aucun revenu/stock/coût inventé, vente suivante hors totaux ; Staking reward FR/EN : revenu 200, gain 300'); }
+  // 30) Même jour sans heure : la vente reste hors totaux ET le reste du stock devient incertain (vente suivante datée aussi hors totaux), pas de calcul définitif silencieux.
+  { const r = run([['2025-03-01', 'Buy', 'BTC', 2, 200, 0], ['2025-03-01', 'Sell', 'BTC', 1, 150, 0], ['2025-04-01', 'Sell', 'BTC', 1, 150, 0], ['2025-06-01', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025);
+    eq([D(r, '01/03/2025').gain, /PBR incertain \(ordre inconnu/.test(D(r, '01/04/2025').status), Y.count, Y.partial], [null, true, 0, true], 'Même jour : achats d\'abord seulement provisoire ; ventes du jour et suivantes hors totaux'); }
   console.log(ko ? ko + ' ÉCHEC(S)' : 'testca : tout est OK (' + ok + ')'); process.exit(ko ? 1 : 0);
 })();
