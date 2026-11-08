@@ -234,7 +234,7 @@
     const r = KP.parsePdfLines(lines);
     if (!r.rows.length && !r.fiat.length && !r.rows2.length) return showErr(file.name + ' : aucune opération crypto trouvée dans ce PDF.' + (r.amb.length ? ' ' + r.amb.length + ' ligne(s) ambiguë(s) non importée(s) : ' + r.amb.map(a => a.why).join(' ; ') + '.' : ''));
     holders[file.name] = KP.holderFromLines(lines); saveHolders();
-    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, feeInKindEurOnly: true, source: file.name, dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, uid);
+    const res = KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, feeInKindEurOnly: true, feeExcl: true, source: file.name, dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, uid);
     txs = txs.concat(res.txs);
     if (r.rows2.length) { // v2.33 : tableaux à date en tête (frais en colonne séparée : comptés comme pour un CSV ; heures lues en UTC comme le relevé connu)
       const r2 = KP.importRows(r.rows2.map(x => x.row), { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: false, source: file.name, dmode: 'DMY', tz: 'UTC', strict: true, cur: { '€': 'EUR', '$': 'USD', '£': 'GBP' }[r.rows2.cur] }, uid);
