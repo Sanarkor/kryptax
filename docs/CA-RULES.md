@@ -1,4 +1,4 @@
-# Canada — règles appliquées (v2.53, bêta)
+# Canada — règles appliquées (v2.54, bêta)
 
 Feuille de calcul **estimative** pour un particulier canadien, crypto détenue **à titre de capital**. Ce n'est pas un formulaire officiel ni un conseil fiscal. Aucun impôt fédéral ou provincial n'est calculé.
 
@@ -23,7 +23,7 @@ Feuille de calcul **estimative** pour un particulier canadien, crypto détenue *
 Une perte est **« à examiner »** et sortie du total définitif quand le même actif a été acquis dans les 30 jours avant ou après et est encore détenu au 30e jour, ou quand le fichier ne couvre pas ces 30 jours. On ne calcule **ni refus partiel ni ajout au PBR**. Les achats du conjoint ou de sociétés affiliées sont invisibles : un avertissement est affiché.
 
 ## Non couvert
-Activité d'entreprise, revenu de minage ou de staking professionnel, pertes d'autres années, report rétrospectif, autres biens, impôt fédéral et provincial, règles du Québec (TP-1), cours de crypto manquants (non recherchés). Si le fuseau est changé après validation, il faut revalider pour recalculer les jours de change.
+Activité d'entreprise, revenu de minage ou de staking professionnel, pertes d'autres années, report rétrospectif, autres biens, impôt fédéral et provincial, règles du Québec (TP-1), cours de crypto manquants (non recherchés). 
 
 ## Exemple calculé à la main (testca.js, test 1)
 - Achats : 1 BTC à 10 000 $ + 50 $ de frais, puis 1 BTC à 20 000 $. PBR = 30 050 / 2 = 15 025 $/BTC.
@@ -31,3 +31,14 @@ Activité d'entreprise, revenu de minage ou de staking professionnel, pertes d'a
 - Échange de 0,5 BTC contre 10 ETH, valeur 9 000 $, frais 10 $ : gain 1 477,50 $. Les ETH coûtent 9 000 $.
 - Vente de 5 ETH pour 3 000 $ : PBR 4 500 $, perte 1 500 $.
 - Totaux 2025 : gains 5 945 $, pertes 1 500 $, net 4 445 $, imposable (1/2) 2 222,50 $.
+
+## v2.54
+- **Langue** : page Canada en français (par défaut) ou en anglais, avec un choix mémorisé dans `kx-ca-lang`, séparé de l'Allemagne. Changer de langue réaffiche seulement : rien n'est relu, recalculé ni redemandé à la Banque du Canada. Les montants sont écrits « CAD » en anglais et dans le PDF ; les dates sont en AAAA-MM-JJ en anglais.
+- **CSP** : `connect-src` contient l'origine exacte `https://www.bankofcanada.ca` (sans joker). Le test vérifie désormais aussi les appels des moteurs pays.
+- **Fuseaux** : un changement de fuseau (fichier ou fiscal) après validation efface les résultats, les années et les taux, et exige « Valider les imports ». La conversion repart toujours des lignes brutes (pas de double conversion).
+- **Excel** : une cellule date est lue comme numéro de série (heure murale du fichier), sans dépendre du fuseau du navigateur. Les calendriers 1904 sont gérés.
+- **Colonne « Currency / Devise »** séparée : lue. Un code inconnu fait écarter la ligne.
+
+## Limites restantes
+- Les raisons d'exclusion produites par le lecteur Binance partagé (formats.js) sont en anglais dans les deux langues, comme pour les autres pays.
+- Le test sur un vrai PDF Binance passe par le texte extrait (fixture partagée), pas par un fichier PDF réel ouvert dans le navigateur.
