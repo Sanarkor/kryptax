@@ -511,3 +511,11 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 @media (min-width:1024px){.usmode>#auleft{grid-column:1;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto;padding:0 8px 8px 2px}.usmode>#auresult{grid-column:2}.usmode:has(#auresult:empty)>#auleft{position:static;max-height:none;overflow:visible}.usmode>#auresult:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px #0006;color:var(--muted);font-style:italic;margin:8px 0}.usmode>#auresult:empty::before{content:"Vos résultats apparaîtront ici après le calcul."}#aumode[lang="en"]>#auresult:empty::before{content:"Your results will appear here after the calculation."}}
 #aumode section.dropover::after{content:"Drop your files here"}
 .aum .usimp p{margin:.4rem 0}.aum .ustzopt{display:block;margin:6px 0;text-align:left}.aum .ustzopt select,.aum .ustzopt input{display:block;width:100%;max-width:100%;min-width:0;margin-top:2px;box-sizing:border-box}
+/* v2.56 : mention Bêta bien visible (pays en bêta seulement) — ambre sur fond sombre, rouge vif sur fond clair ; contrastes AA (badge 4.8:1 à 12:1, texte ≥ 6:1) ; retour à la ligne sur mobile 320 px */
+.usbeta{border-left:4px solid #fbbf24;padding:4px 0 4px 9px;overflow-wrap:anywhere}
+.betatag{background:#fbbf24;color:#111827;font-weight:800;font-size:.82em;padding:2px 9px;line-height:1.35;border:1px solid #f59e0b;margin-right:4px;white-space:nowrap}
+.betanote{color:#fbbf24;font-weight:700}
+:root[data-theme="light"] .usbeta{border-left-color:#dc2626}
+:root[data-theme="light"] .betatag{background:#dc2626;color:#fff;border-color:#b91c1c}
+:root[data-theme="light"] .betanote{color:#b91c1c}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .usbeta{border-left-color:#dc2626}:root:not([data-theme="dark"]) .betatag{background:#dc2626;color:#fff;border-color:#b91c1c}:root:not([data-theme="dark"]) .betanote{color:#b91c1c}}
