@@ -561,31 +561,37 @@
     const src = h.src ? ' ' + h.src : '', off = h.dh ? `, à ${Math.abs(h.dh)} h de l’heure demandée` : '';
     return (h.k === 'seconde' ? 'cours à la seconde' : h.k === 'minute' ? 'cours à la minute' : h.k === 'horaire' ? 'cours horaire' : h.k === 'journalier' ? 'cours journalier' : 'cours') + (src || off ? ' (' + (h.src || 'source non enregistrée') + off + ')' : '');
   };
-  /* v2.60 : annexe COMPACTE, une ligne par actif, groupée par source : « BTC : Binance (seconde, minute ×2) ; relevé (prix de cession) ».
-     Méthode, source et décalage d'heure gardés ; estimations marquées « ≈ » (jamais présentées comme cours réel) ; ×n seulement si n > 1.
-     Limite : méthodes regroupées par actif, sans attribution cession par cession (la colonne de précision est masquée, SHOW_PREC = false). Les métadonnées fn.how restent intactes. */
-  const SHORT_K = { seconde: 'seconde', minute: 'minute', horaire: 'horaire', journalier: 'journalier' };
-  function compactKey(h, fiat, d) {
-    if (d && d.asset === '(saisie manuelle)') return ['saisie', 'valeur 212 saisie par vous'];
-    if (d && d.implied) return ['relevé', 'prix de cession'];
-    if (fiat) return ['parité fixe', ''];
-    if (!h) return ['origine non enregistrée', ''];
-    if (h.k === 'saisi') return ['saisi par vous', ''];
-    if (h.k === 'inconnu') return ['aucun cours (0 €)', ''];
-    if (h.k === 'estimé') return ['≈ estimé', h.src === 'opération' ? 'vos opérations < 30 j' : h.src === 'opération lointaine' ? 'vos opérations > 30 j' : 'cours le plus proche'];
-    return [h.src || 'source non enregistrée', (SHORT_K[h.k] || 'cours') + (h.dh ? ', à ' + Math.abs(h.dh) + ' h' : '')];
+  /* v2.61 : PDF France minimal. Cours standard (minute/seconde) et prix de la cession elle-même : AUCUN détail, une mention commune.
+     Seules les EXCEPTIONS (horaire, journalier, écart d'heure, estimé ≈, saisi, aucun cours, origine non enregistrée) sont listées, groupées par actif.
+     Métadonnées fn.how inchangées (lecture seule). */
+  function srcClass(h, fiat, d) {
+    if (d && d.asset === '(saisie manuelle)') return ['x', 'valeur 212 saisie par vous'];
+    if (d && d.implied) return ['implied'];
+    if (fiat) return ['fiat'];
+    if (!h) return ['x', 'origine non enregistrée'];
+    if (h.k === 'seconde' || h.k === 'minute') return ['std'];
+    if (h.k === 'saisi') return ['x', 'cours saisi par vous'];
+    if (h.k === 'inconnu') return ['x', 'aucun cours trouvé (0 €)'];
+    if (h.k === 'estimé') return ['x', '≈ estimé (' + (h.src === 'opération' ? 'vos opérations < 30 j' : h.src === 'opération lointaine' ? 'vos opérations > 30 j' : 'cours le plus proche') + ')'];
+    return ['x', (h.k === 'horaire' ? 'horaire' : h.k === 'journalier' ? 'journalier' : 'cours') + (h.src ? ' ' + h.src : '') + (h.dh ? ', à ' + Math.abs(h.dh) + ' h' : '')];
   }
-  function priceSources(fn, cessions, opt) {
-    opt = opt || {}; const max = opt.max || 40, G = {}, how = fn && fn.how;
+  function priceSummary(fn, cessions, opt) {
+    opt = opt || {}; const max = opt.max || 40, how = fn && fn.how, G = {}, has = { std: 0, implied: 0, fiat: 0 };
     for (const c of cessions || []) for (const d of c.detail212 || []) {
-      const [src, m] = compactKey(how && how.get(d.asset + '|' + c.date), d.asset === 'EUR', d);
-      const a = d.asset === '(saisie manuelle)' ? 'Portefeuille' : d.asset, g = G[a] = G[a] || { n: 0, s: {} }; g.n++;
-      const S = g.s[src] = g.s[src] || { n: 0, m: {} }; S.n++; if (m) S.m[m] = (S.m[m] || 0) + 1;
+      const [k, lab] = srcClass(how && how.get(d.asset + '|' + c.date), d.asset === 'EUR', d);
+      if (k !== 'x') { has[k]++; continue; }
+      const a = d.asset === '(saisie manuelle)' ? 'Portefeuille' : d.asset, g = G[a] = G[a] || {}; g[lab] = (g[lab] || 0) + 1;
     }
-    const L = Object.entries(G).sort((x, y) => y[1].n - x[1].n || x[0].localeCompare(y[0])).map(([a, g]) => a + ' : ' + Object.entries(g.s).sort((x, y) => y[1].n - x[1].n).map(([src, S]) => {
-      const ms = Object.entries(S.m).sort((x, y) => y[1] - x[1]).map(([m, k]) => m + (k > 1 ? ' ×' + k : '')); return src + (ms.length ? ' (' + ms.join(', ') + ')' : S.n > 1 ? ' ×' + S.n : ''); }).join(' ; '));
-    return L.length > max ? L.slice(0, max).concat(['… et ' + (L.length - max) + ' autre(s) actif(s)']) : L;
+    let exc = Object.keys(G).sort().map(a => a + ' : ' + Object.entries(G[a]).sort((x, y) => y[1] - x[1]).map(([l, n]) => l + (n > 1 ? ' ×' + n : '')).join(' ; '));
+    if (exc.length > max) exc = exc.slice(0, max).concat(['… et ' + (exc.length - max) + ' autre(s) actif(s)']);
+    const parts = [];
+    if (has.std) parts.push('Cours récupérés à la minute ou à la seconde');
+    if (has.implied) parts.push((has.std ? 'actif' : 'Actif') + ' vendu valorisé au prix de la cession elle-même');
+    if (has.fiat) parts.push((parts.length ? 'devises' : 'Devises') + ' et stablecoins à parité fixe');
+    const mention = parts.length ? parts.join(' ; ') + (exc.length ? ', sauf exceptions signalées.' : '.') : '';
+    return { mention, exc, std: has.std, implied: has.implied };
   }
+  function priceSources(fn, cessions, opt) { return priceSummary(fn, cessions, opt).exc; } // exceptions seules (compatibilité)
   function priceLookup(txs, cache, manual, opts) {
     const obs = observed(txs), approx = new Set(), unvalued = new Set(), prec = new Map(), how = new Map(); // how : origine de chaque cours (justificatif), sans effet sur la valeur
     const fn = (a, ts, txId) => {
@@ -828,6 +834,6 @@
     if (dt.items && dt.items.length) return Array.from(dt.items).filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
     return Array.from(dt.files || []);
   }
-  const api = { priceSources, howLabel, sections, hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, twinFix, resolveRecon, reconList, qtyChoices, makeSources, prepare, observed };
+  const api = { priceSources, priceSummary, howLabel, sections, hasFileDrag, droppedFiles, numMode, dateMode, cellDate, badSummary, alertAssets, hasTime, minKey, precLabel, cessionPrec, prepareRetry, holderFromLines, holderFromRows, normName, maskName, checkHolders, mergeImport, fileList, txKey, priceLookup, pool, parsePdfLines, itemsToLines, importRows, twinFix, resolveRecon, reconList, qtyChoices, makeSources, prepare, observed };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxPipeline = api;
 })(this);

@@ -33,22 +33,27 @@ chk(X.frRate(2024).total === 0.30 && X.frRate(2025).total === 0.314 && X.frRate(
     { id: 's', date: T1, type: 'SELL', asset: 'BTC', qty: 0.5, eur: 30000, fee: 0 }];
   const fn = P.priceLookup(txs, cache, { SOLX: 12 }, { zeroIfUnknown: true }), r = E.compute(txs, fn), L = P.priceSources(fn, r.cessions), j = L.join('\n');
   chk(r.cessions.length === 1 && r.cessions[0].l212 > 0, 'Origine des cours : cession fictive calculée');
-  chk(L.length === new Set(L.map(l => l.split(' : ')[0])).size, 'Origine des cours : une seule ligne par actif');
-  chk(/BTC : relevé \(prix de cession\)$/m.test(j), 'BTC vendu : prix implicite de la cession');
-  chk(/ETH : Coinbase ±2 min \(minute\)$/m.test(j), 'ETH : cours minute avec source et écart réels');
-  chk(/ADA : CoinGecko \(horaire, à 1 h\)$/m.test(j), 'ADA : cours horaire, décalage d’1 h signalé');
-  chk(/SOLX : saisi par vous$/m.test(j), 'SOLX : cours saisi');
-  chk(/XRPZ : ≈ estimé \(vos opérations < 30 j\)$/m.test(j), 'XRPZ : estimé depuis une opération');
-  chk(/<b>NOPE<\/b> : aucun cours \(0 €\)$/m.test(j), 'Actif inconnu : compté 0 €, pas de source inventée (texte brut, échappé à l’affichage PDF/ascii)');
+  chk(L.length === new Set(L.map(l => l.split(' : ')[0])).size && !/^(BTC|ETH) :/m.test(j), 'Origine des cours : exceptions seules, une ligne par actif ; BTC (prix de cession) et ETH (minute) non listés');
+  { const ms = P.priceSummary(fn, r.cessions).mention; chk(/^Cours récupérés à la minute ou à la seconde ; actif vendu valorisé au prix de la cession elle-même, sauf exceptions signalées\.$/.test(ms), 'Mention commune fidèle : ' + ms); }
+  chk(fn.how.get('ETH|' + T1).k === 'minute' && fn.how.get('ETH|' + T1).src === 'Coinbase ±2 min', 'Métadonnées internes inchangées (ETH minute, Coinbase ±2 min)');
+  chk(/^ADA : horaire CoinGecko, à 1 h$/m.test(j), 'ADA : cours horaire, décalage d’1 h signalé');
+  chk(/^SOLX : cours saisi par vous$/m.test(j), 'SOLX : cours saisi');
+  chk(/^XRPZ : ≈ estimé \(vos opérations < 30 j\)$/m.test(j), 'XRPZ : estimé depuis une opération');
+  chk(/^<b>NOPE<\/b> : aucun cours trouvé \(0 €\)$/m.test(j), 'Actif inconnu : compté 0 €, pas de source inventée (texte brut, échappé à l’affichage PDF/ascii)');
   const fn2 = P.priceLookup(txs, cache, { SOLX: 12 }, { zeroIfUnknown: true }), r2 = E.compute(JSON.parse(JSON.stringify(txs)), fn2);
   chk(Math.abs(r2.cessions[0].l212 - r.cessions[0].l212) < 1e-9 && fn2.how instanceof Map, 'Justificatif sans effet sur les montants (212 identique)');
   fn.how.clear(); chk(/ETH : origine non enregistrée/.test(P.priceSources(fn, r.cessions).join('\n')), 'Sans métadonnée : « origine non enregistrée » (rien d’inventé)');
-  { // v2.60 : plusieurs cessions, sources seconde/minute/relevé groupées : une ligne par actif, sans « ×1 » répété
-    const T = [Date.UTC(2025, 6, 1, 10), Date.UTC(2025, 7, 1, 10), Date.UTC(2025, 8, 1, 10)], how = new Map([['BTC|' + T[0], { k: 'seconde', src: 'Binance' }], ['BTC|' + T[1], { k: 'minute', src: 'Binance' }], ['BTC|' + T[2], { k: 'minute', src: 'OKX' }], ['ETH|' + T[0], { k: 'minute', src: 'Binance' }], ['ETH|' + T[1], { k: 'minute', src: 'Binance' }], ['ETH|' + T[2], { k: 'estimé', src: 'cache' }]]);
-    const C = T.map((d, i) => ({ date: d, asset: 'SOL', detail212: [{ asset: 'BTC' }, { asset: 'ETH' }, { asset: 'SOL', implied: true }] })), L2 = P.priceSources({ how }, C), j2 = L2.join('\n');
-    chk(L2.length === 3 && /^BTC : Binance \(seconde, minute\) ; OKX \(minute\)$/m.test(j2) && /^ETH : Binance \(minute ×2\) ; ≈ estimé \(cours le plus proche\)$/m.test(j2) && /^SOL : relevé \(prix de cession ×3\)$/m.test(j2) && !/×1/.test(j2), 'Annexe compacte : 3 lignes (BTC/ETH/SOL), sources groupées, estimation marquée ≈, aucun ×1 [' + L2.join(' | ') + ']'); }
+  { // v2.61 : tout standard (seconde/minute + relevé) -> aucune ligne ; mixte -> seules les exceptions ; tout manquant -> pas de mention « récupérés »
+    const T = [Date.UTC(2025, 6, 1, 10), Date.UTC(2025, 7, 1, 10), Date.UTC(2025, 8, 1, 10)], how = new Map(); ['BTC', 'ETH'].forEach(a => T.forEach((d, i) => how.set(a + '|' + d, { k: i ? 'minute' : 'seconde', src: i === 2 ? 'OKX' : 'Binance' })));
+    const C = T.map(d => ({ date: d, asset: 'SOL', detail212: [{ asset: 'BTC' }, { asset: 'ETH' }, { asset: 'SOL', implied: true }] })), a = P.priceSummary({ how }, C);
+    chk(a.exc.length === 0 && a.mention === 'Cours récupérés à la minute ou à la seconde ; actif vendu valorisé au prix de la cession elle-même.', 'Tout standard : aucune ligne par actif, mention seule');
+    const h2 = new Map(how); h2.set('ETH|' + T[2], { k: 'estimé', src: 'cache' }); h2.set('BTC|' + T[1], { k: 'horaire', src: 'CoinGecko', dh: 1 }); const b = P.priceSummary({ how: h2 }, C);
+    chk(b.exc.join(' | ') === 'BTC : horaire CoinGecko, à 1 h | ETH : ≈ estimé (cours le plus proche)' && /sauf exceptions signalées\.$/.test(b.mention), 'Mixte : seules les exceptions [' + b.exc.join(' | ') + ']');
+    const z = P.priceSummary({ how: new Map([['BTC|' + T[0], { k: 'inconnu' }]]) }, [{ date: T[0], detail212: [{ asset: 'BTC' }] }]);
+    chk(z.mention === '' && z.exc.join() === 'BTC : aucun cours trouvé (0 €)', 'Tout manquant : pas de fausse mention de récupération');
+    const r1 = P.priceSummary({ how: new Map() }, [{ date: T[0], detail212: [{ asset: 'SOL', implied: true }] }]); chk(r1.mention === 'Actif vendu valorisé au prix de la cession elle-même.' && !/récupérés/.test(r1.mention), 'Relevé seul : pas de mention API'); }
   const many = [{ date: T1, detail212: Array.from({ length: 60 }, (_, i) => ({ asset: 'T' + i, value: 1 })) }];
-  chk(P.priceSources(fn, many).length === 41, 'Annexe compacte : 40 actifs maximum + 1 ligne de reste');
+  chk(P.priceSources({ how: new Map() }, many).length === 41, 'Exceptions : 40 actifs maximum + 1 ligne de reste');
 }
 // 6) Récompenses à 0 € : avertissement visible et prudent (pas d'affirmation de régime)
 { const A = src('app.js'); chk(/function rwWarn\(\)/.test(A) && /'<\/div>' \+ rwWarn\(\) \+ cmpBlock/.test(A) && /éventuelle imposition à la réception n’est pas calculée par Kryptax : à examiner/.test(A) && !/sont des BNC|imposées en BNC/.test(A), 'Récompenses 0 € : avertissement visible, sans affirmer de régime'); }

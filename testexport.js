@@ -36,13 +36,22 @@ chk(!new RegExp(['rev', 'olut'].join(''), 'i').test(txt), 'PDF : aucune mention 
   chk(xm.cessions.length === 45 && pg.length > 1, 'PDF 45 cessions : ' + pg.length + ' pages (> 1)');
   chk(pg.every(p => /224 Plus ou/.test(p) || !/^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : en-têtes de colonnes répétés');
   const lastTab = pg.map((p, i) => /^\s*GLOBAL/m.test(p) ? i : -1).filter(i => i >= 0); chk(lastTab.length === 1 && !pg.slice(lastTab[0] + 1).some(p => /^\s*\d+\s+AAA/m.test(p)), 'PDF multi-pages : GLOBAL après la dernière cession'); }
-// v2.60 : annexe « origine des cours » compacte (fictif, plusieurs actifs et cours seconde/minute/relevé) : une ligne par actif, légende commune, pied de page gardé
-{ const KP = require('./pipeline.js'), T3 = [Date.UTC(2026, 6, 1, 10), Date.UTC(2026, 7, 1, 10), Date.UTC(2026, 8, 1, 10)];
-  const how = new Map(); ['BTC', 'ETH', 'SOL', 'ADA', 'DOT'].forEach((a, j) => T3.forEach((d, i) => how.set(a + '|' + d, { k: (i + j) % 2 ? 'minute' : 'seconde', src: i === 2 ? 'OKX' : 'Binance' })));
-  const C = T3.map(d => ({ date: d, asset: 'AAA', detail212: ['BTC', 'ETH', 'SOL', 'ADA', 'DOT'].map(asset => ({ asset })).concat([{ asset: 'AAA', implied: true }]) }));
-  const xs = Object.assign({}, x, { sources: KP.priceSources({ how }, C) }), tp = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xs, X.title(2026)).output('arraybuffer')) }).toString();
-  const an = tp.slice(tp.indexOf('Annexe : origine')), rows = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AAA'].map(a => (an.match(new RegExp('^\\s*' + a + '\\s', 'mg')) || []).length);
-  chk(xs.sources.length === 6 && rows.every(n => n === 1) && /^BTC +Binance \(seconde, minute\) ; OKX \(seconde\)/m.test(an) && /^AAA +relev. \(prix de cession x3\)/m.test(an) && !/ x1\b/.test(an) && /Kryptax - page \d+ \/ \d+/.test(tp) && /pas un justificatif/.test(an), 'PDF : annexe compacte, 1 ligne par actif (6), légende commune, aucun ×1, pied de page présent [' + rows.join(',') + ']'); }
+// v2.61 : origine des cours = mention commune sur la 1re page, exceptions seules ; plus d'annexe ni de page dédiée (fictif, 6 actifs)
+{ const KP = require('./pipeline.js'), T3 = [Date.UTC(2026, 6, 1, 10), Date.UTC(2026, 7, 1, 10), Date.UTC(2026, 8, 1, 10)], AS = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT'];
+  const C = T3.map(d => ({ date: d, asset: 'AAA', detail212: AS.map(asset => ({ asset })).concat([{ asset: 'AAA', implied: true }]) }));
+  const std = new Map(); AS.forEach((a, j) => T3.forEach((d, i) => std.set(a + '|' + d, { k: (i + j) % 2 ? 'minute' : 'seconde', src: i === 2 ? 'OKX' : 'Binance' })));
+  const pdf = how => { const ps = KP.priceSummary({ how }, C), xs = Object.assign({}, x, { sources: ps.exc, srcNote: ps.mention }); return require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, xs, X.title(2026)).output('arraybuffer')) }).toString(); };
+  const base = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, x, X.title(2026)).output('arraybuffer')) }).toString(), pgs = t => t.split('\f').filter(p => p.trim()).length;
+  const ts = pdf(std), one = s => s.replace(/\s+/g, ' ');
+  chk(!/Annexe/.test(ts) && !/^\s*(BTC|ETH|SOL|ADA|DOT)\s{2,}/m.test(ts) && /Cours r.cup.r.s . la minute ou . la seconde ; actif vendu valoris. au prix de la cession elle-m.me\./.test(one(ts)) && !/hors minute/.test(ts) && pgs(ts) === pgs(base), 'PDF tout standard (6 actifs) : mention seule, aucune ligne par actif, aucune annexe, ' + pgs(ts) + ' page(s) = sans origine');
+  chk(one(ts.split('\f')[0]).includes('Origine des cours (l. 212) : Cours r') || /Origine des cours \(l\. 212\) : Cours r/.test(one(ts.split('\f')[0])), 'PDF : mention sur la première page');
+  const strip = t => t.split('\n').filter(l => !/Origine des cours|Cours r.cup|vendu valoris|Exceptions|horaire|estim/.test(l)).join('\n').replace(/\s+/g, ' ').replace(/^.*?Kryptax/, '');
+  const mx = new Map(std); mx.set('BTC|' + T3[1], { k: 'horaire', src: 'CoinGecko', dh: 2 }); mx.set('ETH|' + T3[2], { k: 'estimé', src: 'opération' }); const tm = pdf(mx);
+  chk(/Cours hors minute\/seconde \(l\. 212\) BTC : horaire CoinGecko, . 2 h ; ETH : ~ estim. \(vos op.rations < 30 j\)\./.test(one(tm)) && /sauf exceptions signal.es/.test(one(tm)) && !/SOL :|ADA :|DOT :/.test(tm), 'PDF mixte : seules les exceptions BTC (horaire, à 2 h) et ETH (≈ estimé) visibles');
+  const za = new Map(); AS.forEach(a => T3.forEach(d => za.set(a + '|' + d, { k: 'inconnu' }))); const Cz = C.map(c => Object.assign({}, c, { detail212: c.detail212.filter(d => !d.implied) })), psz = KP.priceSummary({ how: za }, Cz);
+  const tz = require('child_process').execSync('pdftotext -layout - -', { input: Buffer.from(X.makePdf(jsPDF, Object.assign({}, x, { sources: psz.exc, srcNote: psz.mention }), X.title(2026)).output('arraybuffer')) }).toString();
+  chk(!/r.cup.r.s/.test(tz) && /ADA : aucun cours trouv. \(0 .\)/.test(one(tz)), 'PDF tout manquant : pas de fausse mention de récupération, actifs signalés');
+  chk(/Kryptax - page \d+ \/ \d+/.test(ts) && /GLOBAL/.test(ts), 'PDF : pied de page et GLOBAL conservés'); }
 /* Logo : mot « Kryptax » vectoriel noir à contour gris métallique, sans icône ni couleur ; analyse des pixels de la zone du logo (pdftoppm) */
 { const cp = require('child_process'), zone = buf => { require('fs').writeFileSync('/tmp/kx-logo.pdf', buf); cp.execSync('pdftoppm -r 72 -f 1 -l 1 -x 0 -y 0 -W 170 -H 50 -singlefile /tmp/kx-logo.pdf /tmp/kx-logo'); const ppm = require('fs').readFileSync('/tmp/kx-logo.ppm'); let i = 0, nl = 0; while (nl < 3) if (ppm[i++] === 10) nl++;
     let col = 0, dark = 0, grey = 0; for (; i + 2 < ppm.length; i += 3) { const r = ppm[i], g = ppm[i + 1], b = ppm[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); if (mx - mn > 60) col++; else if (mx < 60) dark++; else if (mx < 230) grey++; } return { col, dark, grey }; };
