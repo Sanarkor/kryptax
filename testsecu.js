@@ -49,5 +49,5 @@ chk(X.frRate(2024).total === 0.30 && X.frRate(2025).total === 0.314 && X.frRate(
 // 6) Récompenses à 0 € : avertissement visible et prudent (pas d'affirmation de régime)
 { const A = src('app.js'); chk(/function rwWarn\(\)/.test(A) && /'<\/div>' \+ rwWarn\(\) \+ cmpBlock/.test(A) && /éventuelle imposition à la réception n’est pas calculée par Kryptax : à examiner/.test(A) && !/sont des BNC|imposées en BNC/.test(A), 'Récompenses 0 € : avertissement visible, sans affirmer de régime'); }
 // 7) Bandeaux bêta US / UK / DE (EN + DE), absents de la France
-{ const I = src('index.html'), D = src('de-engine.js'); chk((I.match(/<b class="betatag">Beta<\/b>/g) || []).length === 3 && /Weniger getestet als die französische Version/.test(D) && !/betatag/.test((I.match(/<section id="frmode"[\s\S]*?<\/section>/) || [''])[0]), 'Bandeaux bêta US, UK, DE (EN/DE)'); }
+{ const I = src('index.html'), D = src('de-engine.js'); chk((I.match(/<b class="betatag">Beta<\/b>/g) || []).length === 4 && /Weniger getestet als die französische Version/.test(D) && !/betatag/.test((I.match(/<section id="frmode"[\s\S]*?<\/section>/) || [''])[0]), 'Bandeaux bêta US, UK, DE (EN/DE), AU'); }
 console.log(ko ? ko + ' ÉCHEC(S)' : 'testsecu : tout est OK'); process.exit(ko ? 1 : 0);
