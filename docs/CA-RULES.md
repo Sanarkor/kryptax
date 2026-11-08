@@ -62,3 +62,7 @@ Activité d'entreprise, revenu de minage ou de staking professionnel, pertes d'a
 - **Relevé PDF (ancien format, frais à part)** : vente et achat à la même seconde avec les mêmes frais = échange ; frais comptés une fois (moitié vente, moitié achat), comme le mode U.K.
 - **Récompense sans aucun montant** dans un relevé PDF (ex. récompenses « Apprendre ») : gardée comme récompense **sans valeur** (coût inconnu, signalé), au lieu d'être écartée.
 - Limite connue : la France considère que, dans un relevé en €, la valeur d'un achat inclut déjà les frais ; le Canada (comme le U.K.) ajoute les frais au coût. À confirmer sur un relevé réel avant de changer.
+
+## v2.57 (zzv)
+- **Bêta visible** (U.S.A., U.K., Allemagne, Canada, Australie ; jamais la France) : badge ambre sur fond sombre, rouge vif sur fond clair, texte de la note en gras ; contrastes AA vérifiés par test.
+- **Récompenses gratuites sans valeur** : regroupées par actif ; « reçu gratuitement » n'est pas « valeur nulle » : la juste valeur marchande à la réception reste à trouver (coût inconnu, jamais 0).
