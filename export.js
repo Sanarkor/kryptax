@@ -56,7 +56,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     return s;
   }
   function exportData(years, sums, summaryRows, txs, year) {
-    const out = { cessions: [], totals: [], year: year || null, swapCount: (txs || []).filter(t => t.type === 'EXCH_OUT').length, special: special(txs, year) };
+    const out = { cessions: [], totals: [], year: year || null, swapCount: (txs || []).filter(t => t.type === 'EXCH_OUT').length, special: special(txs, year), feeExcl: (txs || []).some(t => t.feeExcl && (t.type === 'BUY' || t.type === 'SELL') && Math.abs(t.fee || 0) > 0) };
     // year : seules les cessions de cette année (le calcul 2086 reste cumulatif depuis le premier achat : l. 220/221/212 viennent de tout l'historique)
     const list = year ? [years[year] || { year, cessions: [] }] : Object.values(years).sort((a, b) => a.year - b.year);
     for (const y of list) {
@@ -151,7 +151,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
       const dl = doc.splitTextToSize(ascii(KX_DISCLAIMER), W - 2 * M); if (yn + dl.length * 3.4 + 2 > H - 8) { doc.addPage(); yn = 14; }
       doc.text(dl, M, yn + 2); yn += dl.length * 3.4 + 1.5; doc.setFont('helvetica', 'normal'); doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }
     // 3) Opérations particulières : courte note, prioritaire sur les libellés officiels (reste sur la même page)
-    const st = specialText(x.special, x.year);
+    const st = specialText(x.special, x.year) + (x.feeExcl ? (specialText(x.special, x.year) ? ' ' : '') + 'Convention frais (relevé Revolut) : hypothèse « Valeur » hors frais, non confirmée par Revolut ; frais ajoutés à l\'achat (220) et déduits à la vente (214).' : '');
     if (st) { doc.setFontSize(7.4); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 70, 90); const sl = doc.splitTextToSize(ascii(st), W - 2 * M);
       if (yn + sl.length * 3 + 2 > H - 8) { doc.addPage(); yn = 14; } doc.text(sl, M, yn + 2); doc.setFont('helvetica', 'normal'); yn += sl.length * 3 + 1.5;
       doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }

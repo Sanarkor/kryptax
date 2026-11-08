@@ -103,7 +103,7 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
   const rows = s => [['Plus-values', 'Gains', '', s.gains], ['Frais', 'Frais totaux', '', s.fees.total], ['Revenus (income)', 'Total', '', s.incomeTotal], ['Sorties (outcome)', 'Ventes', '', s.outcome.SELL.eur], ['Soldes', 'Total', '', s.closingTotal]];
   const x = X.exportData(Y, S, rows, T);
   eq(r.cessions.length, 18, 'Export : 18 cessions calculées'); eq(x.cessions.length, 18, 'Export : 18 lignes de cession exportées');
-  eq(x.swapCount, 4, 'Export : 4 échanges exclus comptés (non listés)'); eq(Object.keys(x).join(',') === 'cessions,totals,year,swapCount,special' ? 1 : 0, 1, 'Export : pas de soldes ni de revenus (cessions, totaux, compteurs)');
+  eq(x.swapCount, 4, 'Export : 4 échanges exclus comptés (non listés)'); eq(Object.keys(x).join(',') === 'cessions,totals,year,swapCount,special,feeExcl' ? 1 : 0, 1, 'Export : pas de soldes ni de revenus (cessions, totaux, compteurs)');
   eq(x.totals[0].n, 18, 'Export : GLOBAL = 18 cessions'); eq(typeof X.makeCsv + typeof X.makeXlsx === 'undefinedundefined' ? 1 : 0, 1, 'Export CSV/xlsx retiré (PDF seul)');
   eq(X.FORM.map(f => f[0]).join(',') === '211,212,213,214,215,216,217,218,220,221,222,223,224' ? 1 : 0, 1, 'Export : lignes 211 à 224 de la 2086 dans l’ordre');
 }
@@ -516,13 +516,27 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(/object-src 'none'; base-uri 'none'; form-action 'none'">/.test(IH) && IH.includes('<meta name="referrer" content="no-referrer">') && !/<form/i.test(IH) ? 1 : 0, 1, 'CSP : object-src, base-uri, form-action, referrer, aucun formulaire'); }
   { // Frais d'un CSV/Excel importé par le dialogue : colonne « Fees » explicite comptée (ligne 214), même avec la plateforme par défaut « Relevé »
     const AP = require('fs').readFileSync(__dirname + '/app.js', 'utf8'), KP = require('./pipeline.js');
-    eq(AP.includes('if (mp.fee != null) o.feeInKind = false;') && AP.includes("{ platform: 'Relevé', feeInKind: true, feeInKindEurOnly: true, source: file.name") ? 1 : 0, 1, 'Frais : colonne explicite comptée en CSV/Excel, relevé PDF : frais en nature pour les lignes en euros, frais des ventes en dollars à part (v2.36)');
+    eq(AP.includes('if (mp.fee != null) o.feeInKind = false;') && AP.includes("{ platform: 'Relevé', feeInKind: true, feeInKindEurOnly: true, feeExcl: true, source: file.name") ? 1 : 0, 1, 'Frais : colonne explicite comptée en CSV/Excel, relevé PDF : frais en euros = hypothèse valeur hors frais (v2.59), frais des ventes en dollars à part (v2.36)');
     const head = ['Symbol', 'Type', 'Quantity', 'Price', 'Value', 'Fees', 'Date'], mp = { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 };
     const rows = [['AAA', 'Achat', '10', '10,00€', '100,00€', '1,00€', '10 mars 2026, 10:00:00'], ['AAA', 'Vente', '10', '40,00€', '400,00€', '2,00€', '10 juin 2026, 10:00:00']];
     let n = 0; const imp = o => KP.importRows(rows, mp, Object.assign({ platform: 'Relevé', tz: 'UTC', cur: 'EUR', strict: true, head }, o), () => 'q' + (++n)).txs;
     const c1 = E.compute(imp({ feeInKind: false }), () => null).cessions[0], c0 = E.compute(imp({}), () => null).cessions[0];
     eq(c1.l214, 2, 'Frais CSV : ligne 214 = 2 € (colonne Fees)'); eq(c1.l218, 398, 'Frais CSV : ligne 218 = 400 - 2 = 398 €'); eq(c1.l220, 101, 'Frais CSV : prix d’acquisition 220 = 100 + 1 € de frais');
     eq(c1.l224, 297, 'Frais CSV : plus-value 224 = 398 - 101 = 297 €'); eq(c0.l214, 0, 'Sans le correctif (frais en nature) : ligne 214 = 0 (ancien comportement CSV, toujours celui du relevé PDF)'); }
+  { // v2.59 relevé Revolut, HYPOTHÈSE « Valeur hors frais » (feeExcl) — cas fictifs calculés à la main
+    const eqs = (a, b, m) => eq(a === b ? 1 : 0, 1, m + ' [' + a + ']');
+    const B = (id, d, type, asset, qty, eur, fee, x) => Object.assign({ id, date: Date.UTC(2026, 0, d), type, asset, qty, eur, fee, feeInKind: true, feeExcl: true, platform: 'Relevé', rawType: type === 'BUY' ? 'Acheter' : 'Vendre' }, x || {});
+    const a = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2), B(2, 9, 'SELL', 'AAA', 1, 120, 2)], () => null).cessions[0]; // 100+2 / 120-2, tout vendu
+    eqs([a.l212, a.l213, a.l214, a.l218, a.l220, +a.fraction.toFixed(2), +a.l224.toFixed(2)].join(), '120,120,2,118,102,102,16', 'Revolut hors frais : 220 = 102, 214 = 2, 218 = 118, PV = 16 (portefeuille entièrement vendu)');
+    const P = (as) => as === 'BBB' ? 80 : null, b = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2), B(3, 6, 'BUY', 'BBB', 1, 100, 0), B(2, 9, 'SELL', 'AAA', 1, 120, 2)], P).cessions[0];
+    eqs([b.l212, b.l220, +b.fraction.toFixed(2), +b.l224.toFixed(2)].join(), '200,202,121.2,-3.2', 'Portefeuille partiel : quotient 202 × 120 (brut, pas 118) / 200 = 121,20 ; PV 118 − 121,20 = −3,20 ; frais d’achat comptés une fois');
+    const x = E.compute([B(1, 5, 'BUY', 'XXX', 1, 100, 0, { rawType: 'Acheter - Plateforme X' }), B(2, 9, 'SELL', 'XXX', 0.5, 200, 0, { rawType: 'Vendre - Plateforme X' })], () => null).cessions[0];
+    eq(+x.l212.toFixed(2), 399.64, 'Plateforme X : frais taker 0,09 % en nature conservés (0,9991 × 400)');
+    const old = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: false }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: false })], () => null).cessions[0];
+    eqs([old.l214, old.l220].join(), '0,100', 'Sans feeExcl (autres sources « en nature ») : comportement inchangé');
+    const sw = f => { const T = [B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: f }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: f }), B(3, 9, 'BUY', 'BBB', 2, 120, 2, { feeExcl: f })]; E.detectSwaps(T); return T; };
+    const s1 = sw(true), s0 = sw(false); E.detectSwaps(s1);
+    eqs([s1.map(t => t.type).join(), JSON.stringify(E.compute(s1, () => null).cessions), E.compute(s1, () => null).total220 - 102].join('|'), [s0.map(t => t.type).join(), '[]', 0].join('|'), 'Échange Revolut (vente+achat même seconde) : deux jambes EXCH, aucun frais ajouté deux fois, aucune cession'); }
   { // staking (fictif) : achat 1 ETH 1 000 €, staking 0,1 ETH = 200 €, vente 0,5 ETH 1 000 € — coût 0 € inchangé, avertissement court, signalement sans cours
     const T = [{ id: 1, date: Date.UTC(2025, 0, 5), type: 'BUY', asset: 'ETH', qty: 1, eur: 1000, fee: 0 }, { id: 2, date: Date.UTC(2025, 1, 5), type: 'STAKING', asset: 'ETH', qty: 0.1, eur: 200, fee: 0 }, { id: 3, date: Date.UTC(2025, 2, 5), type: 'SELL', asset: 'ETH', qty: 0.5, eur: 1000, fee: 0 }], P = a => a === 'ETH' ? 2000 : null;
     const d = E.compute(T, P);
