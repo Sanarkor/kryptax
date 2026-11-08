@@ -30,19 +30,19 @@ const BASE = [['2025-01-10 10:00', 'Buy', 'BTC', 1, 10000, 50], ['2025-03-01 10:
 // 4) Récompense avec valeur : ajoutée au PBR à sa valeur ; listée à part (revenu ou capital à examiner).
 { const r = run([['2025-01-05', 'Staking', 'DOT', 2, 30, ''], ['2025-02-05', 'Sell', 'DOT', 1, 20, 0], ['2025-04-01', 'Buy', 'ZZZ', 1, 1, 0]]);
   eq([D(r, '05/02/2025').acb, D(r, '05/02/2025').gain, C.yearSummary(r, 2025).incomeCad], [15, 5, 30], 'Récompense valorisée : coût = valeur reçue'); }
-// 5) Perte apparente : rachat dans les 30 jours et détenu à J+30 -> à examiner, hors total définitif, aucun ajout automatique au PBR.
-//    Achat 1 ETH 3 000 (01/09) ; vente 1 ETH 2 000 le 20/12 (perte 1 000) ; rachat 1 ETH 2 100 le 05/01/2026 ; données jusqu'au 25/01/2026.
+// 5) v2.56 Perte apparente (cas simple, vos achats) : rachat 1 ETH dans les 30 jours, détenu à J+30 -> S=1, P=1, B=1 : perte de 1 000 refusée en entier
+//    (LIR art. 54, 40(2)g)(i)) et ajoutée au PBR du rachat (art. 53(1)f)) : PBR ETH = 2 100 + 1 000 = 3 100. Perte déductible 2025 = 0.
 { const r = run([['2025-09-01', 'Buy', 'ETH', 1, 3000, 0], ['2025-12-20', 'Sell', 'ETH', 1, 2000, 0], ['2026-01-05', 'Buy', 'ETH', 1, 2100, 0], ['2026-01-25', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025), x = D(r, '20/12/2025');
-  eq([x.gain, !!x.superficial, x.superficial.acqQty, x.superficial.held, x.superficial.incomplete, Y.losses, Y.candidateLoss, Y.count, r.pools.ETH.acb], [-1000, true, 1, 1, false, 0, 1000, 0, 2100], 'Perte apparente possible : à examiner, PBR du rachat non modifié'); }
-// 5b) Données qui s'arrêtent avant J+30 -> à examiner (données à compléter).
-{ const r = run([['2025-09-01', 'Buy', 'ETH', 1, 3000, 0], ['2025-12-20', 'Sell', 'ETH', 1, 2000, 0]]), x = D(r, '20/12/2025');
-  eq([!!x.superficial, x.superficial.incomplete, /19\/01\/2026/.test(x.status)], [true, true, true], 'Fenêtre J+30 non couverte : perte à examiner'); }
+  eq([x.gain, x.denied, x.status, Y.losses, Y.denied, Y.count, Y.partial, r.pools.ETH.acb], [-1000, 1000, 'ok', 0, 1000, 1, false, 3100], 'Perte apparente simple : refusée (S/P/B) et ajoutée au PBR du rachat (année suivante)'); }
+// 5b) Données qui s'arrêtent avant J+30 -> perte en attente (pas perdue), hors totaux, totaux partiels.
+{ const r = run([['2025-09-01', 'Buy', 'ETH', 1, 3000, 0], ['2025-12-20', 'Sell', 'ETH', 1, 2000, 0]]), x = D(r, '20/12/2025'), Y = C.yearSummary(r, 2025);
+  eq([!!x.superficial, x.superficial.incomplete, /19\/01\/2026/.test(x.status), /pas perdue/.test(x.status), Y.losses, Y.partial], [true, true, true, true, 0, true], 'Fenêtre J+30 non couverte : perte en attente, totaux partiels'); }
 // 5c) Rachat dans la fenêtre mais plus rien détenu à J+30 -> perte définitive.
 { const r = run([['2025-09-01', 'Buy', 'ETH', 1, 3000, 0], ['2025-12-20', 'Sell', 'ETH', 1, 2000, 0], ['2026-01-02', 'Buy', 'ETH', 1, 2100, 0], ['2026-01-10', 'Sell', 'ETH', 1, 2200, 0], ['2026-02-01', 'Buy', 'ZZZ', 1, 1, 0]]), x = D(r, '20/12/2025');
   eq([x.status, x.gain, C.yearSummary(r, 2025).losses], ['ok', -1000, 1000], 'Rachat revendu avant J+30 : perte définitive'); }
-// 5d) Achat 20 jours AVANT la vente à perte, encore détenu à J+30 -> à examiner.
+// 5d) Achat 10 ADA 20 jours AVANT la vente de 10 ADA à perte (-30), encore détenus à J+30 : S=10, P=10, B=10 -> 30 refusés, PBR restant 80 + 30 = 110.
 { const r = run([['2025-03-01', 'Buy', 'ADA', 10, 100, 0], ['2025-05-10', 'Buy', 'ADA', 10, 60, 0], ['2025-05-30', 'Sell', 'ADA', 10, 50, 0], ['2025-08-01', 'Buy', 'ZZZ', 1, 1, 0]]), x = D(r, '30/05/2025');
-  eq([x.acb, x.gain, !!x.superficial, x.superficial.held], [80, -30, true, 10], 'Achat dans les 30 jours avant et unités détenues : à examiner'); }
+  eq([x.acb, x.gain, x.denied, r.pools.ADA.acb], [80, -30, 30, 110], 'Achat dans les 30 jours avant, unités détenues : perte refusée, ajoutée au PBR'); }
 // 6) Taux d'inclusion : 2024, 2025, 2026 = 1/2 avec source ; 2023 non vérifié -> pas de gain imposable.
 { const r = run([['2023-01-01', 'Buy', 'BTC', 1, 100, 0], ['2023-06-01', 'Sell', 'BTC', 0.5, 100, 0], ['2024-06-01', 'Sell', 'BTC', 0.25, 50, 0], ['2026-02-01', 'Sell', 'BTC', 0.25, 60, 0]]);
   const Y3 = C.yearSummary(r, 2023), Y4 = C.yearSummary(r, 2024), Y6 = C.yearSummary(r, 2026);
@@ -70,8 +70,12 @@ const BASE = [['2025-01-10 10:00', 'Buy', 'BTC', 1, 10000, 50], ['2025-03-01 10:
   { eq([C.slashOrder(['03/04/2025']), C.slashOrder(['25/04/2025', '03/04/2025']), C.slashOrder(['04/25/2025'])], ['AMB', 'DMY', 'MDY'], 'JJ/MM ou MM/JJ décidé pour tout le fichier');
     const q = C.fromCSVText(H + '03/04/2025,Buy,BTC,1,100,0\n'); eq([q.txs.length, /ambiguë/.test(q.skipped[0].why)], [0, true], 'Date ambiguë 03/04/2025 : écartée, jamais devinée'); }
   { eq([C.resolveTaxTz('auto', 'UTC', 'Europe/Paris').tz, C.resolveTaxTz('auto', 'America/Vancouver', 'Europe/Paris').tz, C.resolveTaxTz('America/Halifax', 'America/Vancouver', 'x').tz, C.Lx(C.resolveTaxTz('auto', 'UTC', 'America/Edmonton').how)], [TO, 'America/Vancouver', 'America/Halifax', 'zone de ce navigateur'], 'Zone des dates fiscales : choix > fichier canadien > navigateur canadien > Est'); }
-  // 9) Doublons entre fichiers comptés une fois
-  { const a = C.fromCSVText(csv([['2025-01-01', 'Buy', 'BTC', 1, 100, 0]])), b = C.fromCSVText(csv([['2025-01-01', 'Buy', 'BTC', 1, 100, 0], ['2025-02-01', 'Sell', 'BTC', 1, 150, 0]])); const m = C.mergeFiles([{ name: 'a', p: a }, { name: 'b', p: b }]); eq([m.dupes, m.txs.length], [1, 2], 'Doublon entre deux fichiers compté une fois'); }
+  // 9) v2.56 Doublons : sans identifiant, jamais fusionnés en silence (gardés + totaux partiels) ; choix « doublons » = une fois ; même ID = vrai doublon
+  { const a = C.fromCSVText(csv([['2025-01-01', 'Buy', 'BTC', 1, 100, 0]])), b = C.fromCSVText(csv([['2025-01-01', 'Buy', 'BTC', 1, 100, 0], ['2025-02-01', 'Sell', 'BTC', 1, 150, 0]])), L = [{ name: 'a', p: a }, { name: 'b', p: b }];
+    const m0 = C.mergeFiles(L), m1 = C.mergeFiles(L, 'same'), m2 = C.mergeFiles(L, 'distinct'), r0 = C.compute(m0.txs, { fileTz: TO, taxTz: TO }); r0.dupPending = m0.dupPending;
+    eq([m0.txs.length, m0.dupPending, m0.dupCand.length, C.yearSummary(r0, 2025).partial, m1.txs.length, m1.dupes, m2.txs.length, m2.dupPending], [3, 1, 1, true, 2, 1, 3, 0], 'Doublon sans ID : gardé et signalé (partiel) ; « doublons » = une fois ; « distinctes » = tout gardé');
+    const HI = 'Date,Type,Asset,Quantity,Total (CAD),Transaction ID\n', i1 = C.fromCSVText(HI + '2025-01-01,Buy,BTC,1,100,T-1\n'), i2 = C.fromCSVText(HI + '2025-01-01,Buy,BTC,1,100,T-1\n2025-01-01,Buy,BTC,1,100,T-2\n'), mi = C.mergeFiles([{ p: i1 }, { p: i2 }]);
+    eq([mi.txs.length, mi.dupes, mi.dupPending, C.fileSig(i1) === C.fileSig(C.fromCSVText(HI + '2025-01-01,Buy,BTC,1,100,T-1\n'))], [2, 1, 0, true], 'Même ID = vrai doublon ; ID différents = deux achats ; même contenu reconnu'); }
   // 10) Sécurité : formules CSV neutralisées, PDF ASCII, noms de fichier
   { const q = C.fromCSVText(H + '2025-01-01,Buy,=HYPERLINK(1),1,100,0\n2025-02-01,Sell,=HYPERLINK(1),1,150,0\n'), r = C.compute(q.txs, { fileTz: TO, taxTz: TO }), out = C.toCSV(r, 2025);
     eq([/,'=HYPERLINK/.test(out), /(^|,)=HYPERLINK/m.test(out)], [true, false], 'CSV : cellule commençant par = neutralisée');
@@ -110,7 +114,47 @@ const BASE = [['2025-01-10 10:00', 'Buy', 'BTC', 1, 10000, 50], ['2025-03-01 10:
   { const r = run(BASE.concat([['2025-12-20 10:00', 'Sell', 'SOL', 1, 100, 0], ['2026-01-05 10:00', 'Buy', 'SOL', 1, 90, 0]])), num = t => (t.split(/\r\n(?:À vérifier|To verify)\r\n/)[0].match(/-?\d[\d.]*\.\d\d/g) || []).join(' '); // montants du tableau (les alertes écrivent les montants au format de la langue)
     C.setLang('fr'); const cf = C.toCSV(r, 2025), pf = C.pdfData(r, 2025, new Date(Date.UTC(2026, 0, 2))), kf = C.checks(r, C.yearSummary(r, 2025)).length;
     C.setLang('en'); const ce = C.toCSV(r, 2025), pe = C.pdfData(r, 2025, new Date(Date.UTC(2026, 0, 2))), ke = C.checks(r, C.yearSummary(r, 2025)), allE = [pe.title, pe.foot].concat(pe.info, ...pe.rows, pe.head).join('\n');
-    eq([num(cf) === num(ce), kf === ke.length, /2,222\.50 CAD/.test(allE) && /Proceeds \(CAD\)/.test(allE), /\$/.test(allE), /à vérifier|Montant|Résultat|Pertes|perte|a verifier|Annee|Recompenses/.test(ce + allE), /2025-12-20 SOL|loss\(es\) to review/.test(ke.join(' ') + allE)], [true, true, true, false, false, true], 'Anglais : mêmes nombres CSV, même nombre d\'alertes, PDF en CAD, aucun texte français, perte à examiner signalée');
+    eq([num(cf) === num(ce), kf === ke.length, /2,222\.50 CAD/.test(allE) && /Proceeds \(CAD\)/.test(allE), /\$/.test(allE), /à vérifier|Montant|Résultat|Pertes|perte|a verifier|Annee|Recompenses/.test(ce + allE), /2025-12-20 SOL|loss\(es\) (?:to review|pending)/.test(ke.join(' ') + allE)], [true, true, true, false, false, true], 'Anglais : mêmes nombres CSV, même nombre d\'alertes, PDF en CAD, aucun texte français, perte à examiner signalée');
     C.setLang('fr'); eq(C.cad(1234.5), '1\u00a0234,50\u00a0$', 'Retour au français : format inchangé'); }
+  // ---------- v2.56 : corrections de l'audit Canada (attendus calculés à la main, données fictives) ----------
+  // 17) Staking : blocage / déblocage = vos propres fonds (pas de récompense inventée, pas de double inventaire) ; seule la récompense est un revenu.
+  //     10 ETH 20 000 ; Stake 10 ; Unstake 10 ; récompense 0,1 ETH = 300 ; vente 10 ETH 30 000 : PBR 20 300 × 10 / 10,1 = 20 099,01 ; gain 9 900,99. Totaux « partiels » (mouvement à confirmer).
+  { const r = run([['2025-01-10 10:00', 'Buy', 'ETH', 10, 20000, 0], ['2025-02-01 10:00', 'Stake', 'ETH', 10, '', ''], ['2025-03-01 10:00', 'Unstake', 'ETH', 10, '', ''], ['2025-03-01 11:00', 'Staking Rewards', 'ETH', 0.1, 300, ''], ['2025-06-01 10:00', 'Sell', 'ETH', 10, 30000, 0], ['2025-08-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025), x = D(r, '01/06/2025');
+    eq([x.acb, x.gain, r.income.length, r.moves.length, +r.pools.ETH.qty.toFixed(6), Y.partial, ['Unstake', 'Staking unlock', 'Simple Earn redemption', 'Staking subscription', 'Staking Rewards', 'Staking'].map(C.kind).join()], [20099.01, 9900.99, 1, 2, 0.1, true, 'MOVE,MOVE,MOVE,MOVE,INCOME,INCOME'], 'Staking : déblocage sans récompense ni double quantité ; récompense seule au revenu ; totaux à confirmer'); }
+  // 18) Reçu ≠ envoyé : don reçu = acquisition (coût = valeur indiquée), paiement reçu = acquisition (revenu possible), jamais une vente.
+  { const r = run([['2025-01-10 10:00', 'Gift received', 'ETH', 2, 6000, 0], ['2025-01-11 10:00', 'Payment received', 'BTC', 0.5, 60, 0], ['2025-01-12 10:00', 'Paiement reçu', 'BTC', 0.5, 40, 0], ['2025-03-10 10:00', 'Sell', 'ETH', 2, 7000, 0], ['2025-06-01 10:00', 'Gift sent', 'BTC', 0.1, 20, 0]]);
+    eq([r.disposals.length, D(r, '10/03/2025').gain, r.income.map(x => x.kind).join(), D(r, '01/06/2025').gift, D(r, '01/06/2025').acb], [2, 1000, 'RECV,RECV,RECV', true, 10], 'Don/paiement reçu : acquisition ; don envoyé : disposition (PBR 100/1 × 0,1 = 10)'); }
+  // 19) Échange avec une monnaie : Convert CAD -> BTC = achat (pas de « vente de CAD ») ; Convert BTC -> CAD = vente.
+  { const r = run([['2025-01-10 10:00', 'Convert', 'CAD', 1000, '', 0, 'BTC', 0.01], ['2025-02-10 10:00', 'Convert', 'BTC', 0.005, '', 0, 'CAD', 650], ['2025-03-10 10:00', 'Sell', 'BTC', 0.005, 600, 0], ['2025-05-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]);
+    eq([r.disposals.map(x => x.asset).join(), r.disposals.map(x => x.gain).join(), !r.pools.CAD], ['BTC,BTC', '150,100', true], 'Convert CAD->BTC = achat 1 000 ; BTC->CAD = vente 650 (gain 150), puis vente 600 (gain 100)'); }
+  // 20) Excel : « date seule » selon le FORMAT de la cellule. 2026-01-01 00:00:00 au format date+heure, fichier UTC -> 31/12/2025 19:00 à Toronto (2025) ;
+  //     même valeur au format date seule -> jour civil 2026 ; format date seule avec une heure cachée (12:00) -> heure gardée ; calendrier 1904 identique.
+  { const X = require('./xlsx.mini.min.js'), ser = Date.UTC(2026, 0, 1) / 864e5 + 25569;
+    const wb = (z, v, w1904) => { const ws = X.utils.aoa_to_sheet([['Date', 'Type', 'Asset', 'Quantity', 'Total (CAD)'], [45000, 'Buy', 'X', 1, 100], [v, 'Sell', 'X', 1, 150]]); ['A2', 'A3'].forEach(a => { ws[a].t = 'n'; ws[a].z = z; }); if (w1904) { ws.A2.v -= 1462; ws.A3.v -= 1462; } const b = X.utils.book_new(); X.utils.book_append_sheet(b, ws, 'S'); if (w1904) b.Workbook = { WBProps: { date1904: true } }; return new Uint8Array(X.write(b, { type: 'array', bookType: 'xlsx' })); };
+    const yr = (z, v, w) => { const q = C.fromWorkbook(X, wb(z, v, w), 'x.xlsx'), t = q.txs.find(t => t.type === 'SELL'); return [t.dateOnly ? 'J' : 'H', C.compute(q.txs, { fileTz: 'UTC', taxTz: TO }).disposals[0].year]; };
+    eq([yr('yyyy-mm-dd hh:mm:ss', ser), yr('yyyy-mm-dd', ser), yr('yyyy-mm-dd', ser + 0.5), yr('yyyy-mm-dd hh:mm:ss', ser, true), yr('[$-409]m/d/yy h:mm AM/PM;@', ser)], [['H', 2025], ['J', 2026], ['H', 2026], ['H', 2025], ['H', 2025]], 'Excel : minuit au format date+heure converti (2025 à Toronto), date seule = jour civil, heure cachée gardée, 1904, format AM/PM (TZ=' + (process.env.TZ || 'local') + ')'); }
+  // 21) CSV : tout texte commençant par = + - @ (même après des espaces) neutralisé ; nombres négatifs gardés.
+  eq(['-1+HYPERLINK("http://exemple.invalid")', ' =1+1', '\t@SUM(A1)', '+33', '-1500.00', '-2,5', '12'].map(C.csvSafe), ['\'-1+HYPERLINK("http://exemple.invalid")', '\' =1+1', '\'\t@SUM(A1)', '\'+33', '-1500.00', '-2,5', '12'], 'CSV : formules neutralisées (y compris -1+...), vrais nombres intacts');
+  { const q = C.fromCSVText(H + '2025-01-01,Buy,"-1+HYPERLINK(""http://exemple.invalid"")",1,100,0\n2025-02-01,Sell,"-1+HYPERLINK(""http://exemple.invalid"")",1,150,0\n'), out = C.toCSV(C.compute(q.txs, { fileTz: TO, taxTz: TO }), 2025);
+    eq([/(^|,)"?-1\+HYPERLINK/mi.test(out), /'-1\+HYPERLINK/i.test(out), /,-?50\.00,/.test(out)], [false, true, true], 'CSV exporté : actif « -1+HYPERLINK » neutralisé, montants intacts'); }
+  // 22) Perte apparente PARTIELLE (vos achats) : 10 ETH 40 000 vendus 20 000 (perte 20 000) ; rachat 1 ETH 2 000 détenu à J+30.
+  //     S=10, P=1, B=1 : refusée 1/10 × 20 000 = 2 000 ; déductible 18 000 ; PBR du rachat 2 000 + 2 000 = 4 000.
+  { const r = run([['2025-03-01 10:00', 'Buy', 'ETH', 10, 40000, 0], ['2025-06-01 10:00', 'Sell', 'ETH', 10, 20000, 0], ['2025-06-15 10:00', 'Buy', 'ETH', 1, 2000, 0], ['2025-08-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025), x = D(r, '01/06/2025');
+    eq([x.gain, x.denied, x.sl.S, x.sl.P, x.sl.B, Y.losses, Y.denied, Y.net, Y.allowableLoss, r.pools.ETH.acb, Y.partial], [-20000, 2000, 10, 1, 1, 18000, 2000, -18000, 9000, 4000, false], 'Perte apparente partielle : 2 000 refusés, 18 000 déductibles, PBR rachat 4 000'); }
+  // 23) Cas complexe (autre vente dans la fenêtre) : perte à examiner, PBR incertain -> vente suivante hors totaux (pas de simulation inventée).
+  { const r = run([['2025-01-01 10:00', 'Buy', 'SOL', 10, 10000, 0], ['2025-03-01 10:00', 'Sell', 'SOL', 5, 3000, 0], ['2025-03-10 10:00', 'Buy', 'SOL', 5, 2500, 0], ['2025-03-20 10:00', 'Sell', 'SOL', 2, 1000, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025);
+    eq([!!D(r, '01/03/2025').superficial, D(r, '01/03/2025').superficial.complex, /PBR incertain/.test(D(r, '20/03/2025').status), Y.count, Y.partial, r.pools.SOL.acb], [true, true, true, 0, true, null], 'Perte apparente complexe : à examiner, PBR incertain propagé, totaux partiels'); }
+  // 24) Date sans heure : achat et vente du même actif le même jour -> ordre inconnu, vente hors totaux (pas d'avantage « minuit » inventé).
+  { const r = run([['2025-03-01', 'Buy', 'BTC', 1, 100, 0], ['2025-03-01', 'Sell', 'BTC', 1, 150, 0], ['2025-06-01', 'Buy', 'ZZZ', 1, 1, 0]]), Y = C.yearSummary(r, 2025);
+    eq([/ordre dans la journée inconnu/.test(D(r, '01/03/2025').status), Y.count, Y.partial, r.sameDay], [true, 0, true, 1], 'Même jour sans heure : ordre inconnu signalé, totaux partiels'); }
+  // 25) Frais réseau : en crypto (quantité connue) -> retirés du solde avec leur part de PBR ; en CAD seulement (quantité inconnue) -> PBR incertain ensuite.
+  { const a = run([['2025-01-01 10:00', 'Buy', 'BTC', 1, 100, 0], ['2025-02-01 10:00', 'Withdrawal fee', 'BTC', 0.01, '', ''], ['2025-03-01 10:00', 'Sell', 'BTC', 0.99, 200, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]);
+    const b = run([['2025-01-01 10:00', 'Buy', 'BTC', 1, 100, 0], ['2025-02-01 10:00', 'Send', 'BTC', 1, '', 5], ['2025-03-01 10:00', 'Sell', 'BTC', 1, 200, 0], ['2025-06-01 10:00', 'Buy', 'ZZZ', 1, 1, 0]]);
+    eq([D(a, '01/03/2025').acb, D(a, '01/03/2025').gain, a.pools.BTC.qty, /frais de transfert/.test(D(b, '01/03/2025').status), C.yearSummary(b, 2025).partial], [99, 101, 0, true, true], 'Frais réseau : 0,01 BTC retiré (PBR 99, gain 101) ; frais en CAD seulement -> vente à vérifier'); }
+  // 26) Relevé PDF (lignes FICTIVES au format « Symbole Type Quantité Prix Valeur Frais Date ») : « $ » seul mis de côté jusqu'au choix USD/CAD (jamais deviné) ;
+  //     vente + achat à la même seconde avec les mêmes frais = échange, frais comptés une fois (2 $ -> 1 + 1) ; récompense sans montant = récompense sans valeur (pas écartée, pas de coût 0).
+  { const L = ['BTC Acheter - Plateforme X 0,01 50000,00$ 500,00$ 2,00$ 10 mai 2025, 10:00:00', 'BTC Vendre - Plateforme X 0,005 60000,00$ 300,00$ 2,00$ 12 mai 2025, 10:00:00', 'ETH Acheter - Plateforme X 0,1 3000,00$ 300,00$ 2,00$ 12 mai 2025, 10:00:00', 'ADA Récompense Apprendre 5,0 15 juil. 2025, 12:15:37'];
+    const p = C.fromPdfLines(L), q = C.applyDollar(p, 'USD'), rw = p.txs.find(t => t.asset === 'ADA');
+    eq([p.txs.length, p.dollar.length, p.skipped.filter(x => x.dollar).length, p.pairs, q.txs.length, q.txs.filter(t => t.cur === 'USD' && t.needFx).length, q.txs.find(t => t.type === 'SELL').feeAmt, q.txs.find(t => t.asset === 'ETH').feeAmt, q.skipped.length, rw && rw.type, rw && isFinite(rw.cad)], [1, 3, 3, 1, 4, 3, 1, 1, 0, 'INCOME', false], 'Relevé : « $ » en attente du choix USD/CAD ; échange à la même seconde = frais une fois ; récompense sans montant gardée sans valeur'); }
   console.log(ko ? ko + ' ÉCHEC(S)' : 'testca : tout est OK (' + ok + ')'); process.exit(ko ? 1 : 0);
 })();
