@@ -113,6 +113,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(110, 110, 110);
     doc.text(ascii('Cessions imposables d\'actifs numériques (cadre 2, lignes 211 à 224). Outil d\'aide au calcul, pas un conseil fiscal.'), W - M, 27, { align: 'right' });
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(30, 58, 138); doc.text(ascii('Montants en euros (€)'), W - M, 21, { align: 'right' }); doc.setFont('helvetica', 'normal');
+    if (n && x.srcNote) { doc.setFontSize(7); doc.setTextColor(90, 90, 100); doc.text(ascii('Origine des cours (l. 212) : ' + x.srcNote), W - M, 24.4, { align: 'right' }); } // v2.61 : mention commune en en-tête de la 1re page (aucune page ajoutée)
     doc.setTextColor(0, 0, 0);
     // 1) Tableau des cessions
     const head = [A(['N°', 'Actif', 'Quantité', ...SHORT])];
@@ -136,6 +137,7 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
     }
     if (!n) lines.unshift(['Cessions', `Aucune cession imposable${x.year ? ' en ' + x.year : ''} : rien a reporter sur la 2086.`]);
     if (x.prec) lines.push(['Précision des cours', x.prec]);
+    if (n && x.sources && x.sources.length) lines.push(['Cours hors minute/seconde (l. 212)', x.sources.join(' ; ') + '.']); // v2.61 : exceptions seules (pagination normale), pas d'annexe
     if (x.unread && x.unread.length) lines.push(['Lignes du relevé non importées (à vérifier)', x.unread.length + ' : ' + x.unread.join(' ; ') + '. Non comptées dans le calcul.']);
     lines.push(['Échanges crypto -> crypto exclus', `${x.swapCount} (non imposables)`]);
     let y = doc.lastAutoTable.finalY + 4; const need = lines.length * 5.2 + 4;
@@ -156,14 +158,6 @@ var KX_DISCLAIMER = "Kryptax est un outil gratuit, à code source disponible, d'
       if (yn + sl.length * 3 + 2 > H - 8) { doc.addPage(); yn = 14; } doc.text(sl, M, yn + 2); doc.setFont('helvetica', 'normal'); yn += sl.length * 3 + 1.5;
       doc.setFontSize(5.8); doc.setTextColor(110, 110, 110); }
     if (yn + note.length * 2.4 < H - 8) doc.text(note, M, yn + 2);
-    // 5) Annexe compacte (en dernier : n'écarte ni l'avertissement ni les libellés officiels) : origine des cours de la ligne 212 (une ligne par actif), si des cessions existent
-    if (n && x.sources && x.sources.length) {
-      const S = [['Annexe : origine des cours (ligne 212)', 'Une ligne par actif : source (précision du cours de marché : seconde, minute, horaire, journalier ; ×n = nombre de cessions si plus d’une). Cours demandé à la date et l’heure de chaque cession (heure de Paris) ; un écart est indiqué (« à n h »). « relevé (prix de cession) » = prix de la vente elle-même ; « ≈ » = estimation, pas un cours réel. Méthodes regroupées par actif (pas cession par cession) ; date et heure de chaque cession : ligne 211. Document d’aide, pas un justificatif officiel : conservez vos relevés.']].concat(x.sources.map(l => { const i = l.indexOf(' : '); return [l.slice(0, i), l.slice(i + 3)]; }));
-      let y2 = yn + note.length * 2.4 + 6; if (y2 + 8 + S.length * 4.6 > H - 10) { doc.addPage(); y2 = 14; }
-      doc.autoTable({ startY: y2, body: S.map(A), theme: 'plain', tableWidth: 170, margin: { left: M },
-        styles: { fontSize: 8.5, cellPadding: .7, textColor: [40, 40, 50] }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { halign: 'left' } },
-        didParseCell: h => { if (h.row.index === 0) { h.cell.styles.fontSize = 9; h.cell.styles.textColor = [20, 20, 30]; if (h.column.index === 0) h.cell.styles.cellWidth = 40; } } });
-    }
     const np = doc.getNumberOfPages(); for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text('Kryptax - page ' + i + ' / ' + np, W - M, H - 5, { align: 'right' }); doc.text(ascii(LAW), M, H - 5); }
     doc.setTextColor(0, 0, 0);
     return doc;
