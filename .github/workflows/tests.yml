@@ -52,3 +52,5 @@ jobs:
         run: node testau.js > out-au.txt; s=$?; cat out-au.txt; ! grep -q "ÉCHEC" out-au.txt && exit $s
       - name: Échanges à confirmer (testswap.js)
         run: node testswap.js > out-swap.txt; s=$?; cat out-swap.txt; ! grep -q "ÉCHEC" out-swap.txt && exit $s
+      - name: Profils de plateformes (testprofiles.js)
+        run: node testprofiles.js > out-profiles.txt; s=$?; cat out-profiles.txt; ! grep -q "ÉCHEC" out-profiles.txt && exit $s
