@@ -522,3 +522,8 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 /* v2.64 : confidentialité (« Ne rien mémoriser », « Effacer mes données ») */
 .kxpriv{display:flex;flex-wrap:wrap;align-items:center;gap:.4em .8em;font-size:.85em;margin:.3em 0 0}.kxpriv label{display:inline-flex;align-items:center;gap:.35em;cursor:pointer}.kxpriv .kxpn{flex-basis:100%}
 @media print{.kxpriv{display:none!important}}
+
+/* v2.65 : bandeau « Résultat provisoire » (rapprochements à confirmer), très visible, thèmes clair et sombre */
+.note.swprov{border:2px solid #e0a100;border-left-width:6px;background:rgba(224,161,0,.16);font-size:1rem;padding:12px 14px}
+.note.swprov .btn{margin:8px 8px 0 0}
+#swpend [data-swall]{font-weight:600}

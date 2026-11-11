@@ -26,7 +26,7 @@ Licence : [PolyForm Noncommercial 1.0.0](LICENSE). Logiciel fourni « tel quel �
 - Les bibliothèques sont incluses localement, sans CDN. Versions et empreintes SHA-256 : [docs/BIBLIOTHEQUES.md](docs/BIBLIOTHEQUES.md), vérifiées par la CI (`testlibs.js`). Pas d'outil de mesure d'audience.
 
 ## Hypothèses et profils de plateformes
-Les conventions propres à chaque plateforme (formats d'import, frais, hypothèses non confirmées comme la « Valeur hors frais » du relevé Revolut ou les frais de 0,09 % de Revolut X) sont déclarées avec leur statut dans [docs/PROFILS-PLATEFORMES.md](docs/PROFILS-PLATEFORMES.md) (`profiles.js`). Les échanges crypto→crypto détectés seulement par l'heure et la valeur sont **à confirmer** par l'utilisateur ; un rapprochement n'est jamais considéré comme non imposable sans preuve ou confirmation.
+Les conventions propres à chaque plateforme (formats d'import, frais, hypothèses non confirmées comme la « Valeur hors frais » du relevé Revolut ou les frais de 0,09 % de Revolut X) sont déclarées avec leur statut dans [docs/PROFILS-PLATEFORMES.md](docs/PROFILS-PLATEFORMES.md) (`profiles.js`). Un échange crypto→crypto n'est considéré comme non imposable qu'avec une preuve (même identifiant d'ordre, ou relevé Revolut : même seconde sans jambe en euros) ou une confirmation de l'utilisateur.
 
 ## Mode FRANCE
 
@@ -40,7 +40,7 @@ Les conventions propres à chaque plateforme (formats d'import, frais, hypothès
 - Pour chaque cession : **224 = 218 − 223 × 217 / 212**, avec 223 = 220 − 221 − 222. Le prix total d'acquisition (220) cumule les achats en euros, frais inclus ; après chaque cession, la fraction de capital initial s'ajoute à la ligne 221.
 - La valeur globale du portefeuille (212) est reconstruite à la date de chaque cession à partir des quantités détenues et des cours.
 - **Seuil de 305 €** : si le total des cessions de l'année ne dépasse pas 305 €, rien n'est imposable.
-- **Échanges crypto→crypto non imposables** : une vente et un achat d'une autre crypto à 5 s près et de valeur proche (±8 %) sont proposés comme rapprochement **à confirmer**. Sans confirmation ni preuve (même identifiant d'ordre), le calcul les compte comme vente + achat et l'export PDF est bloqué.
+- **Échanges crypto→crypto non imposables** : relevé Revolut, une vente et un achat d'une autre crypto **à la même seconde**, sans ligne « Vente de / Achat de » dans le journal en euros du relevé (correspondance unique, valeur à ±8 %) : échange reconnu sans question. Les autres rapprochements (pas de journal, 1 à 5 s d'écart, plusieurs correspondances, autres formats) sont **à confirmer** : un bandeau « Résultat provisoire » indique combien de cessions sont provisoires, avec un bouton « Tout confirmer comme échanges » (confirmation demandée) ou un choix paire par paire. L'export PDF reste bloqué tant qu'ils ne sont pas confirmés.
 - Cours à la minute (bougies 1 min), à la seconde quand c'est disponible, mis en cache. Un cours approché est marqué **≈**. Un cours introuvable laisse la cession « à renseigner ».
 - Récompenses (staking, airdrop, intérêts) sans cours : comptées à **0 €**, signalées discrètement.
 - Dates des relevés en UTC ; affichage et année fiscale en heure de Paris.
