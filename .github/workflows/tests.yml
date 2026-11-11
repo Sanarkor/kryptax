@@ -50,3 +50,5 @@ jobs:
         run: node testca.js > out-ca.txt; s=$?; cat out-ca.txt; ! grep -q "ÉCHEC" out-ca.txt && exit $s
       - name: Australia (testau.js)
         run: node testau.js > out-au.txt; s=$?; cat out-au.txt; ! grep -q "ÉCHEC" out-au.txt && exit $s
+      - name: Échanges à confirmer (testswap.js)
+        run: node testswap.js > out-swap.txt; s=$?; cat out-swap.txt; ! grep -q "ÉCHEC" out-swap.txt && exit $s

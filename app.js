@@ -157,6 +157,9 @@
   // purge des anciens caches : 'NA' (souvent des échecs réseau mis en cache à tort) et anciens formats de clé
   for (const k in cache) if (typeof cache[k] !== 'number' || !/\|h\d+$|\|none$/.test(k)) delete cache[k];
   const save = () => { localStorage.setItem(LS.tx, JSON.stringify(txs)); localStorage.setItem(LS.manual, JSON.stringify(manual)); };
+  /* v2.62 : choix « échange » / « distincts » des rapprochements temps/valeur, par identité stable des deux jambes (jamais par index). */
+  let swapChoices = load('kryptax.swapChoices', {}); E.setSwapChoices(swapChoices); let swPend = [];
+  const saveSwapChoices = () => { localStorage.setItem('kryptax.swapChoices', JSON.stringify(swapChoices)); E.setSwapChoices(swapChoices); };
   try { if (txs.length) E.detectSwaps(txs); } catch (e) {}
   let showAll = false, pdfBal = load('kryptax.balances', null), opening = load('kryptax.opening', null);
   const saveCache = () => { try { localStorage.setItem(LS.cache, JSON.stringify(cache)); } catch (e) {} };
@@ -169,8 +172,8 @@
 
   /* ---------- CSV ---------- */
   const KF = window.KryptaxFormats, parseCSV = KF.parseCSV;
-  const FIELDS = { date: ['date', 'completed date', 'started date', 'time', 'horodatage'], type: ['type', 'transaction type', 'opération'], asset: ['symbol', 'currency', 'asset', 'coin', 'crypto', 'devise', 'actif'], qty: ['quantity', 'amount', 'quantité', 'montant crypto', 'qty'], price: ['price', 'prix', 'rate', 'cours'], eur: ['value', 'fiat amount (inc. fees)', 'fiat amount', 'valeur', 'total', 'montant €'], fee: ['fees', 'fee', 'frais'], desc: ['description', 'product', 'notes'] };
-  const LABELS = { date: 'Date', type: 'Type', asset: 'Crypto', qty: 'Quantité', price: 'Prix unitaire €', eur: 'Valeur / montant €', fee: 'Frais €', desc: 'Description (aide au type)' };
+  const FIELDS = { date: ['date', 'completed date', 'started date', 'time', 'horodatage'], type: ['type', 'transaction type', 'opération'], asset: ['symbol', 'currency', 'asset', 'coin', 'crypto', 'devise', 'actif'], qty: ['quantity', 'amount', 'quantité', 'montant crypto', 'qty'], price: ['price', 'prix', 'rate', 'cours'], eur: ['value', 'fiat amount (inc. fees)', 'fiat amount', 'valeur', 'total', 'montant €'], fee: ['fees', 'fee', 'frais'], ref: ['order id', 'trade id', 'id ordre'], desc: ['description', 'product', 'notes'] };
+  const LABELS = { date: 'Date', type: 'Type', asset: 'Crypto', qty: 'Quantité', price: 'Prix unitaire €', eur: 'Valeur / montant €', fee: 'Frais €', ref: 'Identifiant d’ordre (optionnel : relie vente et achat d’un échange)', desc: 'Description (aide au type)' };
   const guessMap = KF.guessMap;
   let holders = JSON.parse(localStorage.getItem('kryptax.holders') || '{}'), holdInfo = '';
   const saveHolders = () => localStorage.setItem('kryptax.holders', JSON.stringify(holders));
@@ -373,12 +376,19 @@
     const byId = {}; txs.forEach(t => byId[t.id] = t);
     const outs = E.sortTx(txs).filter(t => (t.swapAuto && t.type === 'EXCH_OUT') || t.swapForce === 'taxable' && t.rawSwap === 'out');
     const chk = `<details><summary class="hint">Contre-vérifier avec le relevé en euros (optionnel)</summary><p class="hint">Collez les lignes du relevé de compte EUR/USD (ligne de type « … – Vente de GRASS », avec date et heure). Une vente vers des euros y apparaît ; un échange crypto→crypto non.</p><textarea id="fiattxt" rows="5" class="wfull">${esc(fiatText)}</textarea><button class="small" id="fiatgo">Vérifier</button><div id="fiatres"></div></details>`;
-    if (!outs.length) { el.innerHTML = txs.length ? chk : ''; return; }
+    const dsw = E.detectSwaps(txs), pend = dsw.pending || [], refd = dsw.refused || []; swPend = pend.concat(refd); // recalcul sans effet de bord (mêmes choix)
+    const leg = t => `${num(t.qty)} ${esc(t.asset)} · ${eur(Math.abs(t.eur || t.valCur || 0))}${t.fee ? ' (frais ' + eur(Math.abs(t.fee)) + ')' : ''} · ${dt(t.date)} · ${esc(t.source || 'saisie')}`;
+    const pbox = pend.length ? `<div class="xbox xopen" id="swpend"><p class="xtitle">⚠️ ${pend.length} rapprochement${pend.length > 1 ? 's' : ''} vente / achat à confirmer</p>
+      <p class="hint">Une vente et un achat d’une autre crypto proches dans le temps (≤ 5 s) et en valeur (±8 %) peuvent être un échange crypto→crypto (non imposable) <b>ou</b> une vente en euros suivie d’un achat (vente imposable). L’heure seule ne le prouve pas : vérifiez dans l’application de la plateforme. En attendant, le calcul les compte comme <b>vente + achat distincts</b> (provisoire) et l’export PDF est bloqué.<br>Échange : pas de cession, la crypto reçue entre au portefeuille sans augmenter le prix total d’acquisition (220). Vente + achat : cession imposable (213 = valeur de la vente) et l’achat s’ajoute au prix total d’acquisition (220), ce qui change aussi les cessions suivantes.</p>
+      <ul class="xlist">${pend.map((p, i) => `<li data-swp="${i}"><span class="xwhat">Vendu : <b>${leg(p.out)}</b><br>Reçu : <b>${leg(p.in)}</b><br>Écart : ${(p.dt / 1000).toFixed(p.dt % 1000 ? 1 : 0)} s, valeur ${(p.gap * 100).toFixed(1)} %${p.multi ? ' · <b>plusieurs correspondances possibles</b> : choisissez au plus un échange par ligne' : ''}</span>
+        <button class="small" data-swc="swap">Échange crypto→crypto</button> <button class="small ghost" data-swc="separate">Vente + achat distincts</button></li>`).join('')}</ul></div>` : '';
+    const rbox = refd.length ? `<details class="hint"><summary>${refd.length} rapprochement${refd.length > 1 ? 's' : ''} refusé${refd.length > 1 ? 's' : ''} (vente + achat distincts)</summary><ul class="xlist">${refd.map((p, i) => `<li data-swp="${pend.length + i}"><span class="xwhat">${leg(p.out)} → ${leg(p.in)}</span> <button class="small ghost" data-swc="reset">Annuler ce choix</button></li>`).join('')}</ul></details>` : '';
+    if (!outs.length) { el.innerHTML = pbox + rbox + (txs.length ? chk : ''); return; }
     const nAuto = outs.filter(t => t.swapAuto).length, nForced = outs.length - nAuto;
-    el.innerHTML = `<p class="ok">🔁 ${nAuto} échange${nAuto > 1 ? 's' : ''} crypto→crypto détecté${nAuto > 1 ? 's' : ''}, non imposable${nAuto > 1 ? 's' : ''}${nForced ? ` · ${nForced} forcé${nForced > 1 ? 's' : ''} imposable${nForced > 1 ? 's' : ''}` : ''}.</p>
+    el.innerHTML = pbox + rbox + `<p class="ok">🔁 ${nAuto} échange${nAuto > 1 ? 's' : ''} crypto→crypto (${outs.filter(t => t.swapProof).length} prouvé${outs.filter(t => t.swapProof).length > 1 ? 's' : ''} par identifiant d’ordre, autres confirmés par vous), non imposable${nAuto > 1 ? 's' : ''}${nForced ? ` · ${nForced} forcé${nForced > 1 ? 's' : ''} imposable${nForced > 1 ? 's' : ''}` : ''}.</p>
       <details id="swdet"${swOpen ? ' open' : ''}><summary class="hint">Voir/corriger les échanges</summary>
-      <p class="hint">Une vente et un achat d’une autre crypto à la même seconde (≤ 5 s), pour une valeur proche (±8 %), sont un échange crypto→crypto : non imposable. Une vente vers des euros n’a pas d’achat simultané. Si une ligne est fausse, forcez-la.</p>
-      <div class="scroll"><table><tr><th>Date</th><th>Vendu</th><th>Reçu</th><th class="n">Valeur</th><th>Traitement</th></tr>${outs.map(t => { const b = byId[t.swapWith || t.rawSwapWith]; return `<tr data-sw="${t.id}"><td>${dt(t.date)}</td><td>${num(t.qty)} ${esc(t.asset)}</td><td>${b ? num(b.qty) + ' ' + esc(b.asset) : '—'}</td><td class="n">${eur(t.eur || 0)}</td><td>${t.swapAuto ? 'Échange (non imposable) <button class="small ghost" data-force>Forcer imposable</button>' : 'Vente imposable (forcée) <button class="small ghost" data-unforce>Rétablir échange</button>'}</td></tr>`; }).join('')}</table></div></details>` + chk;
+      <p class="hint">Échanges prouvés (même identifiant d’ordre) ou confirmés par vous. Si une ligne est fausse, forcez-la imposable.</p>
+      <div class="scroll"><table><tr><th>Date</th><th>Vendu</th><th>Reçu</th><th class="n">Valeur</th><th>Traitement</th></tr>${outs.map(t => { const b = byId[t.swapWith || t.rawSwapWith]; return `<tr data-sw="${t.id}"><td>${dt(t.date)}</td><td>${num(t.qty)} ${esc(t.asset)}</td><td>${b ? num(b.qty) + ' ' + esc(b.asset) : '—'}</td><td class="n">${eur(t.eur || 0)}</td><td>${t.swapAuto ? (t.swapProof ? 'Échange prouvé' : 'Échange confirmé') + ' (non imposable) <button class="small ghost" data-force>Forcer imposable</button>' : 'Vente imposable (forcée) <button class="small ghost" data-unforce>Rétablir échange</button>'}</td></tr>`; }).join('')}</table></div></details>` + chk;
   }
   /* Retraits sans dépôt correspondant : l'utilisateur choisit leur traitement avant l'export PDF */
   const XCH = [['own', 'Vers mon portefeuille non importé'], ['gift', 'Frais, perte ou don'], ['sale', 'Paiement ou vente oubliée'], ['ignore', 'Ignorer']];
@@ -416,8 +426,10 @@
       $('#fiatres').innerHTML = `<p>${f.length} lignes « Vente de » lues. ${r.confirmed.length} ventes confirmées imposables.</p><ul>${L(r.swapButFiat, '⚠️ Détectées comme échange mais présentes dans le relevé € (à forcer imposable ?)')}${L(r.sellNoFiat, '⚠️ Ventes imposables absentes du relevé € (échange ?)')}${L(r.fiatNoSell, 'Lignes du relevé € sans vente correspondante')}</ul>`;
       save(); return;
     }
+    { const li = e.target.closest('li[data-swp]'), v = e.target.dataset && e.target.dataset.swc; if (li && (v === 'swap' || v === 'separate' || v === 'reset')) { const p = swPend[+li.dataset.swp]; if (!p) return; if (v === 'reset') delete swapChoices[p.key]; else swapChoices[p.key] = v; saveSwapChoices(); E.detectSwaps(txs); cancelAuto(); save(); dirty = true; window.__kxDone = false; renderTx(); pdfState(); return; } }
     const tr = e.target.closest('tr[data-sw]'); if (!tr) return; const t = txs.find(x => x.id === tr.dataset.sw); if (!t) return;
     const b = txs.find(x => x.id === (t.swapWith || t.rawSwapWith));
+    if (e.target.hasAttribute('data-force') && !t.swapProof) { const k = E.swapKey(t, b || {}); if (swapChoices[k] === 'swap') { swapChoices[k] = 'separate'; saveSwapChoices(); } E.detectSwaps(txs); cancelAuto(); save(); dirty = true; window.__kxDone = false; renderTx(); pdfState(); return; } // échange confirmé : retour à « distincts »
     if (e.target.hasAttribute('data-force')) { t.rawSwap = 'out'; t.rawSwapWith = t.swapWith; [t, b].forEach(x => { if (x) x.swapForce = 'taxable'; }); }
     else if (e.target.hasAttribute('data-unforce')) { [t, b].forEach(x => { if (x) delete x.swapForce; }); }
     else return;
@@ -498,7 +510,7 @@
     Object.keys(localStorage).filter(k => k.startsWith('kryptax.')).forEach(k => localStorage.removeItem(k));
     location.reload(); // la page revient à son état initial
   };
-  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { cancelAuto(); txs = []; manual = {}; fiatText = ''; pdfBal = null; localStorage.removeItem('kryptax.fiat'); localStorage.removeItem('kryptax.balances'); save(); renderTx(); $('#results').innerHTML = ''; } };
+  $('#clear').onclick = () => { if (confirm('Effacer toutes les transactions et saisies de ce navigateur ?')) { cancelAuto(); txs = []; manual = {}; fiatText = ''; pdfBal = null; localStorage.removeItem('kryptax.fiat'); localStorage.removeItem('kryptax.balances'); swapChoices = {}; saveSwapChoices(); save(); renderTx(); $('#results').innerHTML = ''; } };
 
   /* ---------- Cours historiques ---------- */
   const HOUR = 3600e3;
@@ -758,6 +770,7 @@
     if (KP.checkHolders(holders, KP.fileList(txs).map(f => f.name)).status === 'conflict') b.push({ k: 'holders', msg: 'vos relevés semblent appartenir à des personnes différentes : retirez le fichier concerné.' });
     if ($('#err') && !$('#err').hidden && !$('#err').dataset.soft) b.push({ k: 'import', msg: 'un fichier n’a pas été lu en entier (format non reconnu ou lignes illisibles) : corrigez ou retirez ce fichier.' });
     { const n = txs.filter(t => t.reconPending && t.tab).length; if (n) b.push({ k: 'recon', msg: `${n} valeur${n > 1 ? 's' : ''} reconstruite${n > 1 ? 's' : ''} à confirmer (plusieurs hypothèses ou confiance faible) : choisissez dans « 1. Importer ».` }); }
+    { const n = (E.detectSwaps(txs).pending || []).length; if (n) b.push({ k: 'swap', msg: `${n} rapprochement${n > 1 ? 's' : ''} vente / achat à confirmer (échange crypto→crypto ou vente + achat distincts) : choisissez dans « 1. Importer ». Résultat provisoire.` }); }
     { const n = E.openSends(txs).length; if (n) b.push({ k: 'xfer', msg: `${n} retrait${n > 1 ? 's' : ''} sans dépôt correspondant : choisissez leur traitement dans « 1. Importer ».` }); }
     if (t && t.incomplete) b.push({ k: 'cours', rerun: true, msg: 'des cours sont introuvables, le résultat est incomplet : relancez le calcul.' });
     else if (est && est.size) b.push({ k: 'estime', rerun: true, msg: 'un cours est seulement estimé (≈) : relancez le calcul ou saisissez le cours.' });

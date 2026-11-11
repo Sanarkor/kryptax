@@ -47,9 +47,10 @@
     price: ['prix unitaire', 'unit price', 'price', 'prix', 'cours', 'rate', 'taux', 'spot price', 'price at transaction', 'spot price at transaction', 'prix par unite', 'market price'],
     eur: ['montant', 'montant total', 'montant fiat', 'valeur', 'valeur totale', 'value', 'total', 'total value', 'amount fiat', 'fiat amount', 'fiat amount inc fees', 'fiat value', 'subtotal', 'sous total', 'prix total', 'cout', 'cout total', 'cost', 'proceeds', 'net amount', 'montant net', 'somme'],
     fee: ['frais', 'fee', 'fees', 'commission', 'commissions', 'fees and or spread', 'frais de transaction'],
+    ref: ['order id', 'trade id', 'id ordre', 'id de l ordre', 'reference ordre', 'order reference', 'numero d ordre'], // v2.62 : identifiant d'ordre liant vente et achat d'un échange
     desc: ['description', 'notes', 'note', 'remarque', 'remark', 'libelle', 'commentaire', 'comment', 'product', 'details']
   };
-  const ORDER = ['date', 'type', 'asset', 'qty', 'eur', 'price', 'fee', 'desc'];
+  const ORDER = ['date', 'type', 'asset', 'qty', 'eur', 'price', 'fee', 'ref', 'desc'];
   /* Devise d'une colonne de montant d'après son en-tête (« Montant USD », « Total ($) ») ; € par défaut. */
   const headCur = h => { const s = norm(h); return /usd|\$/.test(s) ? 'USD' : /gbp|£/.test(s) ? 'GBP' : /chf/.test(s) ? 'CHF' : 'EUR'; };
   function guessMap(head) {
