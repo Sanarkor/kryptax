@@ -47,7 +47,10 @@ const sw = [
   { id: 'b3', date: T0 + 7200e3 + 1e3, type: 'BUY', asset: 'DDD', qty: 1, eur: 39.6, fee: 0 },
   { id: 'u1', date: T0, type: 'IGNORE', asset: 'USD', qty: 0, eur: 150 }
 ];
-const pairs = E.detectSwaps(sw), ty = id => sw.find(t => t.id === id).type;
+const ty = id => sw.find(t => t.id === id).type, byId = id => sw.find(t => t.id === id);
+{ const p0 = E.detectSwaps(sw); eq(p0.length === 0 && p0.pending.length === 2 && ty('s1') === 'SELL' && byId('s1').swapPending && !p0.pending.some(x => x.multi) ? 1 : 0, 1, 'v2.62 : rapprochements temps/valeur À CONFIRMER, rien d’appliqué sans choix (calcul provisoire vente + achat)'); }
+E.setSwapChoices({ [E.swapKey(byId('s1'), byId('b1'))]: 'swap', [E.swapKey(byId('s4'), byId('b3'))]: 'swap' });
+const pairs = E.detectSwaps(sw);
 eq(pairs.length, 2, 'Échanges détectés');
 eq(ty('s1') === 'EXCH_OUT' && ty('b1') === 'EXCH_IN' ? 1 : 0, 1, 'Même seconde -> échange');
 eq(ty('s2') === 'SELL' && ty('b2') === 'BUY' ? 1 : 0, 1, 'Achat à +27 s non apparié, vente en € imposable');
@@ -59,6 +62,7 @@ eq(ty('s1') === 'SELL' && ty('b1') === 'BUY' ? 1 : 0, 1, 'Forcer imposable');
 const fz = E.parseFiatSales('Transfer from Exchange Digital Assets Ltd - Vente de BBB;21/05/2026 11:00:01;80,00\nautre ligne\n21/05/2026 12:00:00 Vente de ZZZ 5');
 E.detectSwaps(sw); const cc = E.crossCheck(sw, fz.map(x => Object.assign(x, { date: x.asset === 'BBB' ? T0 + 3600e3 + 1e3 : x.date })));
 eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'Vente confirmée par le relevé €'); eq(cc.sellNoFiat.length, 2, 'Ventes absentes du relevé € signalées (s1 forcée, s3)'); eq(cc.fiatNoSell.length, 1, 'Ligne € sans vente signalée');
+E.setSwapChoices({});
 // État reporté au 31/12 : historique complet sur 2 ans == calcul 2027 à partir de l'état exporté (données fictives)
 {
   const P = (a, ts) => a === 'AAA' ? (ts < Date.UTC(2027, 0, 1) ? 10 : 20) : a === 'BBB' ? 5 : null;
@@ -534,8 +538,8 @@ eq(fz.length, 2, 'Relevé € : lignes Vente de'); eq(cc.confirmed.length, 1, 'V
     eq(+x.l212.toFixed(2), 399.64, 'Plateforme X : frais taker 0,09 % en nature conservés (0,9991 × 400)');
     const old = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: false }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: false })], () => null).cessions[0];
     eqs([old.l214, old.l220].join(), '0,100', 'Sans feeExcl (autres sources « en nature ») : comportement inchangé');
-    const sw = f => { const T = [B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: f }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: f }), B(3, 9, 'BUY', 'BBB', 2, 120, 2, { feeExcl: f })]; E.detectSwaps(T); return T; };
-    const s1 = sw(true), s0 = sw(false); E.detectSwaps(s1);
+    const sw = f => { const T = [B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: f }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: f }), B(3, 9, 'BUY', 'BBB', 2, 120, 2, { feeExcl: f })], ch = { choices: { [E.swapKey(T[1], T[2])]: 'swap' } }; E.detectSwaps(T, ch); T.ch = ch; return T; };
+    const s1 = sw(true), s0 = sw(false); E.detectSwaps(s1, s1.ch);
     eqs([s1.map(t => t.type).join(), JSON.stringify(E.compute(s1, () => null).cessions), E.compute(s1, () => null).total220 - 102].join('|'), [s0.map(t => t.type).join(), '[]', 0].join('|'), 'Échange Revolut (vente+achat même seconde) : deux jambes EXCH, aucun frais ajouté deux fois, aucune cession'); }
   { // staking (fictif) : achat 1 ETH 1 000 €, staking 0,1 ETH = 200 €, vente 0,5 ETH 1 000 € — coût 0 € inchangé, avertissement court, signalement sans cours
     const T = [{ id: 1, date: Date.UTC(2025, 0, 5), type: 'BUY', asset: 'ETH', qty: 1, eur: 1000, fee: 0 }, { id: 2, date: Date.UTC(2025, 1, 5), type: 'STAKING', asset: 'ETH', qty: 0.1, eur: 200, fee: 0 }, { id: 3, date: Date.UTC(2025, 2, 5), type: 'SELL', asset: 'ETH', qty: 0.5, eur: 1000, fee: 0 }], P = a => a === 'ETH' ? 2000 : null;

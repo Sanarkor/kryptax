@@ -303,32 +303,50 @@
     }
     return y;
   }
-  /* Échanges crypto→crypto dans un relevé de compte : la vente et l'achat apparaissent comme deux lignes
-     à la même seconde (écart ≤ win ms) pour une valeur € proche (±tol). Appariement un-pour-un.
-     Les ventes vers € n'ont pas d'achat simultané. t.swapForce = 'taxable' empêche l'appariement. */
+  /* v2.62 : échanges crypto→crypto. Une vente (SELL) et un achat (BUY) d'une autre crypto ne sont PLUS fusionnés silencieusement.
+     - Preuve explicite : même identifiant d'ordre (t.ref, colonne « Order ID »…) et même fichier, une seule vente et un seul achat -> échange (swapProof).
+     - Sinon, simple proximité (≤ win ms, valeur ±tol) = HYPOTHÈSE : rapprochement « à confirmer » (swapPending), calcul provisoire en
+       vente + achat distincts (jamais d'échange non imposable inventé), export PDF bloqué tant que l'utilisateur n'a pas choisi.
+     - Choix persistés par identité stable des deux jambes (fichier, actif, date, quantité, valeur), jamais par index : un fichier modifié = choix ignoré.
+     - Plusieurs candidats (1:n, n:1) : jamais apparié arbitrairement ; chaque paire possible est proposée, un seul « échange » par jambe.
+     Devises (EUR, USD…) jamais jambe d'échange ; stablecoins (USDC, USDT…) = crypto. t.swapForce = 'taxable' (ancien forçage) vaut « distincts ». */
+  let SWAP_CHOICES = {};
+  const setSwapChoices = c => { SWAP_CHOICES = c && typeof c === 'object' ? c : {}; };
+  const legKey = t => [t.source || '', t.asset, +t.date, (+t.qty || 0).toPrecision(12), Math.round((+t.eur || +t.valCur || 0) * 100)].join('~');
+  const swapKey = (s, b) => legKey(s) + '>' + legKey(b);
   function detectSwaps(txs, o) {
-    o = o || {}; const win = o.win != null ? o.win : 5000, tol = o.tol != null ? o.tol : 0.08;
+    o = o || {}; const win = o.win != null ? o.win : 5000, tol = o.tol != null ? o.tol : 0.08, choices = o.choices || SWAP_CHOICES;
     const val = t => Math.abs(t.eur || 0) || Math.abs(t.valCur || 0);
-    for (const t of txs) if (t.swapAuto && !t.typeManual) { t.type = t.swapAuto; delete t.swapAuto; delete t.swapWith; }
-    const free = t => !t.typeManual && t.swapForce !== 'taxable';
+    for (const t of txs) { if (t.swapAuto && !t.typeManual) { t.type = t.swapAuto; delete t.swapAuto; delete t.swapWith; } delete t.swapProof; delete t.swapPending; }
+    const free = t => !t.typeManual && t.swapForce !== 'taxable' && !FIATS.includes(t.asset);
     const sells = txs.filter(t => t.type === 'SELL' && free(t)), buys = txs.filter(t => t.type === 'BUY' && free(t));
+    const used = new Set(), pairs = [], pending = [], refused = [];
+    const link = (s, b, how, dt, e) => { used.add(s); used.add(b); s.swapAuto = 'SELL'; b.swapAuto = 'BUY'; s.type = 'EXCH_OUT'; b.type = 'EXCH_IN';
+      s.swapWith = b.id; b.swapWith = s.id; b.seq = (s.seq || 0) + 0.5; if (how === 'proof') s.swapProof = b.swapProof = true; pairs.push({ out: s, in: b, dt, gap: e, how, key: swapKey(s, b) }); };
+    // 1) preuve explicite : même identifiant d'ordre, même fichier, exactement une vente et un achat d'actifs différents
+    const byRef = {}; for (const t of sells.concat(buys)) if (t.ref) (byRef[(t.source || '') + '|' + t.ref] = byRef[(t.source || '') + '|' + t.ref] || []).push(t);
+    for (const k in byRef) { const L = byRef[k], S = L.filter(t => t.type === 'SELL'), B = L.filter(t => t.type === 'BUY');
+      if (S.length === 1 && B.length === 1 && S[0].asset !== B[0].asset) link(S[0], B[0], 'proof', Math.abs(B[0].date - S[0].date), val(S[0]) > 0 ? Math.abs(val(B[0]) - val(S[0])) / val(S[0]) : 0); }
+    // 2) heuristique (temps + valeur) : candidats, jamais appliqués sans choix
     const cand = [];
-    for (const s of sells) for (const b of buys) {
-      if (b.asset === s.asset) continue;
+    for (const s of sells) if (!used.has(s)) for (const b of buys) {
+      if (used.has(b) || b.asset === s.asset || (s.ref && b.ref && s.ref !== b.ref && (s.source || '') === (b.source || ''))) continue; // identifiants d'ordre différents dans un même fichier : pas un échange
       const dt = Math.abs(b.date - s.date), vs = val(s), vb = val(b);
       if (dt > win || !(vs > 0 && vb > 0)) continue;
       const e = Math.abs(vb - vs) / vs; if (e > tol) continue;
-      cand.push({ s, b, dt, e });
+      cand.push({ s, b, dt, e, key: swapKey(s, b) });
     }
-    cand.sort((x, y) => x.dt - y.dt || x.e - y.e);
-    const used = new Set(), pairs = [];
-    for (const c of cand) {
-      if (used.has(c.s) || used.has(c.b)) continue; used.add(c.s); used.add(c.b);
-      c.s.swapAuto = 'SELL'; c.b.swapAuto = 'BUY'; c.s.type = 'EXCH_OUT'; c.b.type = 'EXCH_IN';
-      c.s.swapWith = c.b.id; c.b.swapWith = c.s.id; c.b.seq = (c.s.seq || 0) + 0.5;
-      pairs.push({ out: c.s, in: c.b, dt: c.dt, gap: c.e });
+    const nS = new Map(), nB = new Map(); cand.forEach(c => { nS.set(c.s, (nS.get(c.s) || 0) + 1); nB.set(c.b, (nB.get(c.b) || 0) + 1); });
+    cand.sort((x, y) => x.dt - y.dt || x.e - y.e || (x.s.date - y.s.date));
+    for (const c of cand) if (choices[c.key] === 'swap' && !used.has(c.s) && !used.has(c.b)) link(c.s, c.b, 'confirmed', c.dt, c.e); // choix « échange » confirmé
+    for (const c of cand) { // reste : refusé (« distincts »), écarté (jambe déjà appariée), ou à confirmer
+      if (used.has(c.s) && used.has(c.b) && c.s.swapWith === c.b.id) continue;
+      if (choices[c.key] === 'separate') { refused.push({ key: c.key, out: c.s, in: c.b, dt: c.dt, gap: c.e }); continue; }
+      if (used.has(c.s) || used.has(c.b)) continue;
+      const multi = nS.get(c.s) > 1 || nB.get(c.b) > 1; c.s.swapPending = c.b.swapPending = true;
+      pending.push({ key: c.key, out: c.s, in: c.b, dt: c.dt, gap: c.e, multi });
     }
-    pairs.transfers = detectTransfers(txs);
+    pairs.pending = pending; pairs.refused = refused; pairs.transfers = detectTransfers(txs);
     return pairs;
   }
   /* Transferts entre mes comptes : un retrait (SEND) et un dépôt (RECEIVE) de la même crypto, reçu = envoyé − frais de réseau
@@ -399,6 +417,6 @@
     }
     return out;
   }
-  const api = { isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, REWARDS, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { setSwapChoices, swapKey, isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, REWARDS, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
