@@ -2,10 +2,10 @@
   "name": "kryptax",
   "version": "0.0.0",
   "private": true,
-  "description": "Aide au calcul du formulaire 2086 (plus-values crypto), 100 % dans le navigateur. Aucune dépendance : Node seul pour les tests.",
+  "description": "Aide au calcul du formulaire 2086 (plus-values crypto), 100 % dans le navigateur. Aucune dépendance d'exécution ; tests : Node (+ jsdom pour testprivacy.js).",
   "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
-    "test": "node test.js && node testformats.js && node testexport.js && node testgolden.js && node testus.js && node testusref.js && node testustz.js && node testuk.js && node testca.js && node testau.js && node testde.js && node testimport.js && node testswap.js && node testprofiles.js && node testsecu.js && node testpdf.mjs",
+    "test": "node test.js && node testformats.js && node testexport.js && node testgolden.js && node testus.js && node testusref.js && node testustz.js && node testuk.js && node testca.js && node testau.js && node testde.js && node testimport.js && node testswap.js && node testprofiles.js && node testlibs.js && node testprivacy.js && node testsecu.js && node testpdf.mjs",
     "test:uk": "node testuk.js",
     "test:ca": "node testca.js",
     "test:au": "node testau.js",
@@ -16,6 +16,8 @@
     "test:tz": "for z in Europe/Paris UTC America/Los_Angeles Asia/Tokyo; do echo \"== TZ=$z\"; TZ=$z npm run -s test || exit 1; done",
     "test:import": "node testimport.js",
     "test:secu": "node testsecu.js",
-    "test:pdf": "node testpdf.mjs"
+    "test:pdf": "node testpdf.mjs",
+    "test:libs": "node testlibs.js",
+    "test:privacy": "node testprivacy.js"
   }
 }

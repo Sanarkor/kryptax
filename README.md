@@ -1,23 +1,32 @@
 # Kryptax
 
-Kryptax propose deux modes, choisis par un onglet en haut de la page :
-- **FRANCE** : aide à remplir le **formulaire 2086** (plus-values de cession d'actifs numériques) : art. 150 VH bis du CGI, imposition forfaitaire de **12,8 %** (art. 200 C du CGI), BOI-RPPM-PVBMC-30.
-- **U.S.A.** (interface en anglais) : estimation des gains et pertes en USD au format **Form 8949** (Part I court terme / Part II long terme, cases G à L) et brouillon de **Schedule D (Form 1040)**, à vérifier. Méthodes FIFO, HIFO ou choix manuel du lot, suivi par portefeuille, comparaison avec un Form 1099-DA, pertes reportées. Export PDF, CSV et Excel (.xlsx). Règles et sources IRS : [docs/US-RULES.md](docs/US-RULES.md).
+Aide au calcul des plus-values crypto, **100 % dans le navigateur**. Le pays se choisit en haut de la page.
 
-Gratuit, code source disponible et anonyme : gardez le contrôle total de vos données.
+| Pays | Statut | Langues | Ce que Kryptax prépare | Règles et sources |
+|---|---|---|---|---|
+| France | version principale | français | formulaire **2086** (art. 150 VH bis CGI), report 2042-C | [docs/FR-RULES.md](docs/FR-RULES.md) |
+| U.S.A. | **bêta** | anglais | Form 8949 / Schedule D (estimation) | [docs/US-RULES.md](docs/US-RULES.md) |
+| Royaume-Uni | **bêta** | anglais | gains (pooling, règles same-day / 30 jours) | [docs/UK-RULES.md](docs/UK-RULES.md) |
+| Allemagne | **bêta** | allemand, anglais | § 23 EStG (délai d'un an, FIFO) | [docs/DE-RULES.md](docs/DE-RULES.md) |
+| Canada | **bêta** | français, anglais | gains en capital (PBR moyen, perte apparente) | [docs/CA-RULES.md](docs/CA-RULES.md) |
+| Australie | **bêta** | anglais | CGT (estimation) | [docs/AU-RULES.md](docs/AU-RULES.md) |
+
+En bêta, les modes sont moins testés que la version française et chaque chiffre doit être vérifié (un bandeau « Bêta » le rappelle).
 
 En ligne : https://sanarkor.github.io/kryptax/
 
-> ⚠️ **Kryptax est un outil gratuit, à code source disponible, d'aide au calcul du formulaire 2086. Il ne constitue en aucun cas (ni en mode FRANCE ni en mode U.S.A.) un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
+> ⚠️ **Kryptax est un outil gratuit, à code source disponible, d'aide au calcul. Il ne constitue en aucun cas, dans aucun pays, un conseil fiscal, financier ou juridique officiel. L'utilisateur demeure seul responsable de la vérification de ses données et de sa déclaration auprès de l'administration fiscale.**
 
-Licence : [PolyForm Noncommercial 1.0.0](LICENSE) — logiciel fourni « tel quel », sans garantie.
+Licence : [PolyForm Noncommercial 1.0.0](LICENSE). Logiciel fourni « tel quel », sans garantie.
 
 ## Fonctionnement 100 % dans le navigateur
 - Page statique hébergée sur GitHub Pages : **aucun compte, aucune clé API, aucun serveur Kryptax**.
-- Vos relevés sont lus dans le navigateur ; **leur contenu n'est jamais envoyé** (ni montants, ni quantités, ni nom).
-- Le mode U.S.A. n'envoie **aucune requête** : il calcule uniquement à partir des montants en USD du fichier.
-- En mode FRANCE, les seules requêtes sortantes demandent des **cours publics** (symbole de la crypto + horodatage). La CSP (`connect-src`) les limite à : Binance (api.binance.com, data-api.binance.vision), Gate.io, OKX, DefiLlama (coins.llama.fi), Bitget, Bitstamp, Crypto.com, Coinbase Exchange, Kraken, CoinGecko, GeckoTerminal et Frankfurter (taux BCE USD→EUR).
-- Bibliothèques incluses localement, sans CDN : pdf.js, SheetJS (lecture Excel), jsPDF et jspdf-autotable. Pas d'outil de mesure d'audience.
+- Vos relevés sont lus dans le navigateur, et **leur contenu n'est jamais envoyé** (ni montants, ni quantités, ni nom).
+- Seules des requêtes de **cours ou de taux publics** sortent (symbole et horodatage), vers les hôtes autorisés par la CSP (`connect-src` dans `index.html`) : plateformes publiques de cours en mode France, taux de change officiels pour les autres pays (Banque du Canada, BCE, etc. ; voir les docs de chaque pays).
+- Les bibliothèques sont incluses localement, sans CDN. Versions et empreintes SHA-256 : [docs/BIBLIOTHEQUES.md](docs/BIBLIOTHEQUES.md), vérifiées par la CI (`testlibs.js`). Pas d'outil de mesure d'audience.
+
+## Hypothèses et profils de plateformes
+Les conventions propres à chaque plateforme (formats d'import, frais, hypothèses non confirmées comme la « Valeur hors frais » du relevé Revolut ou les frais de 0,09 % de Revolut X) sont déclarées avec leur statut dans [docs/PROFILS-PLATEFORMES.md](docs/PROFILS-PLATEFORMES.md) (`profiles.js`). Les échanges crypto→crypto détectés seulement par l'heure et la valeur sont **à confirmer** par l'utilisateur ; un rapprochement n'est jamais considéré comme non imposable sans preuve ou confirmation.
 
 ## Mode FRANCE
 
@@ -31,7 +40,7 @@ Licence : [PolyForm Noncommercial 1.0.0](LICENSE) — logiciel fourni « tel que
 - Pour chaque cession : **224 = 218 − 223 × 217 / 212**, avec 223 = 220 − 221 − 222. Le prix total d'acquisition (220) cumule les achats en euros, frais inclus ; après chaque cession, la fraction de capital initial s'ajoute à la ligne 221.
 - La valeur globale du portefeuille (212) est reconstruite à la date de chaque cession à partir des quantités détenues et des cours.
 - **Seuil de 305 €** : si le total des cessions de l'année ne dépasse pas 305 €, rien n'est imposable.
-- **Échanges crypto→crypto non imposables** : une vente et un achat d'une autre crypto à quelques secondes d'intervalle et de valeur proche sont appariés en échange. Seules les conversions en euros et les paiements en crypto sont des cessions.
+- **Échanges crypto→crypto non imposables** : une vente et un achat d'une autre crypto à 5 s près et de valeur proche (±8 %) sont proposés comme rapprochement **à confirmer**. Sans confirmation ni preuve (même identifiant d'ordre), le calcul les compte comme vente + achat et l'export PDF est bloqué.
 - Cours à la minute (bougies 1 min), à la seconde quand c'est disponible, mis en cache. Un cours approché est marqué **≈**. Un cours introuvable laisse la cession « à renseigner ».
 - Récompenses (staking, airdrop, intérêts) sans cours : comptées à **0 €**, signalées discrètement.
 - Dates des relevés en UTC ; affichage et année fiscale en heure de Paris.
@@ -49,24 +58,17 @@ Licence : [PolyForm Noncommercial 1.0.0](LICENSE) — logiciel fourni « tel que
 - **Exports** : PDF (tableaux Form 8949 et Schedule D sur une page à part), CSV lisible par un tableur et Excel (.xlsx).
 
 ## Confidentialité et stockage local
-Rien n'est envoyé, mais le navigateur **conserve en localStorage, sans limite de durée** :
-- les transactions importées et les saisies manuelles (`kryptax.tx`, `kryptax.manual`) ;
-- les soldes et états d'ouverture (`kryptax.balances`, `kryptax.opening`), les opérations en monnaie classique (`kryptax.fiat`) ;
+Rien n'est envoyé. Par défaut, le navigateur **conserve en localStorage, sans limite de durée** les données qui évitent de tout réimporter :
+- transactions, saisies, choix d'échanges, soldes et états (`kryptax.*`) ;
 - **le nom du titulaire** lu dans les relevés (`kryptax.holders`) ;
-- le cache des cours (`kryptax.prices2`, `kryptax.binsyms`).
-- le thème clair ou sombre choisi avec le bouton lune/soleil (`kx-theme`, seulement si vous cliquez ; sinon la préférence du système s'applique).
+- le cache des cours ;
+- les préférences : pays, langue, thème (`kx-*`).
 
-Sur un écran d'au moins 1024 px, la page passe en deux colonnes (import et réglages à gauche, résultat à droite) avec un bandeau de chiffres clés déjà calculés ; en dessous de 1024 px, l'affichage ne change pas.
+En haut de page, dans les 6 pays (FR / EN / DE) :
+- **« Ne rien mémoriser »** : pendant la session, rien n'est écrit dans localStorage, sessionStorage ou IndexedDB. Tout reste en mémoire vive et disparaît à la fermeture de la page. Seule la préférence elle-même (`kx-nostore`) est enregistrée. À l'activation, Kryptax propose d'effacer ce qui est déjà stocké (confirmation demandée).
+- **« Effacer mes données »** : supprime toutes les clés Kryptax (`kryptax.*`, `kx-*`) de ce navigateur, sans toucher aux données d'autres sites. Pensez-y sur un ordinateur partagé.
 
-Deux graphiques en barres s'affichent sous le résultat (empilés sur smartphone) : plus-value nette par année et par crypto vendue, uniquement à partir des montants déjà calculés (ligne 224 de chaque cession ; en U.S.A. les lignes « to verify » sont exclues, comme dans les totaux). Ils n'apparaissent ni dans le PDF, ni dans le CSV ou l'Excel, ni à l'impression.
-
-Sur PC (≥ 1024 px), la mise en page est plus compacte et plus large (entête, pied et avertissement resserrés ; à l'état initial, l'import occupe les deux colonnes) pour éviter le défilement vertical aux hauteurs courantes. En thème clair, l'avertissement est d'un rouge plus vif et les boutons « Pourquoi Kryptax ? » / « Soutenir Kryptax » d'un bleu plus vif.
-
-v2.22 : mise en page PC compacte v2.20 rétablie, avec logo et signature 2,25 fois plus grands et sous-titre 1,5 fois plus grand (écrans de plus de 560 px de haut). v2.23 : sur PC, la carte « 2. Résultat et export » est visible dès l'arrivée avec un message d'attente, « Quel fichier choisir ? » reste dans la colonne gauche ; mode U.S.A. : « Time zone of your file » est la 1re ligne des Options (set before import). v2.24 : même carte d'attente en mode U.S.A. sur PC (message en anglais) ; v2.25 : « 1. Import » sous les Options à gauche dès l'arrivée ; v2.26 : sur PC, « Pourquoi Kryptax ? » et « Soutenir Kryptax » en haut à droite de l'en-tête (pays et thème en dessous), en bas de page sur mobile. Conservé : sur PC avec souris, « Voir le PDF » ouvre le PDF dans un nouvel onglet (repli sur l'aperçu intégré si le navigateur bloque l'onglet) ; sur smartphone, l'aperçu intégré reste.
-
-Le bouton « Tout réinitialiser » efface ces données. Sur un ordinateur partagé, pensez à l'utiliser.
-
-Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'origine de la page, et les symboles et horodatages demandés : ils peuvent donc déduire quelles cryptos vous détenez et quand vous avez vendu, mais pas les montants.
+Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'origine de la page, ainsi que les symboles et horodatages demandés. Ils peuvent donc déduire quelles cryptos vous détenez et quand vous avez vendu, mais pas les montants.
 
 ## Limites
 - Outil d'aide : vérifiez les résultats.
@@ -88,13 +90,17 @@ Les fournisseurs de cours voient, comme pour tout site, votre **adresse IP**, l'
 | `export.js` | Génération du PDF |
 | `us-engine.js` | Mode U.S.A. : import, lots FIFO/HIFO, Form 8949, Schedule D, CSV et Excel, interface |
 | `us-export.js` | Mode U.S.A. : PDF Form 8949 et Schedule D |
-| `docs/US-RULES.md` | Règles US appliquées et sources IRS |
+| `uk-engine.js`, `de-engine.js`, `ca-engine.js`, `au-engine.js` | Modes Royaume-Uni, Allemagne, Canada, Australie (bêta) |
+| `profiles.js` | Profils de plateformes (frais, hypothèses) |
+| `privacy.js` | « Ne rien mémoriser » et « Effacer mes données » |
+| `docs/*-RULES.md` | Règles appliquées et sources, par pays |
 | `testdata/` | Jeux de données **fictifs** |
 
 ## Tests
 ```
-node test.js && node testformats.js && node testexport.js && node testgolden.js && node testus.js
+npm test
 ```
+Tous les tests (6 pays, profils, échanges, confidentialité, empreintes des bibliothèques). `testprivacy.js` utilise jsdom (installé à part : `npm i -g jsdom`, ou `JSDOM_PATH`).
 `npm run test:tz` lance les tests sous 4 fuseaux horaires.
 `testexport.js` utilise `pdftotext` et `pdftoppm` (poppler-utils).
 
