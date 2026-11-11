@@ -52,6 +52,8 @@ jobs:
         run: node testau.js > out-au.txt; s=$?; cat out-au.txt; ! grep -q "ÉCHEC" out-au.txt && exit $s
       - name: Échanges à confirmer (testswap.js)
         run: node testswap.js > out-swap.txt; s=$?; cat out-swap.txt; ! grep -q "ÉCHEC" out-swap.txt && exit $s
+      - name: Échanges prouvés par le relevé Revolut (testswaprevolut.js)
+        run: node testswaprevolut.js > out-swaprev.txt; s=$?; cat out-swaprev.txt; ! grep -q "ÉCHEC" out-swaprev.txt && exit $s
       - name: Profils de plateformes (testprofiles.js)
         run: node testprofiles.js > out-profiles.txt; s=$?; cat out-profiles.txt; ! grep -q "ÉCHEC" out-profiles.txt && exit $s
       - name: Bibliothèques embarquées, empreintes SHA-256 (testlibs.js)
@@ -60,3 +62,5 @@ jobs:
         run: npm install --no-save --no-audit --no-fund --prefix /tmp/jd jsdom@29.1.1
       - name: Ne rien mémoriser (testprivacy.js, jsdom)
         run: JSDOM_PATH=/tmp/jd/node_modules/jsdom node testprivacy.js > out-privacy.txt; s=$?; cat out-privacy.txt; ! grep -q "ÉCHEC" out-privacy.txt && exit $s
+      - name: Rapprochements, interface (testswapui.js, jsdom)
+        run: JSDOM_PATH=/tmp/jd/node_modules/jsdom node testswapui.js > out-swapui.txt; s=$?; cat out-swapui.txt; ! grep -q "ÉCHEC" out-swapui.txt && exit $s

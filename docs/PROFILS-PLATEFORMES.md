@@ -12,7 +12,7 @@ La v2.63 se contente de déplacer des constantes déjà codées en dur : aucun r
 | `revolut-releve` | `valeur-hors-frais` | hypothèse | « Valeur » hors frais : achat = Valeur + Frais ; vente = Valeur, frais déduits une fois. Revolut publie seulement « rate + fee = total cost ». |
 | `revolut-releve` | `frais-eur-seulement` | convention | Lignes en $ : frais comptés à part. |
 | `revolut-releve` | `heures-utc` | convention | Heures du relevé lues en UTC. |
-| `revolut-releve` | `echange-meme-seconde` | hypothèse | Vente + achat à la même seconde : à confirmer (v2.62). |
+| `revolut-releve` | `echange-meme-seconde` | hypothèse | v2.65 : même seconde, même relevé, correspondance unique, valeur ±8 % et journal en devises présent **sans** ligne « Vente de / Achat de » pour les deux jambes : échange reconnu sans question. Ligne « Vente de / Achat de » à ±2 s : vente ou achat en €, pas un échange. Autres cas (pas de journal, 1–5 s, plusieurs correspondances) : à confirmer. (v2.62 demandait toujours confirmation : 19 échanges d'un relevé réel devenaient des cessions provisoires.) |
 | `revolut-x` | `taker-0-09` | hypothèse | 0,09 % prélevés en nature sur l'actif reçu (le relevé affiche 0,00 $). Taux non vérifié sur une grille Revolut X. |
 | `revolut-tableaux` | `frais-colonne` | convention | Tableaux à date en tête : frais comptés comme un CSV. |
 | `csv-generique` | `colonne-frais` | convention | Colonne de frais présente : comptée (l. 220 / l. 214). |
