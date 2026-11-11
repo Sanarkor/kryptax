@@ -519,3 +519,6 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 :root[data-theme="light"] .betatag{background:#dc2626;color:#fff;border-color:#b91c1c}
 :root[data-theme="light"] .betanote{color:#b91c1c}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .usbeta{border-left-color:#dc2626}:root:not([data-theme="dark"]) .betatag{background:#dc2626;color:#fff;border-color:#b91c1c}:root:not([data-theme="dark"]) .betanote{color:#b91c1c}}
+/* v2.64 : confidentialité (« Ne rien mémoriser », « Effacer mes données ») */
+.kxpriv{display:flex;flex-wrap:wrap;align-items:center;gap:.4em .8em;font-size:.85em;margin:.3em 0 0}.kxpriv label{display:inline-flex;align-items:center;gap:.35em;cursor:pointer}.kxpriv .kxpn{flex-basis:100%}
+@media print{.kxpriv{display:none!important}}

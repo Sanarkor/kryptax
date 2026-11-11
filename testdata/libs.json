@@ -1,0 +1,50 @@
+{
+ "_note": "Bibliothèques embarquées (aucun CDN). Mettre à jour ce fichier ET docs/BIBLIOTHEQUES.md à chaque changement volontaire ; testlibs.js échoue sinon.",
+ "libs": [
+  {
+   "file": "jspdf.umd.min.js",
+   "name": "jsPDF",
+   "version": "2.5.1",
+   "license": "MIT",
+   "url": "https://github.com/parallax/jsPDF",
+   "bytes": 364463,
+   "sha256": "98ccf17aa10c20bb1301762618fcc9b6ab3a4e7f26b6071d64d0b41154df3875"
+  },
+  {
+   "file": "jspdf.plugin.autotable.min.js",
+   "name": "jsPDF-AutoTable",
+   "version": "3.8.2",
+   "license": "MIT",
+   "url": "https://github.com/simonbengtsson/jsPDF-AutoTable",
+   "bytes": 38976,
+   "sha256": "27a9c3b61843c6312b87f142d40fe77c0f0f054c9f3cdeccc4bfd5f3322859c8"
+  },
+  {
+   "file": "pdf.min.js",
+   "name": "PDF.js (pdfjs-dist)",
+   "version": "3.11.174",
+   "license": "Apache-2.0",
+   "url": "https://github.com/mozilla/pdf.js",
+   "bytes": 320004,
+   "sha256": "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946"
+  },
+  {
+   "file": "pdf.worker.min.js",
+   "name": "PDF.js worker (pdfjs-dist)",
+   "version": "3.11.174",
+   "license": "Apache-2.0",
+   "url": "https://github.com/mozilla/pdf.js",
+   "bytes": 1087212,
+   "sha256": "feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b"
+  },
+  {
+   "file": "xlsx.mini.min.js",
+   "name": "SheetJS (xlsx, build mini)",
+   "version": "0.20.3",
+   "license": "Apache-2.0",
+   "url": "https://sheetjs.com",
+   "bytes": 279523,
+   "sha256": "0cb353f830d7288385492c83d277b058ddeac664ca51cf1393aa1fd3e2b70939"
+  }
+ ]
+}

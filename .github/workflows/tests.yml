@@ -1,5 +1,5 @@
 # Tests Kryptax : moteur, formats, export PDF, golden, U.S.A., U.K., import, sécurité et lecture PDF (pdf.js embarqué), sous plusieurs fuseaux horaires.
-# Aucune dépendance npm : Node seul + poppler-utils (pdftotext / pdftoppm pour testexport.js).
+# Node + poppler-utils (pdftotext / pdftoppm pour testexport.js) ; jsdom installé hors dépôt pour testprivacy.js. Empreintes des bibliothèques : testlibs.js.
 name: tests
 on:
   push:
@@ -54,3 +54,9 @@ jobs:
         run: node testswap.js > out-swap.txt; s=$?; cat out-swap.txt; ! grep -q "ÉCHEC" out-swap.txt && exit $s
       - name: Profils de plateformes (testprofiles.js)
         run: node testprofiles.js > out-profiles.txt; s=$?; cat out-profiles.txt; ! grep -q "ÉCHEC" out-profiles.txt && exit $s
+      - name: Bibliothèques embarquées, empreintes SHA-256 (testlibs.js)
+        run: node testlibs.js > out-libs.txt; s=$?; cat out-libs.txt; ! grep -q "ÉCHEC" out-libs.txt && exit $s
+      - name: jsdom (test uniquement, hors dépôt)
+        run: npm install --no-save --no-audit --no-fund --prefix /tmp/jd jsdom@29.1.1
+      - name: Ne rien mémoriser (testprivacy.js, jsdom)
+        run: JSDOM_PATH=/tmp/jd/node_modules/jsdom node testprivacy.js > out-privacy.txt; s=$?; cat out-privacy.txt; ! grep -q "ÉCHEC" out-privacy.txt && exit $s
