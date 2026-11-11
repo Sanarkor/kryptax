@@ -1,6 +1,7 @@
 /* Kryptax — moteur de calcul (aucune donnée envoyée : tout tourne localement). */
 (function (root) {
   'use strict';
+  const KPR = typeof require !== 'undefined' && typeof module !== 'undefined' ? require('./profiles.js') : root.KryptaxProfiles; // v2.63 : profils de plateformes
   const TYPES = {
     BUY: 'Achat (€ → crypto)',
     SELL: 'Vente (crypto → €) — imposable',
@@ -158,7 +159,7 @@
     const v = t.cur ? Math.abs(t.valCur || 0) : Math.abs(t.eur || 0), f = t.cur ? Math.abs(t.feeCur || 0) : Math.abs(t.fee || 0);
     if (!(v > 0)) return 0;
     // Plateforme de trading « … X » : frais « taker » de 0,09 % prélevés sur l'actif reçu ; le relevé arrondit le montant au centime (0,00 $ affiché).
-    if (/^(acheter|vendre)\s*-\s*\S.*\sx\s*$/i.test(t.rawType || '')) return 0.0009;
+    { const x = KPR.xTaker(t.rawType); if (x != null) return x; } // profil « revolut-x » (hypothèse non confirmée)
     if (cashBS) return 0;
     return f > 0 && f < v ? f / v : 0;
   }
