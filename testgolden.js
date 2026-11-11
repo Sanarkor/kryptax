@@ -41,7 +41,7 @@ const cases = {
   releve_fictif_pdf: () => { // lignes de texte extraites (pdf.js + itemsToLines) du relevé PDF fictif, puis même chemin que l'appli (app.js importPdf)
     const lines = JSON.parse(fs.readFileSync(path.join(DIR, 'releve_fictif_lignes.json'), 'utf8')), r = KP.parsePdfLines(lines);
     const txs = fxFixed(KP.importRows(r.rows, { asset: 0, type: 1, qty: 2, price: 3, eur: 4, fee: 5, date: 6 }, { platform: 'Relevé', feeInKind: true, source: 'releve_fictif.pdf', dmode: 'DMY', nmode: 'FR', tz: 'UTC' }, id).txs, 0.86);
-    const sw = E.detectSwaps(txs).length, o = snap(txs, priceFrom(txs)); o.swaps = sw; o.fiatLines = r.fiat.length; return o; },
+    const p0 = E.detectSwaps(txs); if (p0.length !== 0 || !p0.pending.length) throw new Error('v2.62 : relevé fictif, rapprochements à confirmer attendus, aucun appliqué : ' + p0.length + '/' + p0.pending.length); const sw = E.detectSwaps(txs, { choices: Object.fromEntries(p0.pending.map(x => [x.key, 'swap'])) }).length, o = snap(txs, priceFrom(txs)); o.swaps = sw; o.fiatLines = r.fiat.length; return o; },
   plusvalue_fictif_csv: () => { // CSV générique fictif, mappage automatique (guessMap) et options par défaut du dialogue d'import
     const rows = Array.from(KF.parseCSV(new Uint8Array(fs.readFileSync(path.join(DIR, 'plusvalue_fictif.csv'))))), head = rows[0], m = KF.guessMap(head), mp = {};
     for (const k in m) if (typeof m[k] === 'number') mp[k] = m[k]; // comme les listes déroulantes du dialogue (colonnes uniquement)
