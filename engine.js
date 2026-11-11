@@ -306,6 +306,7 @@
   }
   /* v2.62 : échanges crypto→crypto. Une vente (SELL) et un achat (BUY) d'une autre crypto ne sont PLUS fusionnés silencieusement.
      - Preuve explicite : même identifiant d'ordre (t.ref, colonne « Order ID »…) et même fichier, une seule vente et un seul achat -> échange (swapProof).
+     - v2.65, preuve « relevé » : même fichier, même seconde, correspondance unique, valeur à ±tol, journal en devises présent sans ligne fiat pour les deux jambes -> échange (swapProof = 'releve').
      - Sinon, simple proximité (≤ win ms, valeur ±tol) = HYPOTHÈSE : rapprochement « à confirmer » (swapPending), calcul provisoire en
        vente + achat distincts (jamais d'échange non imposable inventé), export PDF bloqué tant que l'utilisateur n'a pas choisi.
      - Choix persistés par identité stable des deux jambes (fichier, actif, date, quantité, valeur), jamais par index : un fichier modifié = choix ignoré.
@@ -315,6 +316,8 @@
   const setSwapChoices = c => { SWAP_CHOICES = c && typeof c === 'object' ? c : {}; };
   const legKey = t => [t.source || '', t.asset, +t.date, (+t.qty || 0).toPrecision(12), Math.round((+t.eur || +t.valCur || 0) * 100)].join('~');
   const swapKey = (s, b) => legKey(s) + '>' + legKey(b);
+  const strongStmt = (c, nS, nB) => c.dt < 1000 && nS.get(c.s) === 1 && nB.get(c.b) === 1 && c.s.source && c.s.source === c.b.source
+    && c.s.stmtLedger === 1 && c.b.stmtLedger === 1 && c.s.fiatLeg === 0 && c.b.fiatLeg === 0 && !(c.s.ref || c.b.ref);
   function detectSwaps(txs, o) {
     o = o || {}; const win = o.win != null ? o.win : 5000, tol = o.tol != null ? o.tol : 0.08, choices = o.choices || SWAP_CHOICES;
     const val = t => Math.abs(t.eur || 0) || Math.abs(t.valCur || 0);
@@ -332,6 +335,7 @@
     const cand = [];
     for (const s of sells) if (!used.has(s)) for (const b of buys) {
       if (used.has(b) || b.asset === s.asset || (s.ref && b.ref && s.ref !== b.ref && (s.source || '') === (b.source || ''))) continue; // identifiants d'ordre différents dans un même fichier : pas un échange
+      if (s.fiatLeg === 1 || b.fiatLeg === 1) continue; // v2.65 : le journal en devises du relevé montre une vente vers € ou un achat payé en € : pas un échange
       const dt = Math.abs(b.date - s.date), vs = val(s), vb = val(b);
       if (dt > win || !(vs > 0 && vb > 0)) continue;
       const e = Math.abs(vb - vs) / vs; if (e > tol) continue;
@@ -339,6 +343,9 @@
     }
     const nS = new Map(), nB = new Map(); cand.forEach(c => { nS.set(c.s, (nS.get(c.s) || 0) + 1); nB.set(c.b, (nB.get(c.b) || 0) + 1); });
     cand.sort((x, y) => x.dt - y.dt || x.e - y.e || (x.s.date - y.s.date));
+    // 1 bis) v2.65 : preuve « relevé » (Revolut) : même fichier, même seconde, une seule correspondance possible, valeur à ±tol,
+    //        et le relevé contient le journal en devises (stmtLedger) sans aucune ligne « Vente de / Achat de » pour ces deux jambes (pas de jambe fiat).
+    for (const c of cand) if (!used.has(c.s) && !used.has(c.b) && strongStmt(c, nS, nB)) { link(c.s, c.b, 'proof', c.dt, c.e); c.s.swapProof = c.b.swapProof = 'releve'; pairs[pairs.length - 1].kind = 'releve'; }
     for (const c of cand) if (choices[c.key] === 'swap' && !used.has(c.s) && !used.has(c.b)) link(c.s, c.b, 'confirmed', c.dt, c.e); // choix « échange » confirmé
     for (const c of cand) { // reste : refusé (« distincts »), écarté (jambe déjà appariée), ou à confirmer
       if (used.has(c.s) && used.has(c.b) && c.s.swapWith === c.b.id) continue;
@@ -385,6 +392,30 @@
     }
     return out;
   }
+  /* v2.65 : lignes « Vente de X » et « Achat de X » du journal en devises d'un relevé (side = SELL / BUY), avec l'heure. */
+  function parseFiatLegs(text) {
+    const out = [], reD = /(\d{1,2}\s+[a-zéû.]+\s+\d{4},?\s+\d{1,2}:\d{2}(?::\d{2})?|\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?|\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)/i;
+    for (const line of String(text || '').split(/\r?\n/)) {
+      const m = /(vente|achat) de\s+([A-Za-z0-9]+)/i.exec(line); if (!m) continue;
+      const d = reD.exec(line); if (!d) continue;
+      const date = parseDate(d[1], 'DMY', 'UTC'); if (!isFinite(date)) continue;
+      out.push({ side: /^v/i.test(m[1]) ? 'SELL' : 'BUY', asset: m[2].toUpperCase(), date });
+    }
+    return out;
+  }
+  /* v2.65 : marque les ventes / achats crypto d'un relevé qui contient son journal en devises.
+     stmtLedger = 1 : la date est couverte par ce journal (±1 jour) ; fiatLeg = 1 si une ligne « Vente de / Achat de » du même actif existe à ±2 s.
+     Sans journal lisible, rien n'est marqué (le rapprochement reste à confirmer). Renvoie le nombre de lignes marquées. */
+  function markStatementLegs(txs, text) {
+    const L = parseFiatLegs(text); if (!L.length) return 0;
+    let lo = Infinity, hi = -Infinity; for (const x of L) { lo = Math.min(lo, x.date); hi = Math.max(hi, x.date); } lo -= 864e5; hi += 864e5;
+    let n = 0;
+    for (const t of txs) {
+      const side = t.swapAuto || t.type; if ((side !== 'SELL' && side !== 'BUY') || FIATS.includes(t.asset) || !(t.date >= lo && t.date <= hi)) continue;
+      t.stmtLedger = 1; t.fiatLeg = L.some(x => x.side === side && x.asset === t.asset && Math.abs(x.date - t.date) <= 2000) ? 1 : 0; n++;
+    }
+    return n;
+  }
   function crossCheck(txs, fiat) {
     const sells = txs.filter(t => t.type === 'SELL' || t.type === 'EXCH_OUT'), used = new Set(), res = { confirmed: [], swapButFiat: [], sellNoFiat: [], fiatNoSell: [] };
     const sameDay = (a, b) => parisDay(a) === parisDay(b); // jour civil en heure de Paris
@@ -418,6 +449,6 @@
     }
     return out;
   }
-  const api = { setSwapChoices, swapKey, isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, REWARDS, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
+  const api = { parseFiatLegs, markStatementLegs, setSwapChoices, swapKey, isExempt, EXEMPT_LIMIT, parisDay, isCess, detectTransfers, openSends, parisParts, fromParis, parisYear, fmtParis, summary, stateAt, validateState, stateTs, balanceAdjustments, checkBalances, feeRatio, netQty, parseFiatSales, crossCheck, detectSwaps, fixText, currencyOf, fixQty, scaleToValue, FIATS, TYPES, CHECK, REWARDS, parseNum, parseDate, guessType, compute, byYear, neededPrices, holdingsAt, sortTx, STABLE_NOTE };
   if (typeof module !== 'undefined') module.exports = api; else root.KryptaxEngine = api;
 })(this);
