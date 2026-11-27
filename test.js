@@ -527,20 +527,20 @@ E.setSwapChoices({});
     const c1 = E.compute(imp({ feeInKind: false }), () => null).cessions[0], c0 = E.compute(imp({}), () => null).cessions[0];
     eq(c1.l214, 2, 'Frais CSV : ligne 214 = 2 € (colonne Fees)'); eq(c1.l218, 398, 'Frais CSV : ligne 218 = 400 - 2 = 398 €'); eq(c1.l220, 101, 'Frais CSV : prix d’acquisition 220 = 100 + 1 € de frais');
     eq(c1.l224, 297, 'Frais CSV : plus-value 224 = 398 - 101 = 297 €'); eq(c0.l214, 0, 'Sans le correctif (frais en nature) : ligne 214 = 0 (ancien comportement CSV, toujours celui du relevé PDF)'); }
-  { // v2.59 relevé Revolut, HYPOTHÈSE « Valeur hors frais » (feeExcl) — cas fictifs calculés à la main
+  { // v2.66 relevé Revolut (feeExcl) : achat = Valeur frais inclus, quantité créditée nette des frais (constaté sur le résumé d'un relevé réel) ; vente = frais déduits une fois (hypothèse v2.59 conservée) — cas fictifs calculés à la main
     const eqs = (a, b, m) => eq(a === b ? 1 : 0, 1, m + ' [' + a + ']');
     const B = (id, d, type, asset, qty, eur, fee, x) => Object.assign({ id, date: Date.UTC(2026, 0, d), type, asset, qty, eur, fee, feeInKind: true, feeExcl: true, platform: 'Relevé', rawType: type === 'BUY' ? 'Acheter' : 'Vendre' }, x || {});
-    const a = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2), B(2, 9, 'SELL', 'AAA', 1, 120, 2)], () => null).cessions[0]; // 100+2 / 120-2, tout vendu
-    eqs([a.l212, a.l213, a.l214, a.l218, a.l220, +a.fraction.toFixed(2), +a.l224.toFixed(2)].join(), '120,120,2,118,102,102,16', 'Revolut hors frais : 220 = 102, 214 = 2, 218 = 118, PV = 16 (portefeuille entièrement vendu)');
-    const P = (as) => as === 'BBB' ? 80 : null, b = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2), B(3, 6, 'BUY', 'BBB', 1, 100, 0), B(2, 9, 'SELL', 'AAA', 1, 120, 2)], P).cessions[0];
-    eqs([b.l212, b.l220, +b.fraction.toFixed(2), +b.l224.toFixed(2)].join(), '200,202,121.2,-3.2', 'Portefeuille partiel : quotient 202 × 120 (brut, pas 118) / 200 = 121,20 ; PV 118 − 121,20 = −3,20 ; frais d’achat comptés une fois');
+    const a = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2), B(2, 9, 'SELL', 'AAA', 0.98, 120, 2)], () => null).cessions[0]; // achat 100 € dont 2 € de frais (0,98 crédité) / vente 120 − 2, tout vendu
+    eqs([a.l212, a.l213, a.l214, a.l218, a.l220, +a.fraction.toFixed(2), +a.l224.toFixed(2)].join(), '120,120,2,118,100,100,18', 'Revolut : 220 = 100 (frais inclus), 214 = 2, 218 = 118, PV = 18 (portefeuille entièrement vendu)');
+    const P = (as) => as === 'BBB' ? 80 : null, b = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2), B(3, 6, 'BUY', 'BBB', 1, 100, 0), B(2, 9, 'SELL', 'AAA', 0.98, 120, 2)], P).cessions[0];
+    eqs([b.l212, b.l220, +b.fraction.toFixed(2), +b.l224.toFixed(2)].join(), '200,200,120,-2', 'Portefeuille partiel : quotient 200 × 120 (brut, pas 118) / 200 = 120 ; PV 118 − 120 = −2 ; frais d’achat jamais ajoutés à la Valeur');
     const x = E.compute([B(1, 5, 'BUY', 'XXX', 1, 100, 0, { rawType: 'Acheter - Plateforme X' }), B(2, 9, 'SELL', 'XXX', 0.5, 200, 0, { rawType: 'Vendre - Plateforme X' })], () => null).cessions[0];
     eq(+x.l212.toFixed(2), 399.64, 'Plateforme X : frais taker 0,09 % en nature conservés (0,9991 × 400)');
     const old = E.compute([B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: false }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: false })], () => null).cessions[0];
     eqs([old.l214, old.l220].join(), '0,100', 'Sans feeExcl (autres sources « en nature ») : comportement inchangé');
     const sw = f => { const T = [B(1, 5, 'BUY', 'AAA', 1, 100, 2, { feeExcl: f }), B(2, 9, 'SELL', 'AAA', 1, 120, 2, { feeExcl: f }), B(3, 9, 'BUY', 'BBB', 2, 120, 2, { feeExcl: f })], ch = { choices: { [E.swapKey(T[1], T[2])]: 'swap' } }; E.detectSwaps(T, ch); T.ch = ch; return T; };
     const s1 = sw(true), s0 = sw(false); E.detectSwaps(s1, s1.ch);
-    eqs([s1.map(t => t.type).join(), JSON.stringify(E.compute(s1, () => null).cessions), E.compute(s1, () => null).total220 - 102].join('|'), [s0.map(t => t.type).join(), '[]', 0].join('|'), 'Échange Revolut (vente+achat même seconde) : deux jambes EXCH, aucun frais ajouté deux fois, aucune cession'); }
+    eqs([s1.map(t => t.type).join(), JSON.stringify(E.compute(s1, () => null).cessions), E.compute(s1, () => null).total220 - 100].join('|'), [s0.map(t => t.type).join(), '[]', 0].join('|'), 'Échange Revolut (vente+achat même seconde) : deux jambes EXCH, aucun frais ajouté deux fois, aucune cession'); }
   { // staking (fictif) : achat 1 ETH 1 000 €, staking 0,1 ETH = 200 €, vente 0,5 ETH 1 000 € — coût 0 € inchangé, avertissement court, signalement sans cours
     const T = [{ id: 1, date: Date.UTC(2025, 0, 5), type: 'BUY', asset: 'ETH', qty: 1, eur: 1000, fee: 0 }, { id: 2, date: Date.UTC(2025, 1, 5), type: 'STAKING', asset: 'ETH', qty: 0.1, eur: 200, fee: 0 }, { id: 3, date: Date.UTC(2025, 2, 5), type: 'SELL', asset: 'ETH', qty: 0.5, eur: 1000, fee: 0 }], P = a => a === 'ETH' ? 2000 : null;
     const d = E.compute(T, P);

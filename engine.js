@@ -155,14 +155,16 @@
   /* L'exchange prélève les frais d'achat EN NATURE : quantité créditée = quantité affichée × (1 − frais / valeur). */
   function feeRatio(t) {
     if (!t.feeInKind) return 0;
-    const cashBS = t.feeExcl && (t.type === 'BUY' || t.type === 'SELL'); // v2.59 : achat/vente relevé, frais payés en plus de la valeur (hypothèse) : quantité non réduite
+    /* v2.66 : relevé Revolut, achat : quantité créditée = quantité affichée × (1 − frais / valeur), constaté sur le « Résumé du compte » d'un relevé réel
+       (quantités entrantes) : la « Valeur » inclut les frais. L'hypothèse v2.59 (valeur hors frais, quantité non réduite) est abandonnée pour l'achat. */
     const v = t.cur ? Math.abs(t.valCur || 0) : Math.abs(t.eur || 0), f = t.cur ? Math.abs(t.feeCur || 0) : Math.abs(t.fee || 0);
     if (!(v > 0)) return 0;
     // Plateforme de trading « … X » : frais « taker » de 0,09 % prélevés sur l'actif reçu ; le relevé arrondit le montant au centime (0,00 $ affiché).
     { const x = KPR.xTaker(t.rawType); if (x != null) return x; } // profil « revolut-x » (hypothèse non confirmée)
-    if (cashBS) return 0;
     return f > 0 && f < v ? f / v : 0;
   }
+  /* Vente d'un relevé Revolut (hors lignes … X) : prix de cession = Valeur, frais déduits une fois (l. 214) — hypothèse conservée (v2.59). Lignes … X : frais en nature (journal : montant crédité = Valeur). */
+  const sellFeeExcl = t => !!t.feeExcl && t.type === 'SELL' && KPR.xTaker(t.rawType) == null;
   function netQty(t) { const q = Math.abs(t.qty || 0); return (t.type === 'BUY' || t.type === 'EXCH_IN') ? q * (1 - feeRatio(t)) : q; }
   function apply(h, t) {
     const a = t.asset, q = netQty(t);
@@ -212,11 +214,11 @@
         warnings.push({ t, msg: 'Revenu ' + t.type + ' : ' + (rewardCost ? 'valeur à la réception ajoutée au prix d’acquisition (case cochée)' : 'acquis à 0 € de coût ici') + '. À vérifier : l’art. 150 VH bis III-B du CGI et le BOFiP (BOI-RPPM-PVBMC-30-20 § 80) retiennent la valeur réelle pour une acquisition à titre gratuit (succession, donation) ; le staking n’y est pas cité.' });
       } else if (CHECK.includes(t.type) && t.type !== 'RECEIVE' && t.type !== 'SEND') warnings.push({ t, msg: 'Revenu ' + t.type + ' : traitement fiscal à vérifier (acquis à 0 € de coût ici).' });
       if ((t.type === 'RECEIVE' || t.type === 'SEND') && !t.xferWith && !t.sendChoice) warnings.push({ t, msg: 'Transfert : si c’est entre vos propres portefeuilles déjà saisis, passez-le en « Ignorer » pour ne pas le compter deux fois.' });
-      if (t.feeExcl && (t.type === 'BUY' || t.type === 'SELL') && Math.abs(t.fee || 0) > 0 && !warnings.some(w => w.feeExclNote)) warnings.push({ t, feeExclNote: true, msg: 'Relevé Revolut : hypothèse retenue « Valeur » hors frais (non confirmée par Revolut) — frais ajoutés au prix d’acquisition à l’achat et déduits du prix de cession à la vente (l. 214), une seule fois. À vérifier sur votre relevé.' });
-      if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind && !t.feeExcl ? 0 : Math.abs(t.fee || 0)); // v2.59 : relevé Revolut = hypothèse valeur hors frais -> frais ajoutés une fois ; ancien relevé de compte : la valeur payée inclut déjà les frais
+      if (sellFeeExcl(t) && Math.abs(t.fee || 0) > 0 && !warnings.some(w => w.feeExclNote)) warnings.push({ t, feeExclNote: true, msg: 'Relevé Revolut : frais de vente déduits du prix de cession (l. 214), une seule fois — hypothèse « Valeur » brute à la vente, non confirmée par Revolut. À l’achat, la Valeur inclut les frais (prélevés sur la quantité, constaté sur le résumé du relevé). À vérifier sur votre relevé.' });
+      if (t.type === 'BUY') total220 += Math.abs(t.eur || 0) + (t.feeInKind ? 0 : Math.abs(t.fee || 0)); // v2.59 : relevé Revolut = hypothèse valeur hors frais -> frais ajoutés une fois ; ancien relevé de compte : la valeur payée inclut déjà les frais
       if (isCess(t)) {
         const ss = sendSale(t), pm = ss ? (t.asset in FIAT ? FIAT[t.asset] : priceFn(t.asset, t.date)) : null;
-        const p213 = ss ? (pm != null && isFinite(pm) ? pm * Math.abs(t.qty || 0) : 0) : Math.abs(t.eur || 0), p214 = t.feeInKind && !(t.feeExcl && t.type === 'SELL') ? 0 : Math.abs(t.fee || 0), p216 = t.soulte || 0;
+        const p213 = ss ? (pm != null && isFinite(pm) ? pm * Math.abs(t.qty || 0) : 0) : Math.abs(t.eur || 0), p214 = t.feeInKind && !sellFeeExcl(t) ? 0 : Math.abs(t.fee || 0), p216 = t.soulte || 0;
         const held = Object.assign({}, h);
         const lines = []; let v212 = 0, missing = ss && (pm == null || !isFinite(pm)) ? [t.asset] : [];
         if (t.override212 > 0) { v212 = t.override212; lines.push({ asset: '(saisie manuelle)', value: v212 }); }
@@ -267,7 +269,7 @@
     const val = t => { if (t.eur > 0) return { v: t.eur }; const p = priceFn(t.asset, t.date); if (p == null || !isFinite(p)) return null; const est = approx(t.asset, t.date); if (est) S.estimated++; return { v: Math.abs(t.qty) * p, est }; };
     for (const t of txs.filter(inY)) {
       if (t.type === 'BUY' || t.type === 'SELL' || t.type === 'PAY' || t.type === 'EXCH_IN' || t.type === 'EXCH_OUT') {
-        if (t.feeExcl && (t.type === 'BUY' || t.type === 'SELL')) S.fees.explicit += Math.abs(t.fee || 0) + (t.type === 'BUY' ? Math.abs(t.eur || 0) * feeRatio(t) : 0);
+        if (sellFeeExcl(t)) S.fees.explicit += Math.abs(t.fee || 0);
         else if (t.feeInKind && (t.type === 'BUY' || t.type === 'EXCH_IN')) S.fees.inKind += Math.abs(t.eur || 0) * feeRatio(t);
         else if (t.feeInKind) S.fees.inKind += Math.abs(t.fee || 0); else S.fees.explicit += Math.abs(t.fee || 0);
       }

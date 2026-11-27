@@ -2,6 +2,7 @@
 (function (root) {
   'use strict';
   const E = root.KryptaxEngine || (typeof require !== 'undefined' ? require('./engine.js') : null);
+  const KPR = root.KryptaxProfiles || (typeof require !== 'undefined' ? require('./profiles.js') : null); // v2.66 : lignes … X en $ (frais en nature)
   const MIN = 60e3, HOUR = 3600e3, DAY = 24 * HOUR;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   /* Le relevé donne-t-il l'heure ? (minuit pile, heure de Paris ou UTC = date seule) */
@@ -138,7 +139,7 @@
       if (!isFinite(val) && price > 0 && qty > 0 && type !== 'IGNORE' && qtyStatus === 'ok') recon.push({ field: 'montant', raw: '(vide)', val: v, method: 'quantité × prix', conf: 'élevée' });
       if (!(price > 0) && isFinite(val) && val > 0 && qty > 0 && blank(pRaw) && mp.price != null && type !== 'IGNORE') recon.push({ field: 'prix', raw: '(vide)', val: val / qty, method: 'montant ÷ quantité', conf: 'élevée' });
       if (price === 0 && !blank(pRaw) && isFinite(val) && val > 0 && qty > 0 && type !== 'IGNORE' && qtyStatus === 'ok') recon.push({ field: 'prix', raw: String(E.fixText(pRaw)), val: val / qty, method: 'prix arrondi à 0 : montant ÷ quantité', conf: 'élevée' });
-      const t = { id: uid(), seq: i, line, date, type, feeInKind: (o.feeInKind != null ? !!o.feeInKind : /^relev/i.test(o.platform || '')) && !(o.feeInKindEurOnly && cur !== 'EUR'), feeExcl: !!o.feeExcl, ref: mp.ref != null ? (String(E.fixText(g('ref')) || '').trim().slice(0, 80) || undefined) : undefined, /* v2.59 : relevé Revolut, HYPOTHÈSE « Valeur hors frais » (non confirmée par Revolut) */ /* v2.36 : relevé, lignes en $ : frais comptés à part (l. 214 / l. 220) */ rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || (recon.some(r => r.field === 'prix') ? val / qty : undefined) };
+      const t = { id: uid(), seq: i, line, date, type, feeInKind: (o.feeInKind != null ? !!o.feeInKind : /^relev/i.test(o.platform || '')) && !(o.feeInKindEurOnly && cur !== 'EUR' && !(KPR && KPR.xTaker(E.fixText(g('type'))) != null)), feeExcl: !!o.feeExcl, ref: mp.ref != null ? (String(E.fixText(g('ref')) || '').trim().slice(0, 80) || undefined) : undefined, /* v2.66 : relevé Revolut, frais d'achat en nature (constaté), frais de vente déduits une fois (feeExcl) */ /* v2.36 : relevé, lignes en $ : frais comptés à part (l. 214 / l. 220), sauf lignes … X (0,09 % en nature, v2.66) */ rawType: E.fixText(g('type')), asset, qty, platform: o.platform, source: o.source, qtyStatus, qtyRaw, unitPrice: price || (recon.some(r => r.field === 'prix') ? val / qty : undefined) };
       if (strict) { t.tab = 1; if (lost && price === 0) t.int0 = 1; if (recon.length) t.recon = recon; if (eurMissing) t.eurMissing = true; } // reconstructions : CSV/Excel uniquement (le PDF reste inchangé)
       else { delete t.line; t.unitPrice = price || undefined; }
       if (strict && qtyStatus === 'suspect' && price > 0 && val > 0) { t.reconPending = { field: 'quantité', choices: qtyChoices(qtyRaw, val / price, 3) }; }

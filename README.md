@@ -26,7 +26,7 @@ Licence : [PolyForm Noncommercial 1.0.0](LICENSE). Logiciel fourni « tel quel �
 - Les bibliothèques sont incluses localement, sans CDN. Versions et empreintes SHA-256 : [docs/BIBLIOTHEQUES.md](docs/BIBLIOTHEQUES.md), vérifiées par la CI (`testlibs.js`). Pas d'outil de mesure d'audience.
 
 ## Hypothèses et profils de plateformes
-Les conventions propres à chaque plateforme (formats d'import, frais, hypothèses non confirmées comme la « Valeur hors frais » du relevé Revolut ou les frais de 0,09 % de Revolut X) sont déclarées avec leur statut dans [docs/PROFILS-PLATEFORMES.md](docs/PROFILS-PLATEFORMES.md) (`profiles.js`). Un échange crypto→crypto n'est considéré comme non imposable qu'avec une preuve (même identifiant d'ordre, ou relevé Revolut : même seconde sans jambe en euros) ou une confirmation de l'utilisateur.
+Les conventions propres à chaque plateforme (formats d'import, frais, règles vérifiées sur un relevé réel comme les frais d'achat prélevés en nature du relevé Revolut ([docs/FR-FRAIS-REVOLUT.md](docs/FR-FRAIS-REVOLUT.md)), hypothèses non confirmées comme les frais de 0,09 % de Revolut X) sont déclarées avec leur statut dans [docs/PROFILS-PLATEFORMES.md](docs/PROFILS-PLATEFORMES.md) (`profiles.js`). Un échange crypto→crypto n'est considéré comme non imposable qu'avec une preuve (même identifiant d'ordre, ou relevé Revolut : même seconde sans jambe en euros) ou une confirmation de l'utilisateur.
 
 ## Mode FRANCE
 

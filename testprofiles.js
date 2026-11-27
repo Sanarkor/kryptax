@@ -9,12 +9,27 @@ chk(R.hypotheses().length >= 3 && R.hypotheses().every(h => h.source || h.key ==
 chk(R.PROFILES.every(p => DOC.includes('`' + p.id + '`') && p.rules.every(r => DOC.includes('`' + r.key + '`'))), 'docs/PROFILS-PLATEFORMES.md : tous les profils et règles documentés');
 chk([...new Set(F.FORMATS.map(f => f.id))].every(id => R.forFormat(id)), 'Chaque format d’import reconnu est rattaché à un profil');
 chk(R.importOpts('revolut-releve', { source: 'x' }).source === 'x' && R.byId('revolut-releve').import.source === undefined, 'importOpts : copie, le profil n’est jamais modifié');
-// 1) revolut-releve : hypothèse « Valeur hors frais » (lignes €) ; lignes en $ : frais à part
-{ const L = ['Transactions', 'Symbole Type Quantité Prix Valeur Frais Date', 'BTC Achat 0,001 100000,00€ 100,00€ 2,00€ 10 mars 2025, 10:00:00', 'BTC Vente 0,001 120000,00€ 120,00€ 2,00€ 10 juin 2025, 10:00:00'];
+// 1) revolut-releve : achat = Valeur frais inclus, quantité nette (constaté, v2.66) ; vente = frais déduits une fois ; lignes en $ : frais à part, sauf « … X »
+{ const L = ['Transactions', 'Symbole Type Quantité Prix Valeur Frais Date', 'BTC Achat 0,001 100000,00€ 100,00€ 2,00€ 10 mars 2025, 10:00:00', 'BTC Vente 0,00098 122448,98€ 120,00€ 2,00€ 10 juin 2025, 10:00:00'];
   const r = P.parsePdfLines(L), T = P.importRows(r.rows, MP, R.importOpts('revolut-releve', { source: 'fictif.pdf' }), uid).txs, c = E.compute(T, () => null).cessions[0];
-  chk(T.length === 2 && T.every(t => t.feeInKind && t.feeExcl) && [c.l220, c.l213, c.l214, c.l218, +c.l224.toFixed(2)].join() === '102,120,2,118,16', 'revolut-releve : 100 + 2 / 120 − 2, tout vendu : 220 = 102, 214 = 2, PV = 16');
+  chk(T.length === 2 && T.every(t => t.feeInKind && t.feeExcl) && [c.l220, c.l213, c.l214, c.l218, +c.l224.toFixed(2)].join() === '100,120,2,118,18' && Math.abs(E.netQty(T[0]) - 0.00098) < 1e-12, 'revolut-releve : achat 100 € frais inclus (0,00098 crédité) / 120 − 2, tout vendu : 220 = 100, 214 = 2, PV = 18');
   const D = P.importRows([['BTC', 'Vente', '0,001', '120000,00$', '120,00$', '2,00$', '10 juin 2025, 10:00:00']], MP, R.importOpts('revolut-releve', { source: 'f' }), uid).txs[0];
-  chk(D && !D.feeInKind, 'revolut-releve : ligne en $ = frais à part (pas en nature)'); }
+  chk(D && !D.feeInKind, 'revolut-releve : ligne en $ = frais à part (pas en nature)');
+  const DX = P.importRows([['BTC', 'Acheter - Plateforme X', '0,001', '100000,00$', '100,00$', '0,09$', '10 juin 2025, 10:00:00']], MP, R.importOpts('revolut-releve', { source: 'f' }), uid).txs[0];
+  chk(DX && DX.feeInKind && E.feeRatio(DX) === 0.0009, 'revolut-x : ligne en $ = 0,09 % en nature aussi (v2.66, solde du résumé du relevé)'); }
+// 1b) v2.66 : relevé FICTIF de même forme qu'un relevé réel — le « Résumé du compte » (quantités entrantes) n'est retrouvé que si l'achat
+//     est crédité net des frais (Valeur frais inclus) et si les lignes « … X » en $ perdent 0,09 % en nature. Avec l'hypothèse v2.59, AAA et BBB divergeaient.
+{ const L = ['Période 1 mars 2026 - 30 juin 2026', 'Résumé du compte', "Symbole Actif Valeur à l'ouverture Montant sortant Montant entrant Valeur à la fermeture",
+    '0 AAA 0 AAA', 'AAA Actif A 900 AAA 900 AAA', '0 BBB 0,19972 BBB', 'BBB Actif B 0,0001 BBB 0,19982 BBB', '0,00€ 10,00€',
+    'Transactions', 'Symbole Type Quantité Prix Valeur Frais Date',
+    'AAA Achat 1000 0,04€ 40,00€ 4,00€ 10 mars 2026, 10:00:00', 'AAA Vente 900 0,05€ 45,00€ 1,00€ 10 juin 2026, 10:00:00',
+    'BBB Acheter - Plateforme X 0,1 100,00$ 10,00$ 0,01$ 11 mars 2026, 10:00:00', 'BBB Acheter - Plateforme X 0,1 100,00$ 10,00$ 0,01$ 12 mars 2026, 10:00:00',
+    'BBB Vendre - Plateforme X 0,0001 100,00$ 0,01$ 0,00$ 13 mars 2026, 10:00:00'];
+  const r = P.parsePdfLines(L), T = P.importRows(r.rows, MP, R.importOpts('revolut-releve', { source: 'fictif.pdf' }), uid).txs;
+  const B = r.balances && E.checkBalances(T, r.balances.closing, r.balances.to);
+  chk(T.length === 5 && B && B.length === 2 && B.every(b => b.ok), 'Relevé fictif : soldes du résumé retrouvés (achat net des frais, … X en $ à 0,09 % en nature) ' + JSON.stringify(B));
+  const ttl = E.compute(T.filter(t => t.asset === 'AAA'), () => null).total220;
+  chk(ttl === 40, 'Relevé fictif : prix d’acquisition = Valeur payée (40 €), frais non ajoutés une seconde fois'); }
 // 2) revolut-x : 0,09 % en nature, seulement pour les libellés « … X »
 chk(R.xTaker('Acheter - Plateforme X') === 0.0009 && R.xTaker('Vendre - Plateforme X') === 0.0009 && R.xTaker('Acheter') === null && R.xTaker('Achat Xtra') === null, 'revolut-x : taux reconnu sur « Acheter/Vendre - … X » uniquement');
 { const B = (id, d, type, qty, eur, raw) => ({ id, date: Date.UTC(2026, 0, d), type, asset: 'XXX', qty, eur, fee: 0, feeInKind: true, feeExcl: true, platform: 'Relevé', rawType: raw });
