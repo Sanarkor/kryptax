@@ -1,23 +1,29 @@
-# France : frais du relevé PDF Revolut (v2.59, zzx)
+# France : frais du relevé PDF Revolut (v2.66)
 
-**C'est une hypothèse, pas une confirmation.** Revolut publie seulement « rate + fee = total cost » (grille de frais crypto). Il ne dit pas si la colonne « Valeur » du relevé est brute ou nette des frais. Kryptax retient désormais « Valeur hors frais » pour les achats et les ventes EUR du relevé PDF (`feeExcl`). Pour revenir en arrière, il suffit de faire un revert du commit.
+Document d'aide au calcul, pas un conseil fiscal.
 
-## Ce qui change (lignes Achat/Vente EUR du relevé PDF uniquement)
-- **Achat** : le prix d'acquisition (l. 220) devient Valeur + Frais. La quantité n'est plus réduite des frais.
-- **Vente** : prix de cession (l. 213) = Valeur brute ; frais (l. 214) déduits une fois ; l. 218 = 213 − 214.
-- **Quotient** : prix de cession brut (l. 213, ou 217 s'il y a une soulte) divisé par la valeur globale (l. 212). La formule globale est inchangée.
+## v2.66 : l'achat est vérifié sur un relevé réel
+Le relevé PDF commence par un **« Résumé du compte »** : pour chaque actif, quantité à l'ouverture, **montant sortant, montant entrant** et quantité à la fermeture. Kryptax compare déjà ces soldes aux siens (« Soldes de clôture : relevé PDF vs calculés »).
 
-## Ce qui ne change pas
-- Plateforme X : frais taker de 0,09 % prélevés en nature.
-- Échanges détectés (une vente et un achat dans la même seconde, types EXCH) : traitement inchangé, aucun frais ajouté deux fois, aucune cession.
-- Relevé en $ : déjà compté à part.
-- CSV et Excel avec une colonne de frais, Binance, et autres sources « en nature » : inchangés.
-- Autres pays : inchangés.
+Sur un relevé réel, l'hypothèse v2.59 (« Valeur hors frais », quantité non réduite) laissait **20 actifs sur 25 en écart**. Exemple (montants fictifs, même forme que le relevé réel, vérifiée au huitième chiffre) :
+- ligne `Achat` : 1 000 jetons, Valeur 40,00 €, Frais 4,00 € ;
+- montant entrant du résumé : **900** = 1 000 × (1 − 4 / 40).
+
+La quantité affichée est donc brute (Valeur ÷ Prix) et les frais sont prélevés **sur la crypto** : vous payez la Valeur (40 €), frais compris. Le journal en devises du même relevé le confirme pour les lignes « … X » : « Achat de … » débité exactement la Valeur de la ligne, et non Valeur + Frais.
+
+Règles depuis la v2.66 (relevé PDF uniquement) :
+- **Achat** : prix d'acquisition (l. 220) = **Valeur** ; quantité = quantité affichée × (1 − Frais / Valeur). C'était déjà la règle avant la v2.59.
+- **Lignes « … X »** (en € **et en $**) : 0,09 % prélevés en nature (`revolut-x`), montant payé ou reçu = Valeur, aucun frais ajouté ou déduit en plus. Avant, les lignes en $ ajoutaient les frais au coût sans réduire la quantité. Les 5 achats d'un même jeton puis sa vente totale ne retombaient à 0 qu'avec ces 0,09 %.
+- **Vente (hors « … X »)** : prix de cession (l. 213) = Valeur, frais déduits une fois (l. 214). **C'est toujours une hypothèse** (v2.59) : aucun relevé lu ne contient de vente en € avec sa ligne « Vente de » qui permettrait de la vérifier.
+- Échanges (même seconde, types EXCH) : la jambe d'entrée est créditée nette des frais, comme un achat (soldes du résumé retrouvés).
+
+Avec ces règles, les écarts de soldes du relevé réel ne sont plus que des arrondis (frais affichés au centime), que le bouton « Ajouter des lignes d'ajustement » aligne.
+
+Effet : la ligne 220 ne compte plus deux fois les frais d'achat (environ 2 à 6 % des petits achats dans l'application), et les quantités détenues (ligne 212) ne sont plus surestimées.
 
 ## Sources
 - CGI art. 150 VH bis, III-A : « Le prix de cession est réduit, sur justificatifs, des frais supportés par le cédant à l'occasion de cette cession. »
-- CGI art. 150 VH bis, III-B : « somme des prix effectivement acquittés ». Les frais d'achat n'y sont pas cités : on les compte généralement dans le prix acquitté, sans texte explicite.
+- CGI art. 150 VH bis, III-B : « somme des prix effectivement acquittés » ; ici, la Valeur débitée.
 - BOFiP BOI-RPPM-PVBMC-30-20-20190902 §50 et notice 2086 : les frais « ne viennent pas en diminution du prix de cession pour la détermination du quotient ».
 
-## Message affiché à l'utilisateur
-Un seul avertissement (« Relevé Revolut : hypothèse… ») s'affiche dans « points à vérifier », plus une ligne de convention dans le PDF exporté.
+Tests : `node testprofiles.js` (relevé fictif de même forme : résumé du compte retrouvé), `node test.js` (cas calculés à la main).
