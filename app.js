@@ -202,6 +202,7 @@
       if (KP.fileList(txs).some(f => f.name === file.name)) { holdInfo = 'Fichier déjà ajouté, ignoré : ' + file.name; renderFiles(); continue; }
       if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') { await importPdf(file); continue; }
       if (/\.xlsx?$/i.test(file.name)) {
+        if (!window.XLSX && window.KxLib) { try { await KxLib.load('xlsx'); } catch (e) {} } // v2.68 : chargé à la demande
         if (!window.XLSX) { showErr('Lecture Excel indisponible, rechargez la page.'); continue; }
         const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
         /* feuille utile : la première dont l'en-tête est reconnu (date + crypto/quantité), sinon la première non vide */
@@ -226,6 +227,7 @@
     zone.addEventListener('drop', e => { const f = KP.droppedFiles(e.dataTransfer); off(); if (f.length) { e.preventDefault(); e.stopPropagation(); handleFiles(f); } }); }
   /* ---------- PDF de relevé de compte (pdf.js local, rien n'est envoyé) ---------- */
   async function importPdf(file) {
+    if (!window.pdfjsLib && window.KxLib) { $('#progress').textContent = 'Lecture du PDF…'; try { await KxLib.load('pdfjs'); } catch (e) {} } // v2.68 : chargé à la demande
     if (!window.pdfjsLib) return showErr('Lecture PDF indisponible, rechargez la page.');
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
     $('#progress').textContent = 'Lecture du PDF…';
@@ -644,7 +646,7 @@
       failed = true; $('#progress').textContent = /Annul/.test(e.message) ? 'Calcul annulé.' : 'Le calcul n\'a pas pu aboutir (connexion ?). Relancez.'; $('#progress').className = 'warn';
     }
     if (!failed) $('#progress').textContent = '';
-    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; runCtl = null; bar.at(98); await breathe(); renderResults(); bar.end(!failed); scheduleAuto(failed); if (!failed) showDone();
+    $('#run').disabled = false; $('#run').hidden = !failed; $('#diag').hidden = true; window.__kxDone = true; $('#cancel').hidden = true; runCtl = null; bar.at(98); await breathe(); renderResults(); bar.end(!failed); scheduleAuto(failed); if (!failed) showDone(); if (!failed && window.KxLib) KxLib.load('jspdf').catch(() => {}); /* v2.68 : générateur PDF préchargé pendant la lecture du résultat */
   };
   $('#cancel').onclick = () => { cancelAuto(); if (runCtl) runCtl.abort(); };
   /* v2.65 : « Tout confirmer comme échanges » (liste d'import ou bandeau du résultat), avec confirmation ; les correspondances multiples restent à choisir une par une */
@@ -823,6 +825,7 @@
     box.innerHTML = '<p class="hint">Préparation de l’aperçu…</p>'; box.setAttribute('aria-busy', 'true');
     if (d.showModal) d.showModal(); else d.setAttribute('open', ''); $('#pvsave').focus();
     try {
+      if (!window.pdfjsLib && window.KxLib) await KxLib.load('pdfjs'); // v2.68
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
       const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false }).promise; box.innerHTML = '';
       const w = Math.max(320, box.clientWidth || 340), dpr = Math.min(3, window.devicePixelRatio || 1);
@@ -857,6 +860,7 @@
   function downloadPdf() {
     const b = currentBlockers(); pdfState();
     if (b.length) { pdfRefused(b); return false; }
+    if (!(window.jspdf && window.jspdf.jsPDF) && window.KxLib) { KxLib.load('jspdf').then(downloadPdf, () => { const m = $('#pdfmsg'); if (m) { m.textContent = 'Export impossible, réessayez.'; m.hidden = false; } }); return false; } // v2.68 : générateur PDF chargé au premier export
     if (pdfBusy) return false; pdfBusy = true; setTimeout(() => { pdfBusy = false; }, 1500);
     const X = window.KryptaxExport, data = withPrec(X.exportData(lastY, lastS, summaryRows, txs, fyear));
     try { showPdf(X.makePdf(window.jspdf.jsPDF, data, X.title(fyear)).output('blob'), X.pdfName(fyear, new Date())); window.__kxPdfCount = (window.__kxPdfCount || 0) + 1; return true; }

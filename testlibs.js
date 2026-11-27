@@ -11,4 +11,8 @@ for (const l of D) {
 const mins = fs.readdirSync(__dirname).filter(f => /\.min\.js$/.test(f)).sort(), decl = D.map(l => l.file).sort();
 chk(JSON.stringify(mins) === JSON.stringify(decl), 'Aucune bibliothèque .min.js non déclarée (' + mins.length + ' fichiers)');
 const I = fs.readFileSync(__dirname + '/index.html', 'utf8'); chk(!/<script[^>]+src="https?:/.test(I), 'Aucun script chargé depuis un CDN');
+// v2.68 : bibliothèques lourdes chargées à la demande par lazylib.js (jamais au démarrage), chacune déclarée et locale
+{ const L = fs.readFileSync(__dirname + '/lazylib.js', 'utf8'), srcs = (L.match(/'[\w.-]+\.min\.js'/g) || []).map(x => x.slice(1, -1));
+  chk(!/<script[^>]+src="[^"]*\.min\.js/.test(I) && /<script src="lazylib\.js/.test(I), 'Démarrage : aucune bibliothèque .min.js dans index.html, chargeur lazylib.js présent');
+  chk(['xlsx.mini.min.js', 'pdf.min.js', 'jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js'].every(f => srcs.includes(f) && decl.includes(f)) && srcs.every(f => decl.includes(f)) && !/https?:/.test(L), 'lazylib.js : les 4 bibliothèques déclarées, chargées depuis le dépôt'); }
 console.log(ok ? 'testlibs : tout est OK (' + n + ')' : 'testlibs : ÉCHEC'); process.exit(ok ? 0 : 1);

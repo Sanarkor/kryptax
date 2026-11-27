@@ -711,7 +711,7 @@
       let p, pdfNote = '';
       try {
         if (/\.pdf$/.test(name) || (data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46)) {
-          if (!W.pdfjsLib) { return { err: '<p class="warn">PDF reading is not available. Please reload the page.</p>' }; }
+          if (!W.pdfjsLib && W.KxLib) await W.KxLib.load('pdfjs').catch(() => {}); /* v2.68 */ if (!W.pdfjsLib) { return { err: '<p class="warn">PDF reading is not available. Please reload the page.</p>' }; }
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
           const doc = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           const toLines = W.KryptaxPipeline && W.KryptaxPipeline.itemsToLines;
@@ -720,7 +720,7 @@
           if (!p.txs.length) { return { err: '<p class="warn">' + esc(f.name) + ': this PDF was not recognised. No USD transaction line was found (expected lines like “01/10/2025 Sell BTC 0.5 $35,000.00 $25.00”). Nothing was computed. Please export a CSV or Excel file instead.</p>' }; }
           pdfNote = '<p class="warn">PDF import is best effort: ' + p.txs.length + ' line' + (p.txs.length > 1 ? 's' : '') + ' read. Please check every line against your statement (to verify).</p>';
         } else if (/\.(xlsx|xls)$/.test(name)) {
-          if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; }
+          if (!W.XLSX && W.KxLib) await W.KxLib.load('xlsx').catch(() => {}); /* v2.68 */ if (!W.XLSX) { return { err: '<p class="warn">Excel reading is not available. Please reload the page.</p>' }; }
           p = fromWorkbook(W.XLSX, data, f.name);
         } else p = fromCSVText(data, f.name);
       } catch (e) { return { err: '<p class="warn">' + esc(f.name) + ': this file could not be read. Nothing was computed.</p>' }; }
