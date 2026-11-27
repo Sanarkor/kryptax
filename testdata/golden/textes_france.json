@@ -91,7 +91,7 @@
  "Columns",
  ": Date, Type, Asset, Quantity, Total or Price, Fee (in EUR, or another currency converted to EUR with ECB reference rates — to verify). Missing EUR values are taken from the market price of the minute (to verify). Buy: cost = Total + Fee; Sell: proceeds = Total, the fee is deducted.",
  "Your file stays in this browser; only prices and exchange rates are fetched.",
- "Art. 150 VH bis CGI (seuil 305 €) · art. 200 C CGI (12,8 %, option barème art. 200 A, case 2OP) · prélèvements sociaux art. L136-6 CSS · BOI-RPPM-PVBMC-30",
+ "Art. 150 VH bis CGI (seuil 305 €) · art. 200 C CGI (12,8 %, option barème : case 3CN) · prélèvements sociaux art. L136-6 CSS · BOI-RPPM-PVBMC-30",
  "Sources: IRS Instructions for Form 8949 · IRS Virtual Currency FAQs",
  "Sources: HMRC Cryptoassets Manual CRYPTO22100, CRYPTO22150, CRYPTO22200 (TCGA 1992 s104, s105, s106A) · Capital Gains Manual CG78310 (currency conversion) · Capital Gains Tax rates and allowances · SA108 notes",
  "Sources: EStG s. 22 no. 3, s. 23 (1) no. 2 and (3), s. 2 (7) · BMF letter of 6 March 2025 on crypto assets (BStBl I S. 658), Rn. 34-45, 48, 53-63, 65, 67-75 · AO s. 108 with BGB ss. 187-188 (one-year period) · ELSTER notes to Anlage SO 2025 · details: docs/DE-RULES.md",

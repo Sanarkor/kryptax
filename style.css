@@ -527,3 +527,51 @@ footer .uslaw[hidden],footer .uklaw[hidden]{display:none}
 .note.swprov{border:2px solid #e0a100;border-left-width:6px;background:rgba(224,161,0,.16);font-size:1rem;padding:12px 14px}
 .note.swprov .btn{margin:8px 8px 0 0}
 #swpend [data-swall]{font-weight:600}
+/* v2.67 mise en page PC (>= 1024 px seulement ; mobile et impression inchangés) :
+   conteneur centré de 1440 px, en-tête sur une ligne (logo · titre · actions), colonne d'import fixe,
+   état vide guidé, pied de page sobre. :not(#kx) = surcharge de spécificité, sans !important. */
+@media (min-width:1024px){
+:root{--kx-w:1440px;--kx-pad:32px;--kx-side:420px;--kx-gap:24px}
+header,main,footer{max-width:var(--kx-w);margin-left:auto;margin-right:auto;box-sizing:border-box}
+.usmode{max-width:var(--kx-w);padding-left:var(--kx-pad);padding-right:var(--kx-pad);grid-template-columns:var(--kx-side) minmax(0,1fr);column-gap:var(--kx-gap)}
+/* En-tête : logo | titre + sous-titre + confidentialité | actions (une seule ligne) */
+header{grid-template-columns:auto minmax(0,1fr) auto auto;column-gap:28px;row-gap:2px;align-items:center;padding:22px var(--kx-pad) 18px;border-bottom:1px solid var(--line);margin-bottom:22px}
+header h1{grid-column:1;grid-row:1/span 3;font-size:3.6rem;line-height:1.05;padding-bottom:.3em;align-self:center}
+:root:not(#kx) header h1{font-size:3.6rem}
+header .hsig{position:static;display:block;font-size:.7rem;line-height:1.2;margin-top:2px;text-align:right}
+header h1{padding-bottom:0}:root:not(#kx) header h1{padding-bottom:0}
+header .sub{grid-column:2;grid-row:1;align-self:end;font-size:1.35em;letter-spacing:0;margin:0}
+:root:not(#kx) header .sub{font-size:1.35em}
+header .sub2{grid-column:2;grid-row:2;align-self:start;font-size:.92em;margin:0}
+header .kxpriv{grid-column:2;grid-row:3;align-self:start;margin:6px 0 0;font-size:.8em;color:var(--muted)}
+header .kofifoot.kofitop{grid-column:3;grid-row:1/span 3;align-self:center;justify-self:end;margin:0;gap:8px}
+header .regions{grid-column:4;grid-row:1/span 3;align-self:center;justify-self:end;padding-left:20px;border-left:1px solid var(--line)}
+/* Deux colonnes : import à largeur fixe, résultat fluide */
+main{padding:0 var(--kx-pad);grid-template-columns:var(--kx-side) minmax(0,1fr);column-gap:var(--kx-gap)}
+main>section{padding:20px 22px;border-radius:16px;margin-top:0;margin-bottom:var(--kx-gap)}
+main>section:first-of-type{padding-top:18px;padding-bottom:20px}
+main .sechead{margin-bottom:10px}
+main>section:first-of-type>.hint{margin:4px 0 14px;line-height:1.5}
+main>section:first-of-type>label.btn{display:flex;align-items:center;justify-content:center;min-height:52px;padding:10px 16px;text-align:center;border-radius:12px;box-sizing:border-box;width:100%}
+main .fhelp{margin:14px 0;padding:10px 12px;border-radius:10px;font-style:normal;font-size:.8em;line-height:1.55}
+main .fhelp p{margin:.35em 0}
+main>section:first-of-type #validate{width:100%;min-height:44px;border-radius:12px;margin-top:4px}
+main>#results{margin-top:0;grid-template-columns:minmax(0,1fr) minmax(280px,32%)}
+#results .kxkpi span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* État vide du résultat : titre + étapes, cadre en pointillés plutôt qu'un grand panneau plein */
+main>#results:empty{flex-direction:column;gap:10px;padding:48px 40px;min-height:0;background:transparent;border:1.5px dashed var(--line);box-shadow:none;font-style:normal;text-align:center;margin-bottom:var(--kx-gap)}
+main>#results:empty::before{content:"2. Résultat et export";font-size:1.25rem;font-weight:700;color:var(--text)}
+main>#results:empty::after{content:"Importez vos relevés à gauche, puis touchez « Valider mes imports ».\A Le formulaire 2086 et le PDF à recopier apparaîtront ici.";white-space:pre-line;max-width:56ch;line-height:1.6;color:var(--muted)}
+/* Pied de page : références discrètes, avertissement lisible mais calme */
+footer{padding:18px var(--kx-pad) 8px;border-top:1px solid var(--line);margin-top:8px;font-size:.8em}
+footer .law{opacity:.85}
+:root:not(#kx) footer .disclaim{max-width:980px;margin:8px auto 0;padding:8px 14px;font-weight:500;font-size:.95em;line-height:1.55;color:var(--muted);border-left:3px solid var(--warn);border-radius:6px;background:var(--card2);text-align:left}
+.privlink{margin:6px 0 20px}
+}
+/* Très grands écrans : un peu plus d'air pour le résultat */
+@media (min-width:1600px){:root{--kx-side:440px;--kx-gap:28px}}
+/* v2.67 petits PC (1024-1279 px) : marges et colonne d'import réduites, libellés courts des boutons d'en-tête */
+@media (min-width:1024px) and (max-width:1279.98px){:root{--kx-pad:20px;--kx-side:360px;--kx-gap:18px}
+header{column-gap:16px}:root:not(#kx) header h1{font-size:2.8rem}:root:not(#kx) header .sub{font-size:1.15em}
+header .kofitop .fbtn .fl{display:none}header .kofitop .fbtn .fs{display:inline}header .regions{padding-left:12px}
+main>section{padding:16px 18px}}
