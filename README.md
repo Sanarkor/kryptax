@@ -23,7 +23,7 @@ Licence : [PolyForm Noncommercial 1.0.0](LICENSE). Logiciel fourni « tel quel �
 - Page statique hébergée sur GitHub Pages : **aucun compte, aucune clé API, aucun serveur Kryptax**.
 - Vos relevés sont lus dans le navigateur, et **leur contenu n'est jamais envoyé** (ni montants, ni quantités, ni nom).
 - Seules des requêtes de **cours ou de taux publics** sortent (symbole et horodatage), vers les hôtes autorisés par la CSP (`connect-src` dans `index.html`) : plateformes publiques de cours en mode France, taux de change officiels pour les autres pays (Banque du Canada, BCE, etc. ; voir les docs de chaque pays).
-- Les bibliothèques sont incluses localement, sans CDN. Versions et empreintes SHA-256 : [docs/BIBLIOTHEQUES.md](docs/BIBLIOTHEQUES.md), vérifiées par la CI (`testlibs.js`). Pas d'outil de mesure d'audience.
+- Les bibliothèques sont incluses localement, sans CDN, et chargées seulement quand on en a besoin (`lazylib.js`). Versions et empreintes SHA-256 : [docs/BIBLIOTHEQUES.md](docs/BIBLIOTHEQUES.md), vérifiées par la CI (`testlibs.js`). Pas d'outil de mesure d'audience.
 
 ## Hypothèses et profils de plateformes
 Les conventions propres à chaque plateforme (formats d'import, frais, règles vérifiées sur un relevé réel comme les frais d'achat prélevés en nature du relevé Revolut ([docs/FR-FRAIS-REVOLUT.md](docs/FR-FRAIS-REVOLUT.md)), hypothèses non confirmées comme les frais de 0,09 % de Revolut X) sont déclarées avec leur statut dans [docs/PROFILS-PLATEFORMES.md](docs/PROFILS-PLATEFORMES.md) (`profiles.js`). Un échange crypto→crypto n'est considéré comme non imposable qu'avec une preuve (même identifiant d'ordre, ou relevé Revolut : même seconde sans jambe en euros) ou une confirmation de l'utilisateur.

@@ -473,8 +473,8 @@
     const busy = (en, de) => { status = [en, de]; out.innerHTML = '<p class="hint">' + esc(T(en, de)) + '</p>'; };
     async function readOne(f) {
       const data = new Uint8Array(await f.arrayBuffer()); let p;
-      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) { return { err: { en: 'Excel reading is not available. Please reload the page.', de: 'Excel-Lesen ist nicht verfügbar. Bitte laden Sie die Seite neu.' } }; } p = fromWorkbook(W.XLSX, data, f.name); }
-        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) { return { err: { en: 'PDF reading is not available. Please reload the page.', de: 'PDF-Lesen ist nicht verfügbar. Bitte laden Sie die Seite neu.' } }; }
+      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX && W.KxLib) await W.KxLib.load('xlsx').catch(() => {}); /* v2.68 */ if (!W.XLSX) { return { err: { en: 'Excel reading is not available. Please reload the page.', de: 'Excel-Lesen ist nicht verfügbar. Bitte laden Sie die Seite neu.' } }; } p = fromWorkbook(W.XLSX, data, f.name); }
+        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib && W.KxLib) await W.KxLib.load('pdfjs').catch(() => {}); /* v2.68 */ if (!W.pdfjsLib || !KP) { return { err: { en: 'PDF reading is not available. Please reload the page.', de: 'PDF-Lesen ist nicht verfügbar. Bitte laden Sie die Seite neu.' } }; }
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; busy('Reading the PDF…', 'PDF wird gelesen…');
           const d = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           for (let i = 1; i <= d.numPages; i++) { const c = await (await d.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }

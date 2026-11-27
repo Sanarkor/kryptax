@@ -29,7 +29,7 @@ td input,td select{padding:3px 5px;font-size:.95em}
 .note{background:#0b1a26;border:1px solid #16394a;border-left:3px solid var(--acc);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.9em}
 details summary{cursor:pointer;color:var(--acc)}
 footer{text-align:center;color:var(--muted);font-size:.8em;padding:20px}
-@media (max-width:600px){body{font-size:14px}section{padding:12px;border-radius:12px}main{padding:4px}.grid{grid-template-columns:1fr 1fr}}
+@media (max-width:600px){body{font-size:14px}section{padding:12px;border-radius:12px}main{padding:4px}}
 @media print{:root{color-scheme:light}body{background:#fff!important;color:#000}header,.banner a,section:not(#results),button,footer,details{display:none!important}
  section{background:#fff!important;border:0;box-shadow:none;color:#000}.banner{display:block;background:#fff;color:#000;border:1px solid #999}
  th{background:#eee!important;color:#000;position:static}th,td{border-bottom:1px solid #bbb;color:#000}input,select{background:#fff;color:#000;border:0}
@@ -42,19 +42,16 @@ progress{width:180px;height:8px;vertical-align:middle;accent-color:#22d3ee}
 .txscroll th{position:sticky;top:0;z-index:1;background:inherit}
 #txtable td,#txtable th{padding:.25em .4em}
 #txtable input{max-width:7.5em}
-@media (max-width:600px){#txtable select{max-width:7em}#txtable input{max-width:5.5em}.txscroll{max-height:55vh}}
+@media (max-width:600px){#txtable select{max-width:7em}#txtable input{max-width:5.5em}}
 @media print{.txscroll{max-height:none}}
 [hidden]{display:none!important}
 
 .toprow{display:flex;align-items:center;justify-content:space-between;gap:.6em;flex-wrap:wrap}
 .toprow h1{margin:0}
-#reset,#helpbtn{font-size:.95rem;padding:.5em .8em;white-space:nowrap}
+#reset,#helpbtn{white-space:nowrap}
 @media print{#reset,#helpbtn{display:none}}
-
-.topbar{display:flex;justify-content:flex-end;margin:0 0 .9em}
 #reset,#helpbtn{min-height:0;font-size:.75rem;padding:.25em .6em;opacity:.75}
 #reset:hover,#helpbtn:hover,#helpbtn[aria-expanded=true]{opacity:1}
-.topbar{margin:0 0 1.4em}
 .cards{display:none}
 .card{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:.7em .8em;margin:.6em 0}
 .card.badc{border-color:#c0504d}
@@ -93,7 +90,7 @@ img,input,select,textarea{max-width:100%}
 .help li{margin:.3em 0}
 
 /* Titre : 2x plus grand, très gras, dégradé bleu → orange → vert animé avec halo */
-header h1{font-size:clamp(2.6rem,15vw,3.4rem);font-weight:900;line-height:1.05;letter-spacing:-.03em;
+header h1{font-size:clamp(2.6rem,15vw,3.4rem);font-weight:900;letter-spacing:-.03em;
   background:linear-gradient(90deg,#3b82f6,#22d3ee,#10b981,#3b82f6);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 0 10px rgba(34,211,238,.45));animation:kxglow 8s linear infinite;max-width:100%;overflow-wrap:anywhere}
 @keyframes kxglow{0%{background-position:0% 50%;filter:drop-shadow(0 0 9px rgba(34,211,238,.45))}50%{filter:drop-shadow(0 0 11px rgba(16,185,129,.45))}100%{background-position:300% 50%;filter:drop-shadow(0 0 9px rgba(34,211,238,.45))}}
@@ -136,7 +133,7 @@ footer .fiscfr{margin-left:auto}
 .kxprog{width:100%;margin:.6em 0 .3em}
 .kxbar{position:relative;width:100%;height:12px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;box-shadow:0 0 12px rgba(34,211,238,.18)}
 .kxfill{position:absolute;inset:0;transform-origin:0 50%;transform:scaleX(0);border-radius:999px;background:linear-gradient(90deg,#22d3ee,#10b981);box-shadow:0 0 10px rgba(34,211,238,.55),0 0 4px rgba(16,185,129,.5);transition:transform .12s linear}
-.kxrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5em;min-width:0}
+.kxrow{flex-wrap:wrap;justify-content:space-between;min-width:0}
 .kxrow #progress{flex:1 1 12em;min-width:0}
 .kxrow #progress:empty{display:none}
 @media (prefers-reduced-motion:reduce){.kxfill{transition:none}}
@@ -146,15 +143,12 @@ header .sub{font-size:1.04em;font-weight:700;line-height:1.3;letter-spacing:.02e
 
 @media (min-width:1024px){
 html{font-size:100%}
-body{font-size:15.2px}
 header,main{max-width:768px;box-sizing:border-box}
-header h1{font-size:5.4rem}
-header .sub{font-size:1.7em}
 #reset,#helpbtn{font-size:.85rem;padding:.35em .8em}
 }
 
 /* Logo : place pour les jambages (y, p) au-dessus du sous-titre */
-header h1{line-height:1.22;padding-bottom:.06em}
+header h1{line-height:1.22}
 
 /* Popup de fin de calcul */
 .donepop{border:0;padding:0;background:transparent;color:var(--text);max-width:calc(100vw - 32px);width:340px;overflow:visible}
@@ -221,8 +215,7 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 @media (max-width:360px){.kofifoot{gap:5px;padding:0 4px}.kofifoot>.fbtn{font-size:.74rem;padding:.4em .45em}}
 .fhelp{font-style:italic;margin:6px 0;padding:4px 8px;border:1px solid rgba(34,48,74,.55);border-left:2px solid rgba(34,211,238,.35);border-radius:6px;background:rgba(20,29,49,.35);color:#7f8ea3;font-size:11.5px;line-height:1.45;overflow-wrap:anywhere}.fhelp p{margin:.15em 0}.fhelp b{color:#9aa8bc;font-weight:650}.fhelp-t{font-weight:650;color:#9aa8bc}.fhelp-s{display:none}@media (max-width:767px){.fhelp-l{display:none}.fhelp-s{display:block}}
 #merci{max-width:min(420px,calc(100vw - 24px))}.merci-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin:12px 0 0!important}.merci-foot a.btn{text-decoration:none;display:inline-block;text-align:center}
-.lbl-s{display:none}@media (max-width:767.98px){.lbl-l{display:none}.lbl-s{display:inline}}
-@media (max-width:767.98px){header{padding:10px 14px 3px}header .topbar{margin:0}header h1{padding-bottom:.12em}header .sub{margin-top:14px}header .sub2{margin-top:9px}main{padding:0 6px}main>section:first-child{margin:8px 0 0;padding:11px 12px}.sechead{margin-bottom:5px}main>section:first-child>.hint{margin:5px 0}main>section:first-child>label.btn{margin:3px 0}main>section:first-child .fhelp{margin:5px 0}main>section:first-child #validate{margin:3px 0 0}footer{padding:10px 12px 4px}footer .law{margin-top:0}.disclaim{margin-top:7px}.kofifoot{margin:5px auto 5px}.privlink{margin:0 0 6px}}
+.lbl-s{display:none}@media (max-width:767.98px){.lbl-l{display:none}.lbl-s{display:inline}header{padding:10px 14px 3px}header .topbar{margin:0}header h1{padding-bottom:.12em}header .sub{margin-top:14px}header .sub2{margin-top:9px}main{padding:0 6px}main>section:first-child{margin:8px 0 0;padding:11px 12px}.sechead{margin-bottom:5px}main>section:first-child>.hint{margin:5px 0}main>section:first-child>label.btn{margin:3px 0}main>section:first-child .fhelp{margin:5px 0}main>section:first-child #validate{margin:3px 0 0}footer{padding:10px 12px 4px}footer .law{margin-top:0}.disclaim{margin-top:7px}.kofifoot{margin:5px auto 5px}.privlink{margin:0 0 6px}}
 #merci .merci-legal{font-size:.82rem;line-height:1.4;color:#fbbf24;margin:8px 0 0}
 .total-global .rnd{display:block;font-size:.68rem;opacity:.7;font-weight:400;white-space:normal;overflow-wrap:anywhere;line-height:1.3}
 
@@ -231,11 +224,10 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 .region.on{opacity:1;color:#fff;border-color:#22d3ee;background:linear-gradient(90deg,rgba(59,130,246,.28),rgba(34,211,238,.28),rgba(16,185,129,.28));box-shadow:0 0 0 1px rgba(34,211,238,.7),0 0 10px rgba(34,211,238,.55),0 0 18px rgba(16,185,129,.35)}
 .usmode{max-width:768px;margin:24px auto;padding:0 18px;box-sizing:border-box;text-align:center}
 .usmode[hidden],main[hidden]{display:none}
-.topbar h1{white-space:nowrap}@media (max-width:479.98px){header .topbar h1{font-size:clamp(2.2rem,12.5vw,3.4rem)}.regions{gap:5px}.region{padding:.3em .45em;font-size:.78rem}}
-.usmode .usnote{text-align:left}.uszone{display:block;margin:14px 0;padding:16px;border:2px dashed currentColor;border-radius:12px;cursor:pointer;text-align:left;opacity:.95}.uszone b{display:block;margin-bottom:6px}.uszone span{display:block;font-size:.85rem;opacity:.8;overflow-wrap:anywhere}.uszone input{margin-top:10px;max-width:100%}
-#usresult{text-align:left}#usresult .scroll{max-width:100%;overflow-x:auto}.us8949{border-collapse:collapse;font-size:.78rem;width:100%}.us8949 th,.us8949 td{padding:4px 5px;border-bottom:1px solid rgba(127,127,127,.3);white-space:nowrap;text-align:right}.us8949 th:first-child,.us8949 td:first-child{text-align:left}.us8949 tr.tv td{opacity:.75;font-style:italic}
+.topbar h1{white-space:nowrap}@media (max-width:479.98px){header .topbar h1{font-size:clamp(2.2rem,12.5vw,3.4rem)}.region{padding:.3em .45em;font-size:.78rem}}
+.usmode .usnote{text-align:left}.uszone{display:block;margin:14px 0;padding:16px;border:2px dashed currentColor;border-radius:12px;cursor:pointer;text-align:left;opacity:.95}.uszone b{display:block;margin-bottom:6px}.uszone span{display:block;font-size:.85rem;opacity:.8;overflow-wrap:anywhere}.uszone input{margin-top:10px;max-width:100%}#usresult .scroll{max-width:100%;overflow-x:auto}.us8949{border-collapse:collapse;font-size:.78rem;width:100%}.us8949 th,.us8949 td{padding:4px 5px;border-bottom:1px solid rgba(127,127,127,.3);white-space:nowrap;text-align:right}.us8949 th:first-child,.us8949 td:first-child{text-align:left}.us8949 tr.tv td{opacity:.75;font-style:italic}
 
-.usmode .usimp{text-align:left}.usmode .usimp .sechead h2{margin:0}.usmode .usimp>.hint{margin:6px 0}.usmode .usimp>label.btn{margin:4px 0}.usmode .usimp .fhelp{margin:6px 0 0}.usdet{margin:.15em 0}.usdet summary{cursor:pointer;color:#9aa8bd}.usdet[open] summary{margin-bottom:.15em}#usimp.dropover::after{content:"Drop your file here"}
+.usmode .usimp{text-align:left}.usmode .usimp .sechead h2{margin:0}.usmode .usimp>.hint{margin:6px 0}.usmode .usimp>label.btn{margin:4px 0}.usmode .usimp .fhelp{margin:6px 0 0}.usdet{margin:.15em 0}.usdet summary{color:#9aa8bd}.usdet[open] summary{margin-bottom:.15em}#usimp.dropover::after{content:"Drop your file here"}
 @media (max-width:767.98px){.usmode .usimp{padding:11px 12px}}
 .usexp{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.usexp .btn{flex:1 1 150px}.usreshead{margin:14px 0 6px;text-align:left}#usresult{text-align:left}
 .usmiss .grid{margin:8px 0}.usmiss input{max-width:100%;box-sizing:border-box}.us8949 tr.ususer td{font-style:italic}
@@ -251,7 +243,7 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 
 /* v2.18 thème clair : préférence système par défaut, ou choix mémorisé (data-theme sur <html>) */
 .themebtn{margin-left:14px;display:inline-flex;align-items:center;justify-content:center;padding:.3em .5em;line-height:0}.themebtn svg{display:block}
-@media (max-width:479.98px){header .topbar{position:relative}.themebtn{position:absolute;right:0;top:calc(50% + 18px);margin:0;padding:.2em .4em}.themebtn svg{width:15px;height:15px}}
+@media (max-width:479.98px){.themebtn{position:absolute;right:0;top:calc(50% + 18px);margin:0;padding:.2em .4em}.themebtn svg{width:15px;height:15px}}
 :root[data-theme="light"]{--bg:#f4f7fb;--card:#ffffff;--card2:#eef3f9;--line:#cbd5e1;--text:#0f172a;--muted:#475569;--acc:#0e7490;--acc2:#047857;--neg:#b91c1c;--warn:#92400e;color-scheme:light}
 :root[data-theme="light"] body{background:radial-gradient(1200px 600px at 10% -10%,#dff3fb 0,transparent 60%),var(--bg)}
 :root[data-theme="light"] .banner{background:#fff8e1;border-color:#e6c65a;color:#5c4400}
@@ -321,15 +313,14 @@ header .sub2{margin:4px 0 0;font-size:.86em;font-weight:500;line-height:1.4;colo
 .kxkpi{display:none}
 @media (min-width:1024px){
 header,main,.banner{max-width:1400px}
-.usmode{max-width:1400px}
-main{display:grid;grid-template-columns:minmax(380px,440px) minmax(0,1fr);column-gap:22px;align-items:start}
+main{display:grid;grid-template-columns:minmax(380px,440px) minmax(0,1fr);align-items:start}
 main>*{grid-column:1/-1;min-width:0}
 main>section:first-of-type{grid-column:1;grid-row:1}
 main>#calc{grid-column:1;grid-row:2}
 main>#autoind{grid-column:1;grid-row:3}
-main>#results{grid-column:2;grid-row:1/span 3;margin-top:0}
+main>#results{grid-column:2;grid-row:1/span 3}
 main>#txsection{grid-column:1/-1;grid-row:4}
-.usmode{display:grid;grid-template-columns:minmax(380px,440px) minmax(0,1fr);column-gap:22px;align-items:start}
+.usmode{display:grid;grid-template-columns:minmax(380px,440px) minmax(0,1fr);align-items:start}
 .usmode>*{grid-column:1/-1;min-width:0}
 .usmode>#usleft{grid-column:1;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto;padding:0 8px 8px 2px}
 .usmode>#usresult{grid-column:2}
@@ -352,61 +343,39 @@ main>#txsection{grid-column:1/-1;grid-row:4}
 @media print{.kxcharts{display:none!important}}
 /* v2.19 PC compact (>= 1024 px seulement) : entête et pied plus serrés, largeur utile plus grande, import en deux colonnes tant qu'il n'y a ni progression ni résultat */
 @media (min-width:1024px){
-header,main,.banner,.usmode{max-width:1680px}
-header{padding:10px 24px 4px}
-main{padding:4px 24px;grid-template-columns:minmax(400px,34%) minmax(0,1fr)}
-.usmode{padding:0 24px;margin:8px auto;grid-template-columns:minmax(400px,34%) minmax(0,1fr)}
-header h1{font-size:3.6rem}
-header .sub{font-size:1.3em;margin-top:2px}header .sub2{margin-top:2px}
-main>section{margin-top:8px;margin-bottom:8px}
+main{grid-template-columns:minmax(400px,34%) minmax(0,1fr)}
+.usmode{margin:8px auto;grid-template-columns:minmax(400px,34%) minmax(0,1fr)}header .sub2{margin-top:2px}
 main:has(#results:empty)>#calc{grid-column:2;grid-row:1}
-footer{padding:6px 24px 4px}
-footer .disclaim{max-width:none;margin-top:4px}
-.kofifoot{margin:0 auto 8px}
-}
-@media (min-width:1024px){
-header h1{font-size:3rem}header .sub{font-size:1.15em;margin-top:0}
-main>section:first-of-type{padding-top:12px;padding-bottom:12px}
+footer .disclaim{max-width:none}header .sub{margin-top:0}
 .usmode{margin-top:4px}.usmode>.usbeta{margin:6px 0}
 .betatag{display:inline-block;padding:0 7px;border-radius:9px;font-size:.78em;letter-spacing:.03em;text-transform:uppercase;background:var(--warn);color:#111;vertical-align:1px}.betanote{color:var(--warn)}
 footer .law{margin-top:0}
 }
-@media (min-width:1024px) and (max-height:560px){header{padding-top:4px}header h1{font-size:2.5rem}header .sub{font-size:1.05em}header .sub2{font-size:.9em}footer{font-size:.74em;padding-top:2px}}
-@media (min-width:1024px){.kofifoot{margin:0 auto 2px}.privlink{margin:2px 0 4px}}
+@media (min-width:1024px) and (max-height:560px){header{padding-top:4px}header .sub{font-size:1.05em}header .sub2{font-size:.9em}footer{font-size:.74em;padding-top:2px}}
 @media (min-width:1024px){
 .usopts .grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 10px}
 .usopts select{width:100%;font-size:.8rem}
 .usopts{margin:4px 0}.usopts .hint{margin:4px 0 0;font-size:.78em}
 #usimp{margin-top:0}
 }
-@media (min-width:1024px) and (max-height:560px){.usmode>.usbeta{margin:2px 0;font-size:.85em}.usopts label{font-size:.85em}}
-@media (min-width:1024px) and (max-height:560px){.usmode{font-size:.88em;padding-top:6px;padding-bottom:6px}.usmode section,.usmode .usopts{padding-top:8px;padding-bottom:8px}.usmode .fhelp{margin-top:4px;padding-top:4px;padding-bottom:4px}header .sub2{margin-top:0}header h1{font-size:2.3rem}}
-@media (min-width:1024px) and (max-height:560px){header .sub,header .sub2{display:inline-block;margin:0 14px 0 0;vertical-align:baseline}.usmode>#usleft{padding-bottom:0}.usmode #usimp{margin-bottom:0}.usmode{margin-bottom:4px}.kofifoot>.fbtn{height:2em}.privlink{margin:0 0 2px}footer{padding-bottom:2px}}
-@media (min-width:1024px){#usopts .usopts select{font-size:.78rem;padding-left:6px;padding-right:4px}}
-@media (min-width:1024px){#usimp select{width:100%;max-width:100%}}
+@media (min-width:1024px) and (max-height:560px){.usmode>.usbeta{margin:2px 0;font-size:.85em}.usopts label{font-size:.85em}.usmode{font-size:.88em;padding-top:6px;padding-bottom:6px}.usmode section,.usmode .usopts{padding-top:8px;padding-bottom:8px}.usmode .fhelp{margin-top:4px;padding-top:4px;padding-bottom:4px}header .sub2{margin-top:0}header h1{font-size:2.3rem}header .sub,header .sub2{display:inline-block;margin:0 14px 0 0;vertical-align:baseline}.usmode>#usleft{padding-bottom:0}.usmode #usimp{margin-bottom:0}.usmode{margin-bottom:4px}.kofifoot>.fbtn{height:2em}.privlink{margin:0 0 2px}footer{padding-bottom:2px}}
+@media (min-width:1024px){#usopts .usopts select{font-size:.78rem;padding-left:6px;padding-right:4px}#usimp select{width:100%;max-width:100%}}
 /* v2.20 PC plein écran (>= 1024 px seulement) : entête sur une ligne, conteneur quasi pleine largeur, résultat en deux sous-colonnes sur grands écrans */
 @media (min-width:1024px){
 header,main,.banner,.usmode{max-width:none}
-header{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:18px;align-items:center;padding:4px 12px 2px}
+header{display:grid;grid-template-columns:auto minmax(0,1fr) auto}
 header .topbar{display:contents}
-header h1{grid-column:1;grid-row:1/span 2;font-size:2.4rem;margin:0;padding-bottom:.1em}
-header .sub{grid-column:2;grid-row:1;font-size:1.05em;margin:0;align-self:end}
-header .sub2{grid-column:2;grid-row:2;font-size:.85em;margin:0;align-self:start}
-header .regions{grid-column:3;grid-row:1/span 2}
-main{padding:2px 12px;column-gap:12px;grid-template-columns:minmax(360px,30%) minmax(0,1fr)}
-.usmode{padding:0 12px;column-gap:12px;grid-template-columns:minmax(360px,30%) minmax(0,1fr)}
-main>section{margin-top:4px;margin-bottom:4px;padding:10px 14px}
-main .fhelp{font-size:.78em}
+header h1{margin:0}
+main{grid-template-columns:minmax(360px,30%) minmax(0,1fr)}
+.usmode{padding:0 12px;grid-template-columns:minmax(360px,30%) minmax(0,1fr)}
 #results .note{margin-top:6px;margin-bottom:6px;padding-top:6px;padding-bottom:6px}
 #results .kxkpi{margin:6px 6px 8px;padding:8px 12px}
 #results .halo{margin:8px 6px}
 #results .sechead{margin-bottom:4px}
 .kxcharts{margin:6px 0;gap:8px}.kxchart{padding:6px 10px}.kxrow{margin:2px 0}
 #results .exports{margin:6px 0}
-footer{padding:2px 12px 0;font-size:.72em}
 footer .disclaim{margin-top:2px}
 .kofifoot{margin:0 auto}.kofifoot>.fbtn{height:2em}
-.privlink{margin:0 0 2px}
 }
 @media (min-width:1200px){
 #results{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,36%);column-gap:14px;align-content:start}
@@ -425,32 +394,28 @@ footer .disclaim{margin-top:2px}
 #usresult>.kxcharts{grid-column:2;grid-row:1/span 5;grid-template-columns:1fr;align-self:start}
 }
 /* v2.22 PC : logo et signature x2,25, sous-titre x1,5 (écrans de plus de 560 px de haut) */
-@media (min-width:1024px) and (min-height:561px){header h1{font-size:5.4rem;padding-bottom:.16em}header .sub{font-size:1.575em}}
+@media (min-width:1024px) and (min-height:561px){header h1{padding-bottom:.16em}header .sub{font-size:1.575em}}
 /* v2.40 PC : logo +15 % (5,4 -> 6,21 rem), même point de rupture ; la signature suit (fitSig) et reçoit +25 % au total ; mobile inchangé */
 @media (min-width:1024px) and (min-height:561px){header h1{font-size:6.21rem}}
 /* v2.23 U.S.A. : fuseau du fichier dans Options, ligne pleine largeur */
 .usopts .ustzopt{grid-column:1/-1}.usopts .ustzopt select{width:100%;max-width:100%;min-width:0}
 /* v2.23 FRANCE PC : dès l'arrivée, 2 colonnes ; carte « 2. Résultat et export » vide avec un message d'attente, masquée pendant un calcul */
-@media (min-width:1024px){main>#results:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;color:var(--muted);font-style:italic}
-main>#results:empty::before{content:"2. Résultat et export \2014  le résultat apparaîtra ici après le calcul."}
+@media (min-width:1024px){main>#results:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;color:var(--muted)}
 main:has(#barwrap:not([hidden]),#progress:not(:empty),#run:not([hidden]),#txnote2:not(:empty),#diag:not([hidden]))>#results:empty{display:none}}
 /* v2.24 U.S.A. PC : dès l'arrivée, 2 colonnes (Options + 1. Import à gauche) ; carte de résultat vide avec un message d'attente en anglais */
 @media (min-width:1024px){.usmode>#usleft>#usside:empty{display:none}
 .usmode>#usresult:empty{display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:120px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px #0006;color:var(--muted);font-style:italic;margin:8px 0}
-.usmode>#usresult:empty::before{content:"Your results will appear here after the calculation."}}
-@media (min-width:1024px){.usmode:has(#usresult:empty)>#usleft{position:static;max-height:none;overflow:visible}
+.usmode>#usresult:empty::before{content:"Your results will appear here after the calculation."}.usmode:has(#usresult:empty)>#usleft{position:static;max-height:none;overflow:visible}
 /* v2.25 accueil U.S. PC : Options puis 1. Import empilés à gauche, espacements de ces deux blocs tassés */
 .usmode:has(#usresult:empty) #usopts .usopts{margin:2px 0;padding-top:6px;padding-bottom:6px}.usmode:has(#usresult:empty) #usopts .usopts .grid{gap:2px 10px}.usmode:has(#usresult:empty) #usopts .usopts .hint{margin-top:2px}.usmode:has(#usresult:empty) #usimp{margin:4px 0;padding-top:8px;padding-bottom:8px}.usmode:has(#usresult:empty) #usimp .sechead{margin-bottom:2px}.usmode:has(#usresult:empty) #usimp .fhelp{margin-top:4px;padding-top:4px;padding-bottom:4px}.usmode:has(#usresult:empty) #usimp p{margin-top:4px;margin-bottom:4px}}
 /* v2.26 PC : Pourquoi / Soutenir en haut à droite, pays et thème juste en dessous */
-@media (min-width:1024px){header .kofifoot.kofitop{grid-column:3;grid-row:1;margin:0;padding:0;justify-self:end;align-self:end;gap:6px}header .kofitop>.fbtn{height:1.9em;font-size:.8rem;padding:.2em .7em}header .regions{grid-row:2;align-self:start;justify-self:end}}
+@media (min-width:1024px){header .kofifoot.kofitop{padding:0}header .kofitop>.fbtn{height:1.9em;font-size:.8rem;padding:.2em .7em}}
 /* v2.27 drapeaux SVG dans FRANCE / U.S.A. ; PC : boutons de l'en-tête à la même hauteur, plus d'écart ; sélecteur d'année plus visible */
 .region{display:inline-flex;align-items:center;gap:.4em}.region .flag{width:18px;height:12px;flex:none;border-radius:2px;box-shadow:0 0 0 1px rgba(127,127,127,.45)}
 @media (max-width:479.98px){.region{gap:.3em}.region .flag{width:15px;height:10px}}
-@media (min-width:1024px){header .kofitop>.fbtn,header .regions .region,header .regions .themebtn{height:2.1rem;box-sizing:border-box;font-size:.8rem;padding:0 .75em;display:inline-flex;align-items:center;justify-content:center;line-height:1}
-header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{display:flex;align-items:center;gap:8px}header .regions .themebtn{margin-left:6px;padding:0 .55em}
+@media (min-width:1024px){header .kofitop>.fbtn,header .regions .region,header .regions .themebtn{height:2.1rem;box-sizing:border-box;font-size:.8rem;padding:0 .75em;display:inline-flex;align-items:center;justify-content:center;line-height:1}header .regions{display:flex;align-items:center;gap:8px}header .regions .themebtn{margin-left:6px;padding:0 .55em}
 .yearsel,#usresult label:has(#usyear){font-size:1.05rem;font-weight:700}.yearsel,#usresult label:has(#usyear){display:inline-flex;align-items:center;gap:10px;margin:0}#fyear,#usyear{width:auto;max-width:none;flex:none}
-#fyear,#usyear{font-size:1rem;font-weight:700;min-height:2.3rem;padding:.3em .7em;border:2px solid var(--acc);border-radius:10px;color:var(--text)}}
-@media (min-width:1024px){#usresult .grid:has(#usyear){display:block;margin:2px 0}#usresult .grid label:has(#usyear){display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;margin:0}#usresult .grid label:has(#usyear) select{margin:0}}
+#fyear,#usyear{font-size:1rem;font-weight:700;min-height:2.3rem;padding:.3em .7em;border:2px solid var(--acc);border-radius:10px;color:var(--text)}#usresult .grid:has(#usyear){display:block;margin:2px 0}#usresult .grid label:has(#usyear){display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;margin:0}#usresult .grid label:has(#usyear) select{margin:0}}
 
 /* v2.27 Sélecteur pays : un seul bouton + menu */
 .regpick{position:relative;display:inline-flex}
@@ -469,8 +434,8 @@ header .kofifoot.kofitop{margin:0 0 8px;align-self:end;gap:8px}header .regions{d
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .regmenu{background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.18)}:root:not([data-theme="dark"]) .regopt.on{color:#0e7490}}
 @media (min-width:1024px){header .regions #regbtn{height:2.1rem;min-height:2.1rem}}
 /* v2.zm smartphone : thème sur la même ligne que le bouton pays, tout à droite */
-@media (max-width:479.98px){header .topbar{position:static}.regions{align-items:center;gap:6px}.regions .themebtn{position:static;margin:0;min-width:40px;min-height:40px;padding:0 .45em;box-sizing:border-box}.regions .themebtn svg{width:16px;height:16px}}
-@media (max-width:359.98px){.regions{gap:4px}#regbtn{padding:.3em .35em}.regions .themebtn{min-width:38px;padding:0 .3em}}
+@media (max-width:479.98px){header .topbar{position:static}.regions{align-items:center;gap:6px}.regions .themebtn{position:static;margin:0;box-sizing:border-box}}
+@media (max-width:359.98px){.regions{gap:4px}#regbtn{padding:.3em .35em}}
 /* v2.zn smartphone : bouton pays et bouton thème réduits de 15 % (ne touchent plus le « x » du logo) */
 @media (max-width:479.98px){#regbtn{font-size:.663rem;min-height:34px}#regbtn .flag{width:12.75px;height:8.5px}#regbtn .caret{margin-left:.38em;border-left-width:3.4px;border-right-width:3.4px;border-top-width:4.25px}.regions .themebtn{min-width:34px;min-height:34px;padding:0 .38em}.regions .themebtn svg{width:13.6px;height:13.6px}.regmenu{font-size:.663rem}}
 @media (max-width:359.98px){.regions .themebtn{min-width:32px;padding:0 .26em}}
@@ -536,7 +501,7 @@ header,main,footer{max-width:var(--kx-w);margin-left:auto;margin-right:auto;box-
 .usmode{max-width:var(--kx-w);padding-left:var(--kx-pad);padding-right:var(--kx-pad);grid-template-columns:var(--kx-side) minmax(0,1fr);column-gap:var(--kx-gap)}
 /* En-tête : logo | titre + sous-titre + confidentialité | actions (une seule ligne) */
 header{grid-template-columns:auto minmax(0,1fr) auto auto;column-gap:28px;row-gap:2px;align-items:center;padding:22px var(--kx-pad) 18px;border-bottom:1px solid var(--line);margin-bottom:22px}
-header h1{grid-column:1;grid-row:1/span 3;font-size:3.6rem;line-height:1.05;padding-bottom:.3em;align-self:center}
+header h1{grid-column:1;grid-row:1/span 3;font-size:3.6rem;line-height:1.05;align-self:center}
 :root:not(#kx) header h1{font-size:3.6rem}
 header .hsig{position:static;display:block;font-size:.7rem;line-height:1.2;margin-top:2px;text-align:right}
 header h1{padding-bottom:0}:root:not(#kx) header h1{padding-bottom:0}

@@ -469,8 +469,8 @@
       name = T.map(x => x.name).join(', '); cur = m; year = null; calc(); draw(); });
     async function readOne(f) {
       const data = new Uint8Array(await f.arrayBuffer()); let p;
-      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) return { err: '<p class="warn">Excel reading unavailable. Reload the page.</p>' }; p = fromWorkbook(W.XLSX, data, f.name); }
-        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) return { err: '<p class="warn">PDF reading unavailable. Reload the page.</p>' };
+      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX && W.KxLib) await W.KxLib.load('xlsx').catch(() => {}); /* v2.68 */ if (!W.XLSX) return { err: '<p class="warn">Excel reading unavailable. Reload the page.</p>' }; p = fromWorkbook(W.XLSX, data, f.name); }
+        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib && W.KxLib) await W.KxLib.load('pdfjs').catch(() => {}); /* v2.68 */ if (!W.pdfjsLib || !KP) return { err: '<p class="warn">PDF reading unavailable. Reload the page.</p>' };
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; out.innerHTML = '<p class="hint">Reading the PDF…</p>';
           const d = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           for (let i = 1; i <= d.numPages; i++) { const c = await (await d.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }

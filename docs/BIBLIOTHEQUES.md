@@ -1,6 +1,6 @@
 # Bibliothèques embarquées (v2.64)
 
-Chargées depuis le dépôt, jamais depuis un CDN. Les empreintes SHA-256 sont vérifiées par `testlibs.js` (CI, 4 fuseaux) : le test échoue si un fichier ne correspond plus à son empreinte, si un fichier est absent, si la version lue dans le fichier change, ou si une bibliothèque `*.min.js` non déclarée apparaît. Référence lisible par machine : `testdata/libs.json`.
+Chargées depuis le dépôt, jamais depuis un CDN. **Depuis la v2.68, elles ne sont plus lues au démarrage** : `lazylib.js` charge le lecteur Excel, le lecteur PDF et le générateur PDF au premier import ou export qui en a besoin (mode France), ou dès qu'une page d'un autre pays s'affiche. Environ 1 Mo de JavaScript en moins à la première visite. Les empreintes SHA-256 sont vérifiées par `testlibs.js` (CI, 4 fuseaux) : le test échoue si un fichier ne correspond plus à son empreinte, si un fichier est absent, si la version lue dans le fichier change, ou si une bibliothèque `*.min.js` non déclarée apparaît. Référence lisible par machine : `testdata/libs.json`.
 
 | Fichier | Bibliothèque | Version | Licence | Octets | SHA-256 |
 |---|---|---|---|---|---|

@@ -554,8 +554,8 @@
       try { doc.dispatchEvent(new (W.CustomEvent || CustomEvent)('kx-ca-lang', { detail: LANG })); } catch (x) {} }); }
     async function readOne(f) {
       const data = new Uint8Array(await f.arrayBuffer()); let p;
-      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX) return { err: () => '<p class="warn">' + T('Lecture Excel indisponible. Rechargez la page.', 'Excel reading unavailable. Reload the page.') + '</p>' }; p = fromWorkbook(W.XLSX, data, f.name); }
-        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib || !KP) return { err: () => '<p class="warn">' + T('Lecture PDF indisponible. Rechargez la page.', 'PDF reading unavailable. Reload the page.') + '</p>' };
+      try { if (/\.(xlsx|xls)$/i.test(f.name)) { if (!W.XLSX && W.KxLib) await W.KxLib.load('xlsx').catch(() => {}); /* v2.68 */ if (!W.XLSX) return { err: () => '<p class="warn">' + T('Lecture Excel indisponible. Rechargez la page.', 'Excel reading unavailable. Reload the page.') + '</p>' }; p = fromWorkbook(W.XLSX, data, f.name); }
+        else if (/\.pdf$/i.test(f.name)) { if (!W.pdfjsLib && W.KxLib) await W.KxLib.load('pdfjs').catch(() => {}); /* v2.68 */ if (!W.pdfjsLib || !KP) return { err: () => '<p class="warn">' + T('Lecture PDF indisponible. Rechargez la page.', 'PDF reading unavailable. Reload the page.') + '</p>' };
           W.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js'; out.innerHTML = '<p class="hint">' + T('Lecture du PDF…', 'Reading the PDF…') + '</p>';
           const d = await W.pdfjsLib.getDocument({ data, isEvalSupported: false }).promise; let lines = [];
           for (let i = 1; i <= d.numPages; i++) { const c = await (await d.getPage(i)).getTextContent(); lines = lines.concat(KP.itemsToLines(c.items)); }
